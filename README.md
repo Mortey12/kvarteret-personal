@@ -4,10 +4,10 @@
 
 It owns:
 
-- the personnel admin UI at `personal.kvarteret.no`
+- the personnel admin UI at `personal.samfunnetibergen.no`
 - Supabase Postgres migrations for personnel, auth-support, and registration tables
-- the mobile-card API used by `kvarteret-internbevis-rn`
-- public volunteer prospect intake used by `blifrivillig.no`
+- the mobile-card API used by `kvarteret-internbevis`
+- public volunteer prospect intake used by `samfunnetibergen`
 - media proxy routes for private personnel photos
 - the Spotify-backed now-playing API
 - the checked-in OpenAPI contract in `openapi.json`
@@ -68,21 +68,11 @@ Before committing API changes:
 
 Consumer boundaries and client regeneration are documented in [API boundaries](docs/reference/api-boundaries.md) and [Update OpenAPI clients](docs/how-to/update-openapi-clients.md).
 
-## System Boundaries
-
-The important sibling boundaries are:
-
-- `kvarteret-internbevis-rn` calls mobile-card and now-playing APIs; any generated personal event operations are stale.
-- `samfunnetibergen` proxies volunteer prospect submissions; its current public arrangement pages and feeds are Sanity-backed.
-- `frontend-eventside` is retired; stale direct event-table code in that repo is historical, not a live dependency.
-
-See [Kvarteret system map](docs/explanation/kvarteret-system-map.md) for the full diagram.
-
 ## External Systems
 
-Direct runtime dependencies include Supabase Postgres, Supabase Auth, Azure Blob Storage, Spotify, Resend, Slack Incoming Webhooks, Linear, and Vercel.
+Direct runtime dependencies include Supabase Postgres, Supabase Auth, Azure Blob Storage, Resend, Linear, Spotify, PostHog, and Vercel.
 
-See [External systems](docs/reference/external-systems.md) and [Configuration](docs/reference/configuration.md).
+See [Configuration](docs/reference/configuration.md).
 
 ## Deployment Shape
 
@@ -91,5 +81,3 @@ Vercel loads `api/index.py`, which exposes a module-level ASGI app from `app.mai
 The Vercel build runs the CSS/static preparation steps so `/static/...` assets are served from `public/static`, while non-static routes are rewritten to FastAPI.
 
 Operational checks are documented in [Deploy and runtime checks](docs/how-to/deploy-and-runtime-checks.md).
-
-Current documentation issues are tracked in [docs/issues/current-documentation-issues.md](docs/issues/current-documentation-issues.md).

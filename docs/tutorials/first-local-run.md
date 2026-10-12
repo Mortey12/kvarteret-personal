@@ -49,4 +49,4 @@ For API contract work, also run:
 
 ## 5. Where to Go Next
 
-Use [Local development](../how-to/local-development.md) for daily commands, [API boundaries](../reference/api-boundaries.md) before changing public API shape, and [External systems](../reference/external-systems.md) before debugging provider failures.
+Use [Local development](../how-to/local-development.md) for daily commands, and [API boundaries](../reference/api-boundaries.md) before changing public API shape.

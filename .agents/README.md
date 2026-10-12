@@ -27,17 +27,9 @@ Verify cross-repo claims against code before editing durable docs.
 - `seeds/dev-snapshot.sql` is deliberately gitignored. The snapshot builder
   excludes secret-bearing tables and verifies anonymization, but the resulting
   organizational history must still be distributed out of band.
-- Current `samfunnetibergen` public arrangement pages and feeds are Sanity-backed
-  in that sibling repo (`lib/sanity/fetch/events.ts`,
-  `lib/sanity/queries/events.ts`, `app/[locale]/arrangementer/page.tsx`,
-  `app/api/events/feed/route.ts`, and `app/api/ical/route.ts`).
-- Current `kvarteret-internbevis-rn` dashboard event reads are Sanity-backed in
-  `src/features/dashboard/data/eventsRepository.ts`, while its generated
-  `src/core/api/kvarteret-personal` client still contains personal event
-  operations from `openapi.json`.
-- `frontend-eventside` is retired. Its source still contains direct Supabase
-  event-table code, but that is historical evidence only and not a live
-  dependency.
+- `samfunnetibergen` reads events from Sanity and calls Personal server-side
+  with HMAC-signed requests. `kvarteret-internbevis` reads events from the
+  website's `/api/v1/events`, not from Personal.
 
 ## Skills
 
