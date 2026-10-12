@@ -421,6 +421,57 @@ def test_previous_secret_is_accepted_during_rotation() -> None:
     assert service.calls == 1
 
 
+def test_shared_signing_secrets_and_legacy_secret_are_accepted_during_cutover() -> None:
+    shared = "personal-signing-test-secret-0123456789"
+    shared_previous = "personal-signing-previous-secret-01234"
+    app, service = _build_app(
+        personal_signing_secret=shared,
+        personal_signing_previous_secret=shared_previous,
+    )
+    client = TestClient(app)
+
+    for secret in (shared, shared_previous, HMAC_SECRET):
+        body = _encoded_payload()
+        response = client.post(
+            VOLUNTEER_PROSPECT_PATH,
+            content=body,
+            headers=_signed_headers(body, secret=secret),
+        )
+        assert response.status_code == 201
+
+    assert service.calls == 3
+
+
+def test_legacy_event_interest_secret_is_not_accepted_for_prospects() -> None:
+    event_interest_secret = "event-interest-test-secret-0123456789"
+    app, service = _build_app(event_interest_secret=event_interest_secret)
+    body = _encoded_payload()
+
+    response = TestClient(app).post(
+        VOLUNTEER_PROSPECT_PATH,
+        content=body,
+        headers=_signed_headers(body, secret=event_interest_secret),
+    )
+
+    assert response.status_code == 401
+    assert service.calls == 0
+
+
+def test_shared_signing_secret_alone_is_enough() -> None:
+    shared = "personal-signing-test-secret-0123456789"
+    app, service = _build_app(secret=None, personal_signing_secret=shared)
+    body = _encoded_payload()
+
+    response = TestClient(app).post(
+        VOLUNTEER_PROSPECT_PATH,
+        content=body,
+        headers=_signed_headers(body, secret=shared),
+    )
+
+    assert response.status_code == 201
+    assert service.calls == 1
+
+
 def test_missing_hmac_configuration_fails_closed() -> None:
     app, service = _build_app(secret=None)
     body = _encoded_payload()

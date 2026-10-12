@@ -25,8 +25,14 @@ class Settings(BaseSettings):
     app_secret_key: str = Field(default="change-me")
     legacy_admin_login_enabled: bool = Field(default=True)
     app_public_base_url: str | None = Field(default=None)
-    event_interest_secret: str | None = Field(default=None)
     website_base_url: str = Field(default="https://www.samfunnetibergen.no")
+    # One key signs every website -> Personal request; the previous key is
+    # accepted during zero-downtime rotation.
+    personal_signing_secret: str | None = Field(default=None)
+    personal_signing_previous_secret: str | None = Field(default=None)
+    # Deprecated per-route names, still accepted until the website has
+    # switched to PERSONAL_SIGNING_SECRET.
+    event_interest_secret: str | None = Field(default=None)
     volunteer_prospect_hmac_secret: str | None = Field(default=None)
     volunteer_prospect_hmac_previous_secret: str | None = Field(default=None)
     volunteer_prospect_max_body_bytes: int = Field(default=16 * 1024, gt=0)
@@ -113,6 +119,8 @@ class Settings(BaseSettings):
         "dev_admin_password",
         "app_secret_key",
         "app_public_base_url",
+        "personal_signing_secret",
+        "personal_signing_previous_secret",
         "volunteer_prospect_hmac_secret",
         "volunteer_prospect_hmac_previous_secret",
         "supabase_url",
@@ -160,6 +168,29 @@ class Settings(BaseSettings):
             return value.strip()
         return value
 
+    @property
+    def volunteer_signing_secrets(self) -> tuple[str, ...]:
+        """Keys accepted for volunteer prospect and booking request signatures."""
+        return _signing_secrets(
+            self.personal_signing_secret,
+            self.personal_signing_previous_secret,
+            self.volunteer_prospect_hmac_secret,
+            self.volunteer_prospect_hmac_previous_secret,
+        )
+
+    @property
+    def event_interest_signing_secrets(self) -> tuple[str, ...]:
+        """Keys accepted for event interest signatures."""
+        return _signing_secrets(
+            self.personal_signing_secret,
+            self.personal_signing_previous_secret,
+            self.event_interest_secret,
+        )
+
+
+def _signing_secrets(*secrets: str | None) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(secret for secret in secrets if secret))
+
 
 def validate_production_secrets(settings: Settings) -> Settings:
     if settings.app_env is None:
@@ -195,24 +226,33 @@ def validate_production_secrets(settings: Settings) -> Settings:
                 "a path, query, or fragment in production."
             )
             raise ValueError(msg)
-        if (
-            not settings.volunteer_prospect_hmac_secret
-            or len(settings.volunteer_prospect_hmac_secret) < 32
+        if not any(
+            secret and len(secret) >= 32
+            for secret in (
+                settings.personal_signing_secret,
+                settings.volunteer_prospect_hmac_secret,
+            )
         ):
             msg = (
-                "VOLUNTEER_PROSPECT_HMAC_SECRET must be at least 32 characters "
+                "PERSONAL_SIGNING_SECRET must be at least 32 characters "
                 "in production."
             )
             raise ValueError(msg)
-        if (
-            settings.volunteer_prospect_hmac_previous_secret
-            and len(settings.volunteer_prospect_hmac_previous_secret) < 32
+        for name, secret in (
+            ("PERSONAL_SIGNING_SECRET", settings.personal_signing_secret),
+            (
+                "PERSONAL_SIGNING_PREVIOUS_SECRET",
+                settings.personal_signing_previous_secret,
+            ),
+            ("VOLUNTEER_PROSPECT_HMAC_SECRET", settings.volunteer_prospect_hmac_secret),
+            (
+                "VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET",
+                settings.volunteer_prospect_hmac_previous_secret,
+            ),
         ):
-            msg = (
-                "VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET must be at least 32 "
-                "characters when configured."
-            )
-            raise ValueError(msg)
+            if secret and len(secret) < 32:
+                msg = f"{name} must be at least 32 characters when configured."
+                raise ValueError(msg)
     if settings.posthog_observability_enabled and not settings.posthog_project_token:
         msg = "POSTHOG_PROJECT_TOKEN is required when PostHog observability is enabled."
         raise ValueError(msg)
