@@ -125,7 +125,7 @@ def test_validate_production_secrets_rejects_insecure_public_base_url() -> None:
         raise AssertionError("Expected production public URL validation to fail.")
 
 
-def test_validate_production_secrets_requires_prospect_hmac_secret() -> None:
+def test_validate_production_secrets_requires_signing_secret() -> None:
     settings = Settings(
         app_env="production",
         app_secret_key="a-production-secret-with-32-characters",
@@ -138,11 +138,11 @@ def test_validate_production_secrets_requires_prospect_hmac_secret() -> None:
         validate_production_secrets(settings)
     except ValueError as exc:
         assert str(exc) == (
-            "VOLUNTEER_PROSPECT_HMAC_SECRET must be at least 32 characters "
+            "PERSONAL_SIGNING_SECRET must be at least 32 characters "
             "in production."
         )
     else:
-        raise AssertionError("Expected prospect HMAC secret validation to fail.")
+        raise AssertionError("Expected signing secret validation to fail.")
 
 
 def test_validate_production_secrets_rejects_short_previous_hmac_secret() -> None:
@@ -176,6 +176,61 @@ def test_validate_production_secrets_accepts_complete_production_settings() -> N
     )
 
     assert validate_production_secrets(settings) is settings
+
+
+def test_validate_production_secrets_accepts_shared_signing_secret_alone() -> None:
+    settings = Settings(
+        app_env="production",
+        app_secret_key="a-production-secret-with-32-characters",
+        app_public_base_url="https://personal.example.test",
+        personal_signing_secret="a-personal-signing-secret-with-32-chars",
+        volunteer_prospect_hmac_secret=None,
+        email_dispatch_enabled=False,
+    )
+
+    assert validate_production_secrets(settings) is settings
+
+
+def test_validate_production_secrets_rejects_short_shared_signing_secret() -> None:
+    settings = Settings(
+        app_env="production",
+        app_secret_key="a-production-secret-with-32-characters",
+        app_public_base_url="https://personal.example.test",
+        personal_signing_secret="too-short",
+        volunteer_prospect_hmac_secret="a-prospect-hmac-secret-with-32-characters",
+        email_dispatch_enabled=False,
+    )
+
+    try:
+        validate_production_secrets(settings)
+    except ValueError as exc:
+        assert str(exc) == (
+            "PERSONAL_SIGNING_SECRET must be at least 32 characters when configured."
+        )
+    else:
+        raise AssertionError("Expected shared signing secret validation to fail.")
+
+
+def test_signing_secrets_prefer_shared_key_and_keep_route_fallbacks() -> None:
+    settings = Settings(
+        app_env="test",
+        personal_signing_secret="shared",
+        personal_signing_previous_secret="previous",
+        volunteer_prospect_hmac_secret="shared",
+        volunteer_prospect_hmac_previous_secret="volunteer-previous",
+        event_interest_secret="event-interest",
+    )
+
+    assert settings.volunteer_signing_secrets == (
+        "shared",
+        "previous",
+        "volunteer-previous",
+    )
+    assert settings.event_interest_signing_secrets == (
+        "shared",
+        "previous",
+        "event-interest",
+    )
 
 
 def test_build_database_runtime_uses_queue_pool_by_default(monkeypatch) -> None:

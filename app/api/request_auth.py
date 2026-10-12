@@ -115,14 +115,7 @@ async def require_signed_volunteer_prospect(
 ) -> VerifiedVolunteerProspectRequest:
     timestamp_header = request.headers.get("X-Kvarteret-Timestamp")
     nonce_header = request.headers.get("X-Kvarteret-Nonce")
-    secrets = tuple(
-        secret
-        for secret in (
-            settings.volunteer_prospect_hmac_secret,
-            settings.volunteer_prospect_hmac_previous_secret,
-        )
-        if secret
-    )
+    secrets = settings.volunteer_signing_secrets
     if not secrets:
         logger.error("volunteer.prospect.auth.unconfigured", extra={"event": "volunteer.prospect.auth.unconfigured"})
         raise HTTPException(

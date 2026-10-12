@@ -35,8 +35,8 @@ async def require_signed_event_interest(
     settings: Settings = Depends(get_settings),
     limiter: RateLimiter = Depends(get_rate_limiter),
 ) -> None:
-    secret = settings.event_interest_secret
-    if not secret or len(secret) < 32:
+    secrets = [s for s in settings.event_interest_signing_secrets if len(s) >= 32]
+    if not secrets:
         raise HTTPException(503, "Event responses are unavailable")
     timestamp = request.headers.get("X-Kvarteret-Timestamp", "")
     nonce = request.headers.get("X-Kvarteret-Nonce", "")
@@ -67,11 +67,14 @@ async def require_signed_event_interest(
             hashlib.sha256(body).hexdigest(),
         )
     )
-    expected = (
-        "v1="
-        + hmac.new(secret.encode(), canonical.encode(), hashlib.sha256).hexdigest()
-    )
-    if not signature or not hmac.compare_digest(expected, signature):
+    if not signature or not any(
+        hmac.compare_digest(
+            "v1="
+            + hmac.new(s.encode(), canonical.encode(), hashlib.sha256).hexdigest(),
+            signature,
+        )
+        for s in secrets
+    ):
         raise HTTPException(401, "Invalid signature")
     try:
         await limiter.hit(f"event-interest-nonce:{nonce}", limit=1, window_seconds=600)

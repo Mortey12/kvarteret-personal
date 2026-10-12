@@ -35,7 +35,7 @@ def snapshot():
     }
 
 
-def headers(body, submission_id, timestamp=None, nonce=None):
+def headers(body, submission_id, timestamp=None, nonce=None, secret=SECRET):
     timestamp = timestamp or str(int(time.time()))
     nonce = nonce or str(uuid4())
     return {
@@ -44,17 +44,18 @@ def headers(body, submission_id, timestamp=None, nonce=None):
         "X-Kvarteret-Nonce": nonce,
         "X-Kvarteret-Idempotency-Key": submission_id,
         "X-Kvarteret-Signature": booking_signature(
-            SECRET, timestamp, nonce, submission_id, body
+            secret, timestamp, nonce, submission_id, body
         ),
     }
 
 
-def app():
+def app(**settings):
     instance = FastAPI()
     instance.include_router(router, prefix="/api/v1/booking-requests")
     limiter = InMemoryRateLimiter()
+    settings = settings or {"volunteer_prospect_hmac_secret": SECRET}
     instance.dependency_overrides[get_settings] = lambda: Settings(
-        app_env="test", volunteer_prospect_hmac_secret=SECRET
+        app_env="test", **settings
     )
     instance.dependency_overrides[get_rate_limiter] = lambda: limiter
     return instance
@@ -279,3 +280,42 @@ def test_prefill_missing_or_karaoke_snapshot_returns_not_found(monkeypatch):
             ).status_code
             == 404
         )
+
+
+def test_shared_signing_secret_and_legacy_secret_are_accepted_during_cutover(
+    monkeypatch,
+):
+    shared = "personal-signing-test-secret-0123456789"
+    event_interest_secret = "event-interest-test-secret-0123456789"
+
+    async def store(self, snapshot):
+        return BookingReceipt(
+            booking_request_id=uuid4(),
+            submission_id=snapshot.submission_id,
+            content_hash="a" * 64,
+        )
+
+    monkeypatch.setattr(BookingRequestsService, "store", store)
+    monkeypatch.setattr(
+        "app.api.v1.booking_requests.commit_request_session", AsyncMock()
+    )
+    client = TestClient(
+        app(
+            personal_signing_secret=shared,
+            volunteer_prospect_hmac_secret=SECRET,
+            event_interest_secret=event_interest_secret,
+        )
+    )
+    for secret, status in (
+        (shared, 201),
+        (SECRET, 201),
+        (event_interest_secret, 401),
+    ):
+        data = snapshot()
+        body = json.dumps(data).encode()
+        response = client.post(
+            "/api/v1/booking-requests",
+            content=body,
+            headers=headers(body, data["submission_id"], secret=secret),
+        )
+        assert response.status_code == status

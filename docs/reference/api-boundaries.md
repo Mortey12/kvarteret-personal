@@ -82,10 +82,34 @@ slug is immutable even if the group's display name is later changed.
 
 The request body accepts `friend_emails` (up to two). When present, the backend creates one ordinary application for the submitter and one ordinary application per friend, linked by invitation relationship records. Each friend gets a personal `/apply/{token}` link delivered by email; applications are reviewed and approved independently. Field-level validation errors for friend emails come back under `fieldErrors.friendEmails`.
 
+### Signed website requests
+
+Every server-to-server call from the website is signed with one shared,
+server-only `PERSONAL_SIGNING_SECRET`. Each request type starts its canonical
+message with its own purpose label, so a signature for one route never verifies
+on another:
+
+| Route | Canonical prefix | Verifier |
+| --- | --- | --- |
+| `POST /api/v1/volunteer-prospects` | `v2` (legacy `v1`) | `app/api/request_auth.py` |
+| `POST /api/v1/booking-requests`, `…/prefill` | `booking-v1` | `app/api/booking_request_auth.py` |
+| `POST /api/v1/event-interest/read`, `…/response` | `event-interest-v1` | `app/api/v1/event_interest.py` |
+
+The website also signs browser-visible tokens (booking promotion links,
+booking continuation and event-interest source cookies) with the same key under
+their own `booking-promotion-v1:`, `booking-continuation-v1:` and
+`event-interest-source-v1:` prefixes. Personal never verifies those.
+
+During the cutover from per-route names, Personal accepts `PERSONAL_SIGNING_SECRET`,
+`PERSONAL_SIGNING_PREVIOUS_SECRET` and the old route-specific key:
+`VOLUNTEER_PROSPECT_HMAC_SECRET` (and its previous value) for prospects and
+bookings, `EVENT_INTEREST_SECRET` for event interest. A route never accepts the
+other route's old key.
+
 ### Volunteer-prospect request authentication
 
 Personal accepts prospect creation only from a caller that holds the shared
-`VOLUNTEER_PROSPECT_HMAC_SECRET`. The website signs the exact serialized JSON
+`PERSONAL_SIGNING_SECRET`. The website signs the exact serialized JSON
 body in
 `samfunnetibergen/apps/web/src/lib/integrations/kvarteret-personal/volunteer-prospect-signing.ts`.
 Personal verifies it in `app/api/request_auth.py` before the application service
@@ -164,8 +188,8 @@ v1 signature and v2. Then deploy the website v2 signer. Remove v1 acceptance in
 a later Personal release after production traffic confirms the website cutover.
 
 To rotate the signing secret without downtime, put the new value in Personal's
-`VOLUNTEER_PROSPECT_HMAC_SECRET` and the old value in
-`VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET`; deploy Personal, switch the website
+`PERSONAL_SIGNING_SECRET` and the old value in
+`PERSONAL_SIGNING_PREVIOUS_SECRET`; deploy Personal, switch the website
 to the new value, verify submissions, and finally remove the previous value.
 There is deliberately no unsigned compatibility mode.
 
