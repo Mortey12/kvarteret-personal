@@ -26,9 +26,9 @@ flowchart TB
     supabaseDb["Supabase Postgres"]
     supabaseAuth["Supabase Auth (GoTrue)\nadmin password verification"]
     storage["StorageService\nAzure Blob"]
-    email["SmtpEmailSender"]
+    email["ResendEmailSender"]
     spotify["NowPlayingService\nSpotify Web API"]
-    feedback["FeedbackService\nSlack webhook"]
+    feedback["FeedbackService\nLinear GraphQL"]
 
     client --> app
     app --> middleware

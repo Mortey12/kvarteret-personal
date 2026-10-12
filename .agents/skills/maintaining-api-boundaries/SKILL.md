@@ -28,10 +28,7 @@ IDs, OpenAPI output, generated clients, or docs that explain sibling API use.
 
 ## Consumer Notes
 
-- `kvarteret-internbevis-rn` uses mobile-card and now-playing runtime calls.
-  Its current dashboard events repository reads Sanity, though generated event
-  operations still exist in `src/core/api/kvarteret-personal`.
-- `samfunnetibergen` currently posts volunteer prospects to this repo. Its public
-  arrangement pages and feeds read Sanity.
-- `frontend-eventside` is retired. Its stale direct Supabase event-table code is
-  historical evidence only and is not a live coordination blocker.
+- `kvarteret-internbevis` uses mobile-card, now-playing and feedback runtime
+  calls. It reads events from the website, not from Personal.
+- `samfunnetibergen` calls volunteer-prospect, booking-request, event-interest,
+  statistics-access, feedback and now-playing routes server-side.

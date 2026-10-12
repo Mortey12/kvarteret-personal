@@ -18,14 +18,12 @@ Consumers that generate typed clients should regenerate from `openapi.json`, pre
 
 ## Boundary Summary
 
-| Consumer | Depends on | Boundary | Current state |
-| --- | --- | --- | --- |
-| `kvarteret-internbevis-rn` | `kvarteret-personal` and Sanity | Mobile-card, now-playing, generated personal API client, Sanity dashboard events | Mobile-card and now-playing are runtime API calls; current dashboard event reads are Sanity-backed; generated event operations are retired |
-| `samfunnetibergen` | `kvarteret-personal` and Sanity | Volunteer prospects, Sanity public arrangements | Server-side volunteer prospect proxy; public arrangement pages and feeds are Sanity-backed |
-| `frontend-eventside` | Retired Supabase event tables | Retired event editing | Retired repo; stale source references are historical and not a live dependency |
-| `kvarteret-personal` | Supabase, Azure, Spotify, Resend, Slack | Third-party services | Runtime adapters documented in [External systems](external-systems.md) |
+| Consumer | Personal routes | Auth |
+| --- | --- | --- |
+| `kvarteret-internbevis` | `/api/v1/mobile-card/*`, `GET /api/now-playing`, `POST /api/v1/feedback/` | mobile-card bearer session; none |
+| `samfunnetibergen` | `POST /api/v1/volunteer-prospects`, `/api/v1/booking-requests*`, `/api/v1/event-interest/*`, `GET /api/v1/me/statistikk-tilgang`, `POST /api/v1/feedback/`, `GET /api/now-playing` | HMAC; forwarded session cookie; none |
 
-## `kvarteret-internbevis-rn`
+## `kvarteret-internbevis`
 
 The React Native app defaults to:
 
@@ -52,12 +50,6 @@ Reads the current profile with `Authorization: Bearer <mobile-card-session-token
 
 Accepts diagnostics when the mobile app logs a user out due to missing or invalid local credentials. This endpoint is write-only telemetry and returns `202`.
 
-### Events API
-
-The old `GET /api/v1/events`, `GET /api/v1/events/taxonomy`, and
-`GET /api/v1/events/{event_id}` operations are retired. They are intentionally
-absent from `openapi.json`.
-
 ### Now-playing API
 
 `GET /api/now-playing`
@@ -66,17 +58,9 @@ The app derives the personal base URL from the configured mobile-card base URL a
 
 ## `samfunnetibergen`
 
-`samfunnetibergen` production is `blifrivillig.no`, released from `main` by manual release. `neste.samfunnetibergen` uses the `develop` branch in the Vercel Preview environment.
-
 The site defaults to:
 
     PERSONAL_APP_BASE_URL=https://personal.samfunnetibergen.no
-
-Current public arrangement pages and feeds read from Sanity, not from
-`kvarteret-personal`. Verified sibling paths include
-`lib/sanity/fetch/events.ts`, `lib/sanity/queries/events.ts`,
-`app/[locale]/arrangementer/page.tsx`, `app/api/events/feed/route.ts`, and
-`app/api/ical/route.ts`.
 
 `samfunnetibergen/apps/web/src/app/api/volunteer-prospects/route.ts` validates the
 public recruitment form, then posts server-to-server to
@@ -185,24 +169,12 @@ To rotate the signing secret without downtime, put the new value in Personal's
 to the new value, verify submissions, and finally remove the previous value.
 There is deliberately no unsigned compatibility mode.
 
-## `frontend-eventside`
-
-`frontend-eventside` was the event editing surface at `event.kvarteret.no`.
-Its source still contains direct Supabase queries against the retired event
-tables. The repo is retired, so those source references are historical evidence
-only and are not a coordination requirement for `kvarteret-personal` table
-removal.
-
-## Removed Legacy Boundary
-
-`POST /api/DigitalInternkort/RequestAccessTokenOnEmail` and `POST /api/DigitalInternkort/GetInternkortInformation` were permanently removed on 2026-06-10 as part of the legacy restructure (M4). The four-week traffic gate was waived by the product owner. Pre-v1 app installs that called these paths lose mobile-card access and must update to the v1 mobile-card API at `/api/v1/mobile-card/*`.
-
 ## Booking request capture
 
 The website now calls `POST /api/v1/booking-requests` before forwarding room or
 karaoke requests to Crescat. Personal owns the private snapshot archive and
 migration; the website owns form validation, availability checks, request
-building, and Crescat dispatch. Public events continue to read from Sanity.
+building, and Crescat dispatch.
 
 See [Booking request storage](booking-requests.md) for the signed contract,
 deduplication, access, and deployment sequence.
