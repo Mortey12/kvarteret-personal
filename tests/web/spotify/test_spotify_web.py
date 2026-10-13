@@ -44,7 +44,7 @@ class FakeSpotifyNowPlayingService:
         self.raise_on_callback: Exception | None = None
         self.polling_enabled = True
 
-    def is_polling_enabled(self) -> bool:
+    async def is_polling_enabled(self) -> bool:
         return self.polling_enabled
 
     async def get_state(self) -> NowPlayingResult:
@@ -169,8 +169,8 @@ def test_spotify_now_playing_page_banners_when_polling_disabled() -> None:
     )
 
     assert response.status_code == 200
-    assert "midlertidig slått av" in response.text
-    assert "SPOTIFY_NOW_PLAYING_ENABLED" in response.text
+    assert "Spotify-polleringen er slått av" in response.text
+    assert "personal-spotify-now-playing" in response.text
 
 
 def test_spotify_login_redirects_to_spotify_authorize_url() -> None:
