@@ -3,6 +3,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 from app.config import Settings
 from app.config import validate_production_secrets
 from app.db.session import build_database_runtime
@@ -199,6 +201,7 @@ def test_validate_production_secrets_accepts_complete_production_settings() -> N
         app_public_base_url="https://personal.example.test",
         volunteer_prospect_hmac_secret="a-prospect-hmac-secret-with-32-characters",
         email_dispatch_enabled=False,
+        posthog_project_token="phc_test",
     )
 
     assert validate_production_secrets(settings) is settings
@@ -212,6 +215,7 @@ def test_validate_production_secrets_accepts_shared_signing_secret_alone() -> No
         personal_signing_secret="a-personal-signing-secret-with-32-chars",
         volunteer_prospect_hmac_secret=None,
         email_dispatch_enabled=False,
+        posthog_project_token="phc_test",
     )
 
     assert validate_production_secrets(settings) is settings
@@ -327,3 +331,18 @@ def test_build_database_runtime_allows_null_pool_override(monkeypatch) -> None:
         "pool_pre_ping": True,
         "poolclass": NullPool,
     }
+
+
+def test_production_requires_posthog_token_for_observability() -> None:
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        app_secret_key="a-production-secret-with-32-characters",
+        app_public_base_url="https://personal.example.test",
+        personal_signing_secret="a-personal-signing-secret-with-32-chars",
+        email_dispatch_enabled=False,
+    ).model_copy(update={"posthog_project_token": None})
+
+    assert settings.posthog_observability_enabled
+    with pytest.raises(ValueError, match="POSTHOG_PROJECT_TOKEN"):
+        validate_production_secrets(settings)

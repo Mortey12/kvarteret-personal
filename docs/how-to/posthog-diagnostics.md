@@ -30,7 +30,7 @@ The SDK can deduplicate repeated capture of the same exception object.
 
 ## Configuration and delivery
 
-Set `POSTHOG_OBSERVABILITY_ENABLED=true`, the shared project's
+Observability is always on when `APP_ENV=production`. Set the shared project's
 `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST=https://eu.i.posthog.com`, and
 `OTEL_SERVICE_NAME=kvarteret-personal` in the desired Vercel environment, then
 redeploy. Production already had these variables when inspected. Preview must
