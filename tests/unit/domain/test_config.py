@@ -90,13 +90,39 @@ def test_validate_production_secrets_rejects_default_secret() -> None:
         raise AssertionError("Expected production secret validation to fail.")
 
 
+_PRODUCTION_DEFAULT_NAMES = (
+    "APP_PUBLIC_BASE_URL",
+    "SESSION_COOKIE_DOMAIN",
+    "POSTHOG_PROJECT_TOKEN",
+)
+
+
+def test_production_uses_committed_public_defaults(monkeypatch) -> None:
+    for name in _PRODUCTION_DEFAULT_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    settings = Settings(_env_file=None, app_env="production")
+
+    assert settings.app_public_base_url == "https://personal.samfunnetibergen.no"
+    assert settings.session_cookie_domain == ".samfunnetibergen.no"
+    assert settings.posthog_project_token.startswith("phc_")
+
+
+def test_development_does_not_use_production_defaults(monkeypatch) -> None:
+    for name in _PRODUCTION_DEFAULT_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    settings = Settings(_env_file=None, app_env="development")
+
+    assert settings.app_public_base_url is None
+    assert settings.session_cookie_domain is None
+    assert settings.posthog_project_token is None
+
+
 def test_validate_production_secrets_rejects_missing_public_base_url() -> None:
     settings = Settings(
         app_env="production",
         app_secret_key="a-production-secret-with-32-characters",
-        app_public_base_url=None,
         email_dispatch_enabled=False,
-    )
+    ).model_copy(update={"app_public_base_url": None})
 
     try:
         validate_production_secrets(settings)
