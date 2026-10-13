@@ -104,10 +104,12 @@ delivery adapter.
 
 ## PostHog Observability
 
+OTLP logs/traces and server exception issues are always on when
+`APP_ENV=production` and off otherwise; there is no switch.
+
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `POSTHOG_OBSERVABILITY_ENABLED` | `false` | Enables OTLP logs/traces and server exception issues. |
-| `POSTHOG_PROJECT_TOKEN` | unset | Shared PostHog project token (`phc_`); required when enabled. |
+| `POSTHOG_PROJECT_TOKEN` | unset | Shared PostHog project token (`phc_`); required in production. |
 | `POSTHOG_HOST` | `https://eu.i.posthog.com` | EU ingestion origin, not the PostHog dashboard URL. |
 | `OTEL_SERVICE_NAME` | `kvarteret-personal` | Service filter in shared logs and error events. |
 

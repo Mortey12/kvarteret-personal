@@ -85,7 +85,6 @@ class Settings(BaseSettings):
     review_bypass_email: str | None = Field(default=None)
     review_bypass_token: str | None = Field(default=None)
     log_level: str = Field(default="INFO")
-    posthog_observability_enabled: bool = Field(default=False)
     posthog_project_token: str | None = Field(default=None)
     posthog_feature_flags_token: str | None = Field(default=None, repr=False)
     posthog_host: str = Field(default="https://eu.i.posthog.com")
@@ -167,6 +166,11 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip()
         return value
+
+    @property
+    def posthog_observability_enabled(self) -> bool:
+        """OTLP logs/traces and exception issues: always on in production only."""
+        return self.app_env == "production"
 
     @property
     def volunteer_signing_secrets(self) -> tuple[str, ...]:
@@ -254,7 +258,7 @@ def validate_production_secrets(settings: Settings) -> Settings:
                 msg = f"{name} must be at least 32 characters when configured."
                 raise ValueError(msg)
     if settings.posthog_observability_enabled and not settings.posthog_project_token:
-        msg = "POSTHOG_PROJECT_TOKEN is required when PostHog observability is enabled."
+        msg = "POSTHOG_PROJECT_TOKEN is required in production for PostHog observability."
         raise ValueError(msg)
     if settings.app_env == "production" and settings.email_dispatch_enabled:
         if not settings.cron_secret:
