@@ -41,8 +41,9 @@ class Settings(BaseSettings):
     # accepted during zero-downtime rotation.
     personal_signing_secret: str | None = Field(default=None)
     personal_signing_previous_secret: str | None = Field(default=None)
-    # Deprecated per-route names, still accepted until the website has
-    # switched to PERSONAL_SIGNING_SECRET.
+    # Deprecated 2026-10-13, merged into PERSONAL_SIGNING_SECRET. Remove these
+    # fields and their Infisical/Vercel values on or after 2027-01-12, 90 days
+    # (booking link and event-interest cookie lifetime) after the switch.
     event_interest_secret: str | None = Field(default=None)
     volunteer_prospect_hmac_secret: str | None = Field(default=None)
     volunteer_prospect_hmac_previous_secret: str | None = Field(default=None)

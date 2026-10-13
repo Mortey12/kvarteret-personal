@@ -13,9 +13,9 @@ Do not commit real secrets. The checked-in `.env.example` should contain names a
 | `APP_PUBLIC_BASE_URL` | unset | Set `https://personal.samfunnetibergen.no` in production. Public base URL used in email links, media URLs, and OAuth redirects. Production requires an HTTPS origin without credentials, a path, query, or fragment. |
 | `PERSONAL_SIGNING_SECRET` | unset | Active shared secret that authenticates every signed request from `samfunnetibergen`: volunteer prospects, booking requests and event interest. Production requires at least 32 characters. Each request type signs a distinct canonical prefix, see [Website boundary](api-boundaries.md#signed-website-requests). |
 | `PERSONAL_SIGNING_PREVIOUS_SECRET` | unset | Optional previous signing secret accepted temporarily during zero-downtime rotation. When set in production it requires at least 32 characters. |
-| `VOLUNTEER_PROSPECT_HMAC_SECRET` | unset | Deprecated. Still accepted for volunteer prospects and booking requests until the website signs with `PERSONAL_SIGNING_SECRET`; satisfies the production requirement when `PERSONAL_SIGNING_SECRET` is unset. |
-| `VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET` | unset | Deprecated previous value for `VOLUNTEER_PROSPECT_HMAC_SECRET`. |
-| `EVENT_INTEREST_SECRET` | unset | Deprecated. Still accepted for event interest until the website signs with `PERSONAL_SIGNING_SECRET`. |
+| `VOLUNTEER_PROSPECT_HMAC_SECRET` | unset | Deprecated 2026-10-13; remove on or after 2027-01-12. Same value as `PERSONAL_SIGNING_SECRET`. Still accepted for volunteer prospects and booking requests; satisfies the production requirement when `PERSONAL_SIGNING_SECRET` is unset. |
+| `VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET` | unset | Deprecated 2026-10-13; remove on or after 2027-01-12. Previous value for `VOLUNTEER_PROSPECT_HMAC_SECRET`. |
+| `EVENT_INTEREST_SECRET` | unset | Deprecated 2026-10-13; remove on or after 2027-01-12, once event-interest source cookies issued with it have expired. Still accepted for event interest. |
 | `VOLUNTEER_PROSPECT_MAX_BODY_BYTES` | `16384` | Maximum exact request-body size accepted by the volunteer-prospect endpoint. Larger bodies return `413` before JSON parsing. Keep this synchronized with the website proxy. |
 | `VOLUNTEER_PROSPECT_ROUTE_LIMIT` | `120` | Route-wide volunteer-prospect requests allowed per window. |
 | `VOLUNTEER_PROSPECT_ROUTE_WINDOW_SECONDS` | `60` | Route-wide volunteer-prospect fixed-window duration. |
