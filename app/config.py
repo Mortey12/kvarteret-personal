@@ -97,11 +97,6 @@ class Settings(BaseSettings):
     spotify_refresh_token: str | None = Field(default=None)
     now_playing_cache_seconds: float = Field(default=10.0)
     now_playing_stale_grace_seconds: float = Field(default=30.0)
-    # Temporary kill switch: defaults to OFF while a recurring Spotify 413 /
-    # HTTPStatusError in the now-playing poller is investigated. When disabled
-    # the service never contacts Spotify and reports an idle (authorized, no
-    # track) state. Flip SPOTIFY_NOW_PLAYING_ENABLED=true once resolved.
-    spotify_now_playing_enabled: bool = Field(default=False)
     review_bypass_enabled: bool = Field(default=False)
     review_bypass_email: str | None = Field(default=None)
     review_bypass_token: str | None = Field(default=None)

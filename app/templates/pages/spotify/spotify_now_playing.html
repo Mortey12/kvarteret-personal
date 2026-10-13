@@ -45,7 +45,7 @@
       {% endif %}
       {% if not spotify_polling_enabled %}
         <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Spotify-polleringen er midlertidig slått av (<code>SPOTIFY_NOW_PLAYING_ENABLED=false</code>).
+          Spotify-polleringen er slått av (PostHog-flagget <code>personal-spotify-now-playing</code>).
           Nåværende spor vises ikke før integrasjonen er aktivert igjen.
         </div>
       {% endif %}
