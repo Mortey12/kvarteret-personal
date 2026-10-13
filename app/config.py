@@ -2,8 +2,19 @@ import os
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# Public production identifiers. They are not secrets, so they are committed
+# here instead of being delivered from Infisical; environment variables still
+# override them. They apply only when APP_ENV=production so local runs never
+# share production cookies or analytics.
+PRODUCTION_DEFAULTS = {
+    "app_public_base_url": "https://personal.samfunnetibergen.no",
+    "session_cookie_domain": ".samfunnetibergen.no",
+    "posthog_project_token": "phc_BKDMEjKXXhntNVQW4h2JDHJy95CLgs28PekPzbNoGS69",
+}
 
 
 class Settings(BaseSettings):
@@ -60,18 +71,28 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=5)
     database_pool_timeout_seconds: int = Field(default=10)
     database_pool_recycle_seconds: int = Field(default=1800)
-    # Linear feedback integration — all products route through this backend
+    # Linear feedback integration — all products route through this backend.
+    # The ids are public workspace identifiers; only the API key is secret.
     linear_api_key: str | None = Field(default=None)
-    linear_team_id: str | None = Field(default=None)
-    linear_project_id_personal: str | None = Field(default=None)
-    linear_project_id_internbevis: str | None = Field(default=None)
-    linear_project_id_nettside: str | None = Field(default=None)
-    linear_state_id_triage: str | None = Field(default=None)
+    linear_team_id: str | None = Field(default="6ea0cddf-c6ed-4c10-a9ac-7884249ea35a")
+    linear_project_id_personal: str | None = Field(
+        default="73181b8f-728c-4251-b649-ade7d88d44c5"
+    )
+    linear_project_id_internbevis: str | None = Field(
+        default="76554661-df42-482b-9d84-a794aaebe9e5"
+    )
+    linear_project_id_nettside: str | None = Field(
+        default="6b3c6f1b-c7fa-413e-a982-6a934893045a"
+    )
+    linear_state_id_triage: str | None = Field(
+        default="396268d4-7abf-4783-801b-a04d3d7db580"
+    )
     # slack_feedback_webhook_url: str | None = Field(default=None)
     resend_api_key: str | None = Field(default=None, repr=False)
     email_sender_name: str = Field(default="Samfunnet i Bergen")
     email_sender_email: str = Field(default="hallaien@samfunnetibergen.no")
-    spotify_client_id: str | None = Field(default=None)
+    # Public OAuth client id; the client secret and refresh token gate use.
+    spotify_client_id: str | None = Field(default="e9ab845ebdfe4b7db5202dc60d9d0f04")
     spotify_client_secret: str | None = Field(default=None)
     spotify_refresh_token: str | None = Field(default=None)
     now_playing_cache_seconds: float = Field(default=10.0)
@@ -167,6 +188,14 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip()
         return value
+
+    @model_validator(mode="after")
+    def apply_production_defaults(self):
+        if self.app_env == "production":
+            for name, value in PRODUCTION_DEFAULTS.items():
+                if getattr(self, name) is None:
+                    setattr(self, name, value)
+        return self
 
     @property
     def volunteer_signing_secrets(self) -> tuple[str, ...]:
