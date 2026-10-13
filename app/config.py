@@ -41,11 +41,6 @@ class Settings(BaseSettings):
     # accepted during zero-downtime rotation.
     personal_signing_secret: str | None = Field(default=None)
     personal_signing_previous_secret: str | None = Field(default=None)
-    # Event-interest legacy signatures were retired on 2026-10-13.
-    # Keep the volunteer/booking fallback until old booking links expire
-    # on 2027-01-12.
-    volunteer_prospect_hmac_secret: str | None = Field(default=None)
-    volunteer_prospect_hmac_previous_secret: str | None = Field(default=None)
     volunteer_prospect_max_body_bytes: int = Field(default=16 * 1024, gt=0)
     volunteer_prospect_route_limit: int = Field(default=120, gt=0)
     volunteer_prospect_route_window_seconds: int = Field(default=60, gt=0)
@@ -136,8 +131,6 @@ class Settings(BaseSettings):
         "app_public_base_url",
         "personal_signing_secret",
         "personal_signing_previous_secret",
-        "volunteer_prospect_hmac_secret",
-        "volunteer_prospect_hmac_previous_secret",
         "supabase_url",
         "supabase_secret_key",
         "azure_blob_connection_string",
@@ -197,22 +190,17 @@ class Settings(BaseSettings):
         return self.app_env == "production"
 
     @property
-    def volunteer_signing_secrets(self) -> tuple[str, ...]:
-        """Keys accepted for volunteer prospect and booking request signatures."""
+    def personal_signing_secrets(self) -> tuple[str, ...]:
+        """Keys accepted for signed requests from the website."""
         return _signing_secrets(
             self.personal_signing_secret,
             self.personal_signing_previous_secret,
-            self.volunteer_prospect_hmac_secret,
-            self.volunteer_prospect_hmac_previous_secret,
         )
 
     @property
     def event_interest_signing_secrets(self) -> tuple[str, ...]:
         """Keys accepted for event interest signatures."""
-        return _signing_secrets(
-            self.personal_signing_secret,
-            self.personal_signing_previous_secret,
-        )
+        return self.personal_signing_secrets
 
 
 def _signing_secrets(*secrets: str | None) -> tuple[str, ...]:
@@ -253,13 +241,7 @@ def validate_production_secrets(settings: Settings) -> Settings:
                 "a path, query, or fragment in production."
             )
             raise ValueError(msg)
-        if not any(
-            secret and len(secret) >= 32
-            for secret in (
-                settings.personal_signing_secret,
-                settings.volunteer_prospect_hmac_secret,
-            )
-        ):
+        if not settings.personal_signing_secret or len(settings.personal_signing_secret) < 32:
             msg = (
                 "PERSONAL_SIGNING_SECRET must be at least 32 characters "
                 "in production."
@@ -270,11 +252,6 @@ def validate_production_secrets(settings: Settings) -> Settings:
             (
                 "PERSONAL_SIGNING_PREVIOUS_SECRET",
                 settings.personal_signing_previous_secret,
-            ),
-            ("VOLUNTEER_PROSPECT_HMAC_SECRET", settings.volunteer_prospect_hmac_secret),
-            (
-                "VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET",
-                settings.volunteer_prospect_hmac_previous_secret,
             ),
         ):
             if secret and len(secret) < 32:

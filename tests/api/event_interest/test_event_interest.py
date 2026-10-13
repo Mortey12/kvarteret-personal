@@ -163,7 +163,7 @@ def test_shared_signing_keys_are_accepted_and_retired_event_key_is_rejected():
     assert len(service.calls) == 2
 
 
-def test_legacy_volunteer_secret_is_not_accepted_for_event_interest():
+def test_old_volunteer_secret_setting_is_ignored_for_event_interest():
     volunteer_secret = "volunteer-prospect-secret-0123456789ab"
     client, service = client_and_service(
         personal_signing_secret=SECRET,

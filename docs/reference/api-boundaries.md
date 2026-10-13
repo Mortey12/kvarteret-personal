@@ -100,12 +100,12 @@ booking continuation and event-interest source cookies) with the same key under
 their own `booking-promotion-v1:`, `booking-continuation-v1:` and
 `event-interest-source-v1:` prefixes. Personal never verifies those.
 
-Personal accepts `PERSONAL_SIGNING_SECRET` and `PERSONAL_SIGNING_PREVIOUS_SECRET`.
-During the volunteer/booking cutover it also accepts the old route-specific key:
-`VOLUNTEER_PROSPECT_HMAC_SECRET` (and its previous value) for prospects and
-bookings. `EVENT_INTEREST_SECRET` was retired on 2026-10-13 and no longer
-authenticates event-interest requests. A route never accepts another route's
-old key.
+Personal accepts `PERSONAL_SIGNING_SECRET` and
+`PERSONAL_SIGNING_PREVIOUS_SECRET` for all signed website requests. The shared
+key replaced the old volunteer-specific key; existing booking promotion links
+remain valid because the shared key already had the same value. The website
+derives volunteer client-key pseudonyms from the shared key with HKDF-SHA256 and
+a fixed purpose string. `EVENT_INTEREST_SECRET` was retired on 2026-10-13.
 
 ### Volunteer-prospect request authentication
 
@@ -182,11 +182,8 @@ application and send an email continuation link. Public responses expose IDs
 only, never tokens or the existing person's canonical profile. See
 [The Volunteer Application Lifecycle](../explanation/volunteer-application-lifecycle.md).
 
-For the v2 cutover, provision the signing secret in both Vercel projects and the
-separate client-key secret only in `samfunnetibergen`. Apply the Personal
-migration and deploy Personal first; this release accepts both the established
-v1 signature and v2. Then deploy the website v2 signer. Remove v1 acceptance in
-a later Personal release after production traffic confirms the website cutover.
+The v2 request includes a client-key pseudonym derived from the shared signing
+secret. No independent client-key secret is configured or stored.
 
 To rotate the signing secret without downtime, put the new value in Personal's
 `PERSONAL_SIGNING_SECRET` and the old value in

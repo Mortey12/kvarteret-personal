@@ -53,7 +53,7 @@ def app(**settings):
     instance = FastAPI()
     instance.include_router(router, prefix="/api/v1/booking-requests")
     limiter = InMemoryRateLimiter()
-    settings = settings or {"volunteer_prospect_hmac_secret": SECRET}
+    settings = settings or {"personal_signing_secret": SECRET}
     instance.dependency_overrides[get_settings] = lambda: Settings(
         app_env="test", **settings
     )
@@ -282,7 +282,7 @@ def test_prefill_missing_or_karaoke_snapshot_returns_not_found(monkeypatch):
         )
 
 
-def test_shared_signing_secret_and_legacy_secret_are_accepted_during_cutover(
+def test_shared_signing_secret_and_previous_key_are_accepted_during_rotation(
     monkeypatch,
 ):
     shared = "personal-signing-test-secret-0123456789"
@@ -302,13 +302,14 @@ def test_shared_signing_secret_and_legacy_secret_are_accepted_during_cutover(
     client = TestClient(
         app(
             personal_signing_secret=shared,
-            volunteer_prospect_hmac_secret=SECRET,
+            personal_signing_previous_secret=SECRET,
             event_interest_secret=event_interest_secret,
         )
     )
     for secret, status in (
         (shared, 201),
         (SECRET, 201),
+        ("retired-volunteer-key-0123456789abc", 401),
         (event_interest_secret, 401),
     ):
         data = snapshot()

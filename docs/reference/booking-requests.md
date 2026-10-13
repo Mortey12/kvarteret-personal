@@ -25,8 +25,7 @@ read/prefill endpoint is introduced.
 ## Authentication and access
 
 Sign with the shared server-only `PERSONAL_SIGNING_SECRET` (Personal also
-accepts `PERSONAL_SIGNING_PREVIOUS_SECRET` during rotation and the deprecated
-`VOLUNTEER_PROSPECT_HMAC_SECRET` until the website has switched). Headers are `X-Kvarteret-Timestamp` (Unix seconds),
+accepts `PERSONAL_SIGNING_PREVIOUS_SECRET` during rotation). Headers are `X-Kvarteret-Timestamp` (Unix seconds),
 `X-Kvarteret-Nonce` (fresh lowercase UUID), `X-Kvarteret-Idempotency-Key`
 (submission UUID), and `X-Kvarteret-Signature` (`v1=` plus HMAC-SHA256 hex).
 The signed message has no trailing newline:
