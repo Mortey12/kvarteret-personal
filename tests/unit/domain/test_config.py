@@ -259,7 +259,6 @@ def test_signing_secrets_prefer_shared_key_and_keep_route_fallbacks() -> None:
     assert settings.event_interest_signing_secrets == (
         "shared",
         "previous",
-        "event-interest",
     )
 
 

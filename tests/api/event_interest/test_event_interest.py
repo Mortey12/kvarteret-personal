@@ -33,7 +33,7 @@ def client_and_service(**settings):
     app.include_router(router, prefix="/api/v1/event-interest")
     service = Service()
     app.dependency_overrides[get_event_interest_service] = lambda: service
-    settings = settings or {"event_interest_secret": SECRET}
+    settings = settings or {"personal_signing_secret": SECRET}
     app.dependency_overrides[get_settings] = lambda: Settings(**settings)
     limiter = InMemoryRateLimiter()
     app.dependency_overrides[get_rate_limiter] = lambda: limiter
@@ -146,7 +146,7 @@ def test_strict_bounds_and_private_read():
     assert service.calls == [("event", None)]
 
 
-def test_shared_signing_secret_and_legacy_secret_are_accepted_during_cutover():
+def test_shared_signing_keys_are_accepted_and_retired_event_key_is_rejected():
     shared = "personal-signing-test-secret-0123456789"
     previous = "personal-signing-previous-secret-01234"
     client, service = client_and_service(
@@ -155,16 +155,18 @@ def test_shared_signing_secret_and_legacy_secret_are_accepted_during_cutover():
         event_interest_secret=SECRET,
     )
     path = "/api/v1/event-interest/read"
-    for secret in (shared, previous, SECRET):
+    for secret in (shared, previous):
         body, headers = signed({"event_id": "event"}, path, secret=secret)
         assert client.post(path, content=body, headers=headers).status_code == 200
-    assert len(service.calls) == 3
+    body, headers = signed({"event_id": "event"}, path, secret=SECRET)
+    assert client.post(path, content=body, headers=headers).status_code == 401
+    assert len(service.calls) == 2
 
 
 def test_legacy_volunteer_secret_is_not_accepted_for_event_interest():
     volunteer_secret = "volunteer-prospect-secret-0123456789ab"
     client, service = client_and_service(
-        event_interest_secret=SECRET,
+        personal_signing_secret=SECRET,
         volunteer_prospect_hmac_secret=volunteer_secret,
     )
     path = "/api/v1/event-interest/read"

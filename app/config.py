@@ -41,10 +41,9 @@ class Settings(BaseSettings):
     # accepted during zero-downtime rotation.
     personal_signing_secret: str | None = Field(default=None)
     personal_signing_previous_secret: str | None = Field(default=None)
-    # Deprecated 2026-10-13, merged into PERSONAL_SIGNING_SECRET. Remove these
-    # fields and their Infisical/Vercel values on or after 2027-01-12, 90 days
-    # (booking link and event-interest cookie lifetime) after the switch.
-    event_interest_secret: str | None = Field(default=None)
+    # Event-interest legacy signatures were retired on 2026-10-13.
+    # Keep the volunteer/booking fallback until old booking links expire
+    # on 2027-01-12.
     volunteer_prospect_hmac_secret: str | None = Field(default=None)
     volunteer_prospect_hmac_previous_secret: str | None = Field(default=None)
     volunteer_prospect_max_body_bytes: int = Field(default=16 * 1024, gt=0)
@@ -213,7 +212,6 @@ class Settings(BaseSettings):
         return _signing_secrets(
             self.personal_signing_secret,
             self.personal_signing_previous_secret,
-            self.event_interest_secret,
         )
 
 

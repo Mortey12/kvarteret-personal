@@ -100,11 +100,12 @@ booking continuation and event-interest source cookies) with the same key under
 their own `booking-promotion-v1:`, `booking-continuation-v1:` and
 `event-interest-source-v1:` prefixes. Personal never verifies those.
 
-During the cutover from per-route names, Personal accepts `PERSONAL_SIGNING_SECRET`,
-`PERSONAL_SIGNING_PREVIOUS_SECRET` and the old route-specific key:
+Personal accepts `PERSONAL_SIGNING_SECRET` and `PERSONAL_SIGNING_PREVIOUS_SECRET`.
+During the volunteer/booking cutover it also accepts the old route-specific key:
 `VOLUNTEER_PROSPECT_HMAC_SECRET` (and its previous value) for prospects and
-bookings, `EVENT_INTEREST_SECRET` for event interest. A route never accepts the
-other route's old key.
+bookings. `EVENT_INTEREST_SECRET` was retired on 2026-10-13 and no longer
+authenticates event-interest requests. A route never accepts another route's
+old key.
 
 ### Volunteer-prospect request authentication
 

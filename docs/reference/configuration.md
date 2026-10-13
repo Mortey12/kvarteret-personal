@@ -15,7 +15,7 @@ Do not commit real secrets. The checked-in `.env.example` should contain names a
 | `PERSONAL_SIGNING_PREVIOUS_SECRET` | unset | Optional previous signing secret accepted temporarily during zero-downtime rotation. When set in production it requires at least 32 characters. |
 | `VOLUNTEER_PROSPECT_HMAC_SECRET` | unset | Deprecated 2026-10-13; remove on or after 2027-01-12. Same value as `PERSONAL_SIGNING_SECRET`. Still accepted for volunteer prospects and booking requests; satisfies the production requirement when `PERSONAL_SIGNING_SECRET` is unset. |
 | `VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET` | unset | Deprecated 2026-10-13; remove on or after 2027-01-12. Previous value for `VOLUNTEER_PROSPECT_HMAC_SECRET`. |
-| `EVENT_INTEREST_SECRET` | unset | Deprecated 2026-10-13; remove on or after 2027-01-12, once event-interest source cookies issued with it have expired. Still accepted for event interest. |
+| `EVENT_INTEREST_SECRET` | ignored | Retired 2026-10-13. Event-interest requests accept only `PERSONAL_SIGNING_SECRET` and `PERSONAL_SIGNING_PREVIOUS_SECRET`; old event-interest signatures are intentionally invalid. |
 | `VOLUNTEER_PROSPECT_MAX_BODY_BYTES` | `16384` | Maximum exact request-body size accepted by the volunteer-prospect endpoint. Larger bodies return `413` before JSON parsing. Keep this synchronized with the website proxy. |
 | `VOLUNTEER_PROSPECT_ROUTE_LIMIT` | `120` | Route-wide volunteer-prospect requests allowed per window. |
 | `VOLUNTEER_PROSPECT_ROUTE_WINDOW_SECONDS` | `60` | Route-wide volunteer-prospect fixed-window duration. |
