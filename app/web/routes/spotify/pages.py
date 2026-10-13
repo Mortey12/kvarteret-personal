@@ -52,7 +52,7 @@ async def spotify_now_playing_page(
             "now_playing": now_playing.state,
             "is_spotify_configured": now_playing_service.is_login_configured(),
             "has_shared_token": has_shared_token,
-            "spotify_polling_enabled": now_playing_service.is_polling_enabled(),
+            "spotify_polling_enabled": await now_playing_service.is_polling_enabled(),
         },
     )
 
