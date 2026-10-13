@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from secrets import token_urlsafe
 from time import monotonic
+from collections.abc import Awaitable
 from typing import Any, Callable
 from urllib.parse import urlencode
 
@@ -15,6 +16,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
+from app.feature_flags import SPOTIFY_NOW_PLAYING, build_flag
 from app.errors import NotConfiguredError
 from app.domain.spotify.repository import IntegrationTokensRepository
 
@@ -62,8 +64,13 @@ class NowPlayingService:
         repository: IntegrationTokensRepository,
         client: httpx.AsyncClient | None = None,
         now_fn: Callable[[], float] | None = None,
+        polling_enabled: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         self.settings = settings
+        # PostHog flag `personal-spotify-now-playing`; off when unreachable.
+        self._polling_enabled = polling_enabled or build_flag(
+            settings, SPOTIFY_NOW_PLAYING
+        )
         self.repository = repository
         self._client = client or httpx.AsyncClient(timeout=20.0, follow_redirects=True)
         self._owns_client = client is None
@@ -84,8 +91,8 @@ class NowPlayingService:
 
     async def get_state(self) -> NowPlayingResult:
         cache_seconds = self.settings.now_playing_cache_seconds
-        if not self.settings.spotify_now_playing_enabled:
-            # Spotify now-playing polling is temporarily disabled. Do not touch
+        if not await self._polling_enabled():
+            # Spotify now-playing polling is switched off. Do not touch
             # the repository or the Spotify API so the recurring upstream 4xx
             # errors cannot recur or spam error tracking.
             return self._polling_disabled_result(cache_seconds)
@@ -188,8 +195,8 @@ class NowPlayingService:
     def is_login_configured(self) -> bool:
         return self._is_login_configured()
 
-    def is_polling_enabled(self) -> bool:
-        return self.settings.spotify_now_playing_enabled
+    async def is_polling_enabled(self) -> bool:
+        return await self._polling_enabled()
 
     async def _get_state_with_cache(
         self,
