@@ -35,7 +35,7 @@ async def require_signed_event_interest(
     settings: Settings = Depends(get_settings),
     limiter: RateLimiter = Depends(get_rate_limiter),
 ) -> None:
-    secrets = [s for s in settings.event_interest_signing_secrets if len(s) >= 32]
+    secrets = [s for s in settings.signing_secrets if len(s) >= 32]
     if not secrets:
         raise HTTPException(503, "Event responses are unavailable")
     timestamp = request.headers.get("X-Kvarteret-Timestamp", "")

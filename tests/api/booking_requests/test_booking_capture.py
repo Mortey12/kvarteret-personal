@@ -53,7 +53,7 @@ def app(**settings):
     instance = FastAPI()
     instance.include_router(router, prefix="/api/v1/booking-requests")
     limiter = InMemoryRateLimiter()
-    settings = settings or {"volunteer_prospect_hmac_secret": SECRET}
+    settings = settings or {"personal_signing_secret": SECRET}
     instance.dependency_overrides[get_settings] = lambda: Settings(
         app_env="test", **settings
     )
@@ -282,11 +282,8 @@ def test_prefill_missing_or_karaoke_snapshot_returns_not_found(monkeypatch):
         )
 
 
-def test_shared_signing_secret_and_legacy_secret_are_accepted_during_cutover(
-    monkeypatch,
-):
-    shared = "personal-signing-test-secret-0123456789"
-    event_interest_secret = "event-interest-test-secret-0123456789"
+def test_current_and_previous_signing_secrets_are_accepted(monkeypatch):
+    previous = "personal-signing-previous-secret-01234"
 
     async def store(self, snapshot):
         return BookingReceipt(
@@ -300,16 +297,12 @@ def test_shared_signing_secret_and_legacy_secret_are_accepted_during_cutover(
         "app.api.v1.booking_requests.commit_request_session", AsyncMock()
     )
     client = TestClient(
-        app(
-            personal_signing_secret=shared,
-            volunteer_prospect_hmac_secret=SECRET,
-            event_interest_secret=event_interest_secret,
-        )
+        app(personal_signing_secret=SECRET, personal_signing_previous_secret=previous)
     )
     for secret, status in (
-        (shared, 201),
         (SECRET, 201),
-        (event_interest_secret, 401),
+        (previous, 201),
+        ("unrelated-signing-secret-0123456789ab", 401),
     ):
         data = snapshot()
         body = json.dumps(data).encode()

@@ -158,7 +158,7 @@ def test_validate_production_secrets_requires_signing_secret() -> None:
         app_env="production",
         app_secret_key="a-production-secret-with-32-characters",
         app_public_base_url="https://personal.example.test",
-        volunteer_prospect_hmac_secret=None,
+        personal_signing_secret=None,
         email_dispatch_enabled=False,
     )
 
@@ -173,13 +173,13 @@ def test_validate_production_secrets_requires_signing_secret() -> None:
         raise AssertionError("Expected signing secret validation to fail.")
 
 
-def test_validate_production_secrets_rejects_short_previous_hmac_secret() -> None:
+def test_validate_production_secrets_rejects_short_previous_signing_secret() -> None:
     settings = Settings(
         app_env="production",
         app_secret_key="a-production-secret-with-32-characters",
         app_public_base_url="https://personal.example.test",
-        volunteer_prospect_hmac_secret="a-prospect-hmac-secret-with-32-characters",
-        volunteer_prospect_hmac_previous_secret="too-short",
+        personal_signing_secret="a-personal-signing-secret-with-32-chars",
+        personal_signing_previous_secret="too-short",
         email_dispatch_enabled=False,
     )
 
@@ -187,7 +187,7 @@ def test_validate_production_secrets_rejects_short_previous_hmac_secret() -> Non
         validate_production_secrets(settings)
     except ValueError as exc:
         assert str(exc) == (
-            "VOLUNTEER_PROSPECT_HMAC_PREVIOUS_SECRET must be at least 32 "
+            "PERSONAL_SIGNING_PREVIOUS_SECRET must be at least 32 "
             "characters when configured."
         )
     else:
@@ -199,7 +199,7 @@ def test_validate_production_secrets_accepts_complete_production_settings() -> N
         app_env="production",
         app_secret_key="a-production-secret-with-32-characters",
         app_public_base_url="https://personal.example.test",
-        volunteer_prospect_hmac_secret="a-prospect-hmac-secret-with-32-characters",
+        personal_signing_secret="a-personal-signing-secret-with-32-chars",
         email_dispatch_enabled=False,
         posthog_project_token="phc_test",
     )
@@ -213,7 +213,6 @@ def test_validate_production_secrets_accepts_shared_signing_secret_alone() -> No
         app_secret_key="a-production-secret-with-32-characters",
         app_public_base_url="https://personal.example.test",
         personal_signing_secret="a-personal-signing-secret-with-32-chars",
-        volunteer_prospect_hmac_secret=None,
         email_dispatch_enabled=False,
         posthog_project_token="phc_test",
     )
@@ -227,7 +226,6 @@ def test_validate_production_secrets_rejects_short_shared_signing_secret() -> No
         app_secret_key="a-production-secret-with-32-characters",
         app_public_base_url="https://personal.example.test",
         personal_signing_secret="too-short",
-        volunteer_prospect_hmac_secret="a-prospect-hmac-secret-with-32-characters",
         email_dispatch_enabled=False,
     )
 
@@ -235,32 +233,21 @@ def test_validate_production_secrets_rejects_short_shared_signing_secret() -> No
         validate_production_secrets(settings)
     except ValueError as exc:
         assert str(exc) == (
-            "PERSONAL_SIGNING_SECRET must be at least 32 characters when configured."
+            "PERSONAL_SIGNING_SECRET must be at least 32 characters "
+            "in production."
         )
     else:
         raise AssertionError("Expected shared signing secret validation to fail.")
 
 
-def test_signing_secrets_prefer_shared_key_and_keep_route_fallbacks() -> None:
+def test_signing_secrets_are_current_then_previous() -> None:
     settings = Settings(
         app_env="test",
-        personal_signing_secret="shared",
+        personal_signing_secret="current",
         personal_signing_previous_secret="previous",
-        volunteer_prospect_hmac_secret="shared",
-        volunteer_prospect_hmac_previous_secret="volunteer-previous",
-        event_interest_secret="event-interest",
     )
 
-    assert settings.volunteer_signing_secrets == (
-        "shared",
-        "previous",
-        "volunteer-previous",
-    )
-    assert settings.event_interest_signing_secrets == (
-        "shared",
-        "previous",
-        "event-interest",
-    )
+    assert settings.signing_secrets == ("current", "previous")
 
 
 def test_build_database_runtime_uses_queue_pool_by_default(monkeypatch) -> None:

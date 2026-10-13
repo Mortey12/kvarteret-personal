@@ -49,7 +49,7 @@ async def require_signed_booking(
     settings: Settings = Depends(get_settings),
     rate_limiter: RateLimiter = Depends(get_rate_limiter),
 ) -> tuple[bytes, UUID]:
-    secrets = [s for s in settings.volunteer_signing_secrets if len(s) >= 32]
+    secrets = [s for s in settings.signing_secrets if len(s) >= 32]
     if not secrets:
         raise HTTPException(503, "Booking storage unavailable.")
     timestamp = request.headers.get("X-Kvarteret-Timestamp", "")
