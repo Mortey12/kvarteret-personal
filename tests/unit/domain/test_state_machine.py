@@ -6,7 +6,6 @@ from app.domain.volunteer_applications.state_machine import (
     ApplicationAction,
     ApplicationState,
     IllegalTransition,
-    SendApprovalEmail,
     TransitionContext,
     application_transition,
 )
@@ -63,10 +62,9 @@ def test_trial_profile_submission_is_profile_completion():
     assert result.event.event_type == "profile_completed"
 
 
-def test_promote_emits_approval_effect():
+def test_promote_emits_approval_event():
     result = application_transition(ApplicationState.TRIAL, ApplicationAction.PROMOTE)
 
-    assert isinstance(result.effects[0], SendApprovalEmail)
     assert result.event is not None
     assert result.event.event_type == "application_approved"
 

@@ -88,41 +88,17 @@ _TRANSITIONS: dict[
 # Actions that result in row removal (no target state).
 _DELETE_ACTIONS = {ApplicationAction.DELETE}
 
-# ── Side effects ───────────────────────────────────────────────────
-
-# Side effects are named, serializable records so the workflow
-# coordinator can execute them after the database transaction commits.
-# This preserves today's commit-before-email behavior and keeps the
-# seam open for the deferred transactional outbox.
-
-
-@dataclass(frozen=True, slots=True)
-class Effect:
-    """Base class for named side effects."""
-    pass
-
-
-@dataclass(frozen=True, slots=True)
-class SendApplicantEmail(Effect):
-    template: str
-    registration_id: int
-
-
-@dataclass(frozen=True, slots=True)
-class SendInvitationEmail(Effect):
-    registration_id: int
-
-
-@dataclass(frozen=True, slots=True)
-class SendApprovalEmail(Effect):
-    registration_id: int
-    volunteer_id: int
-
-
-@dataclass(frozen=True, slots=True)
-class SendRejectionEmail(Effect):
-    registration_id: int
-
+# Audit event emitted for each action. SUBMIT_PROFILE depends on the state
+# and is resolved in ``application_transition``.
+_EVENT_TYPES: dict[ApplicationAction, str] = {
+    ApplicationAction.RESEND_INVITATION: "invitation_resent",
+    ApplicationAction.CONTACT: "application_contacted",
+    ApplicationAction.START_TRIAL: "trial_started",
+    ApplicationAction.PROMOTE: "application_approved",
+    ApplicationAction.REJECT: "application_rejected",
+    ApplicationAction.REOPEN: "application_reopened",
+    ApplicationAction.RESTORE_VOLUNTEER: "application_volunteer_restored",
+}
 
 # ── Domain event ───────────────────────────────────────────────────
 
@@ -145,7 +121,6 @@ class DomainEventRecord:
 @dataclass(frozen=True, slots=True)
 class TransitionResult:
     new_state: ApplicationState
-    effects: tuple[Effect, ...] = ()
     event: DomainEventRecord | None = None
 
 
@@ -206,89 +181,24 @@ def application_transition(
             f"Cannot apply action '{action.value}' to state '{state.value}'."
         )
 
-    effects: tuple[Effect, ...] = ()
-    event: DomainEventRecord | None = None
-
     if action == ApplicationAction.SUBMIT_PROFILE:
-        event = DomainEventRecord(
-            # A promoted applicant re-submitting is completing their
-            # volunteer profile, not re-applying.
-            event_type=(
-                "profile_completed"
-                if state in (ApplicationState.TRIAL, ApplicationState.VOLUNTEER)
-                else "application_submitted"
-            ),
+        # A promoted applicant re-submitting is completing their volunteer
+        # profile, not re-applying.
+        event_type = (
+            "profile_completed"
+            if state in (ApplicationState.TRIAL, ApplicationState.VOLUNTEER)
+            else "application_submitted"
+        )
+    else:
+        event_type = _EVENT_TYPES[action]
+
+    return TransitionResult(
+        new_state=new_state,
+        event=DomainEventRecord(
+            event_type=event_type,
             actor_user_account_id=ctx.actor_user_account_id,
             subject_type="application",
-            subject_id=0,
+            subject_id=0,  # caller fills this in
             payload={"previous_state": state.value},
-        )
-
-    elif action == ApplicationAction.CONTACT:
-        event = DomainEventRecord(
-            event_type="application_contacted",
-            actor_user_account_id=ctx.actor_user_account_id,
-            subject_type="application",
-            subject_id=0,
-            payload={"previous_state": state.value},
-        )
-
-    elif action == ApplicationAction.START_TRIAL:
-        event = DomainEventRecord(
-            event_type="trial_started",
-            actor_user_account_id=ctx.actor_user_account_id,
-            subject_type="application",
-            subject_id=0,
-            payload={"previous_state": state.value},
-        )
-
-    elif action == ApplicationAction.PROMOTE:
-        effects = (SendApprovalEmail(
-            registration_id=0,  # caller fills in
-            volunteer_id=0,     # caller fills in
-        ),)
-        event = DomainEventRecord(
-            event_type="application_approved",
-            actor_user_account_id=ctx.actor_user_account_id,
-            subject_type="application",
-            subject_id=0,
-            payload={"previous_state": state.value},
-        )
-
-    elif action == ApplicationAction.REJECT:
-        event = DomainEventRecord(
-            event_type="application_rejected",
-            actor_user_account_id=ctx.actor_user_account_id,
-            subject_type="application",
-            subject_id=0,
-            payload={"previous_state": state.value},
-        )
-
-    elif action == ApplicationAction.REOPEN:
-        event = DomainEventRecord(
-            event_type="application_reopened",
-            actor_user_account_id=ctx.actor_user_account_id,
-            subject_type="application",
-            subject_id=0,
-            payload={"previous_state": state.value},
-        )
-
-    elif action == ApplicationAction.RESTORE_VOLUNTEER:
-        event = DomainEventRecord(
-            event_type="application_volunteer_restored",
-            actor_user_account_id=ctx.actor_user_account_id,
-            subject_type="application",
-            subject_id=0,
-            payload={"previous_state": state.value},
-        )
-
-    elif action == ApplicationAction.RESEND_INVITATION:
-        event = DomainEventRecord(
-            event_type="invitation_resent",
-            actor_user_account_id=ctx.actor_user_account_id,
-            subject_type="application",
-            subject_id=0,
-            payload={"previous_state": state.value},
-        )
-
-    return TransitionResult(new_state=new_state, effects=effects, event=event)
+        ),
+    )

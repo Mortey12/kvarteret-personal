@@ -36,6 +36,9 @@ from app.email_delivery import (
     EmailDeliveryOutboxProtocol,
     EmailDeliveryRequest,
 )
+from app.domain.volunteer_applications.models import (
+    VolunteerApplicationNotFoundError,
+)
 from app.domain.volunteer_applications.state_machine import (
     ApplicationAction,
     ApplicationState,
@@ -97,6 +100,7 @@ class VolunteerApplicationWorkflowOperations(Protocol):
         registration_id: int,
         *,
         status: ApplicationState,
+        expected_status: ApplicationState,
         start_trial: bool = False,
     ) -> "VolunteerApplicationDetail": ...
     async def approve_application_record(
@@ -448,22 +452,22 @@ class VolunteerApplicationWorkflow:
         existing = await self.operations.get_volunteer_application_detail(
             registration_id
         )
-        result = None
-        if existing is not None:
-            result = application_transition(
-                ApplicationState(existing.status),
-                action,
-                context=TransitionContext(actor_user_account_id=actor_user_account_id),
-            )
-        new_state = result.new_state if result is not None else ApplicationState.NEW
-        assert isinstance(new_state, ApplicationState)
+        if existing is None:
+            raise VolunteerApplicationNotFoundError("Registration was not found.")
+        current_state = ApplicationState(existing.status)
+        result = application_transition(
+            current_state,
+            action,
+            context=TransitionContext(actor_user_account_id=actor_user_account_id),
+        )
         detail = await self.operations.set_application_status_record(
             registration_id,
-            status=new_state,
+            status=result.new_state,
+            expected_status=current_state,
             start_trial=start_trial,
         )
         event_id = None
-        if result is not None and result.event is not None:
+        if result.event is not None:
             event_id = await self.operations.append_domain_event(
                 replace(
                     result.event,
@@ -483,7 +487,7 @@ class VolunteerApplicationWorkflow:
                 source_domain_event_id=event_id,
             )
         await commit_request_session()
-        if result is not None and result.event is not None:
+        if result.event is not None:
             self._record_lifecycle(detail, status=result.event.event_type)
         if email_template_key is not None:
             await self._dispatch_best_effort()

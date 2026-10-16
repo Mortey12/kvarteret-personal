@@ -236,7 +236,10 @@ class FakeVolunteerApplicationsRepository:
         volunteer_id: int | None = None,
         trial_assignment_id: int | None = None,
         owns_volunteer_profile: bool | None = None,
-    ) -> None:
+        expected_status=None,
+    ) -> bool:
+        if expected_status is not None and self.detail_status != expected_status:
+            return False
         self.detail_status = status.value
         if owns_volunteer_profile is not None:
             self.owns_volunteer_profile = owns_volunteer_profile
@@ -244,6 +247,7 @@ class FakeVolunteerApplicationsRepository:
             self.promoted_volunteer_id = volunteer_id
         if start_trial:
             self.trial_assignment_id = trial_assignment_id
+        return True
 
     async def lock_registration_emails(self, emails: list[str]) -> None:
         self.locked_emails = getattr(self, "locked_emails", []) + [emails]
@@ -2149,3 +2153,47 @@ async def test_mobile_session_identity_connects_logout_by_diagnostic_session(cap
     assert login.event_data["request_id"] != logout.event_data["request_id"]
     assert "volunteer_id" not in logout.event_data
     assert "person@example.com" not in str(login.event_data)
+
+
+class _ConcurrentlyChangedRepository(FakeVolunteerApplicationsRepository):
+    """Simulates another request moving the application while this one waits for the lock."""
+
+    def __init__(self, *, changed_to: str) -> None:
+        super().__init__()
+        self.changed_to = changed_to
+
+    async def lock_registration_emails(self, emails: list[str]) -> None:
+        await super().lock_registration_emails(emails)
+        self.detail_status = self.changed_to
+
+
+def _service_for(repository: FakeVolunteerApplicationsRepository) -> VolunteerApplicationsService:
+    return VolunteerApplicationsService(
+        volunteer_creator=FakeVolunteerCreator(),
+        settings=Settings(app_secret_key="test-secret"),
+        repository=repository,
+        email_outbox=FakeEmailOutbox(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_status_change_conflicts_when_application_changed_concurrently() -> None:
+    repository = _ConcurrentlyChangedRepository(changed_to="contacted")
+    repository.detail_status = "new"
+
+    with pytest.raises(VolunteerApplicationConflictError, match="changed by someone else"):
+        await _service_for(repository).reject_volunteer_application(7)
+
+    assert repository.detail_status == "contacted"
+
+
+@pytest.mark.asyncio
+async def test_delete_conflicts_when_application_left_new_concurrently() -> None:
+    repository = _ConcurrentlyChangedRepository(changed_to="contacted")
+    repository.detail_status = "new"
+    repository.application_submitted = False
+
+    with pytest.raises(VolunteerApplicationConflictError, match="changed by someone else"):
+        await _service_for(repository).delete_volunteer_application(7)
+
+    assert repository.deleted_registration_ids == []

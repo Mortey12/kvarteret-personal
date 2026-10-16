@@ -583,7 +583,8 @@ class VolunteerApplicationsRepositoryProtocol(Protocol):
         volunteer_id: int | None = None,
         trial_assignment_id: int | None = None,
         owns_volunteer_profile: bool | None = None,
-    ) -> None: ...
+        expected_status: ApplicationState | None = None,
+    ) -> bool: ...
     async def find_active_trial_applicant_by_email(
         self, email: str
     ) -> TrialApplicantCardSnapshot | None: ...
