@@ -5,7 +5,10 @@ from uuid import UUID
 
 import pytest
 
-from app.domain.volunteer_applications.models import PublicProspectRequestClaim
+from app.domain.volunteer_applications.models import (
+    PublicProspectRequestClaim,
+    VolunteerApplicationNotFoundError,
+)
 from app.domain.volunteer_applications.workflow import VolunteerApplicationWorkflow
 from app.email_delivery import (
     APPLICANT_APPLICATION_RECEIVED,
@@ -79,7 +82,12 @@ class FakeWorkflowOperations:
         return _Record(registration_id=7, email="applicant@example.test")
 
     async def set_application_status_record(
-        self, registration_id: int, *, status, start_trial: bool = False
+        self,
+        registration_id: int,
+        *,
+        status,
+        expected_status,
+        start_trial: bool = False,
     ):
         self.calls.append(("status", status.value))
         self.detail_status = status.value
@@ -372,3 +380,23 @@ async def test_workflow_register_mark_delete_and_resend_are_traceable() -> None:
         APPLICANT_PROFILE_COMPLETION,
         APPLICANT_INVITATION,
     ]
+
+
+@pytest.mark.asyncio
+async def test_workflow_status_change_on_missing_application_raises_not_found() -> None:
+    operations = FakeWorkflowOperations()
+
+    async def missing(registration_id: int):
+        return None
+
+    operations.get_volunteer_application_detail = missing
+    workflow = VolunteerApplicationWorkflow(
+        operations=operations,
+        side_effects=FakeWorkflowSideEffects(),
+        email_outbox=FakeEmailOutbox(),
+    )
+
+    with pytest.raises(VolunteerApplicationNotFoundError):
+        await workflow.reject(404)
+
+    assert operations.calls == []

@@ -545,7 +545,9 @@ class VolunteerApplicationsRepository(SqlAlchemyRepository):
         volunteer_id: int | None = None,
         trial_assignment_id: int | None = None,
         owns_volunteer_profile: bool | None = None,
-    ) -> None:
+        expected_status: ApplicationState | None = None,
+    ) -> bool:
+        """Write the new status; return False if ``expected_status`` no longer holds."""
         values: dict[str, object] = {"status": status}
         if owns_volunteer_profile is not None:
             values["owns_volunteer_profile"] = owns_volunteer_profile
@@ -560,11 +562,16 @@ class VolunteerApplicationsRepository(SqlAlchemyRepository):
                 trial_started_at=started_at,
                 trial_ends_at=started_at + timedelta(days=30),
             )
-        await self.session.execute(
+        stmt = (
             update(volunteer_application_invites)
             .where(volunteer_application_invites.c.id == registration_id)
             .values(**values)
         )
+        if expected_status is not None:
+            # Compare-and-set: a concurrent transition makes this a no-op.
+            stmt = stmt.where(volunteer_application_invites.c.status == expected_status)
+        result = await self.session.execute(stmt)
+        return result.rowcount == 1
 
     async def photo_in_use(self, sha1: str) -> bool:
         return bool(

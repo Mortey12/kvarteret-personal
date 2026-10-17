@@ -46,14 +46,18 @@ an audit trail, not a state store.
 returns a `DomainEventRecord` as part of every `TransitionResult`.  The workflow
 coordinator inserts the event row in the same transaction as the state change.
 
-**Side effects are named, serializable records.**  `TransitionResult.effects`
-is a tuple of frozen `Effect` dataclasses (`SendApplicantEmail`,
-`SendInvitationEmail`, `SendApprovalEmail`, `SendRejectionEmail`).  The workflow
-executes them after the transaction commits, preserving today's commit-before-email
-behavior.  Because effects are named values chosen by the coordinator rather than
-anonymous subscriptions, converting "execute inline" to "insert row, dispatch
-later" (transactional outbox) is a localized change to delivery, not a redesign
-of decision-making.
+**Side effects are chosen by the workflow, not the state machine.**  The
+original design had `TransitionResult.effects` return named `Effect` records,
+but the workflow never executed them; emails are enqueued by the workflow in
+the same transaction (`email_delivery` outbox, keyed by the domain event id)
+and dispatched after commit.  The unused `Effect` records were removed
+(2026-10) so the state machine only decides the new state and the audit event.
+
+**Transitions are compare-and-set.**  The workflow validates a transition
+against the status it read, then the write re-checks that status after the
+per-email advisory lock and in the `UPDATE ... WHERE status = :expected`
+clause.  A concurrent transition fails with a conflict instead of producing
+two contradictory events.
 
 ## Alternatives considered
 
@@ -72,7 +76,7 @@ coherent timeline difficult to reconstruct.
 
 - Every state transition produces exactly one `domain_events` row.
 - The state machine (`state_machine.py`) is the single place that decides what
-  event type and payload to emit.
+  event type and payload to emit (`_EVENT_TYPES`).
 - Adding a new transition type requires adding it to the state machine and
   the transition table — both in one file.
 - The `payload` jsonb column allows forward-compatible metadata without schema

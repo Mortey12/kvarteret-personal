@@ -48,6 +48,9 @@ from app.email_delivery import EmailDeliveryOutboxProtocol
 from app.observability import current_trace_id
 
 _REGISTRATION_NOT_FOUND = "Registration was not found."
+_CHANGED_CONCURRENTLY = (
+    "The application was changed by someone else. Reload and try again."
+)
 
 _PUBLIC_PROSPECT_ROLE_ROUTES = {
     "grondahls": ("skjenke-gruppen", "Pubdyr", "Grøndahls"),
@@ -616,6 +619,7 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
         registration_id: int,
         *,
         status: ApplicationState,
+        expected_status: ApplicationState,
         start_trial: bool = False,
     ) -> VolunteerApplicationDetail:
         repository = self._require_repository()
@@ -626,6 +630,10 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
         detail = await self.get_volunteer_application_detail(registration_id)
         if detail is None:
             raise VolunteerApplicationNotFoundError(_REGISTRATION_NOT_FOUND)
+        # The workflow validated the transition before the lock was held; a
+        # concurrent request may have moved the application since then.
+        if detail.status != expected_status:
+            raise VolunteerApplicationConflictError(_CHANGED_CONCURRENTLY)
         if start_trial and detail.status != ApplicationState.CONTACTED:
             raise VolunteerApplicationConflictError(
                 "Only contacted applications can start a trial."
@@ -696,14 +704,17 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
                     semester_code=get_current_semester_code(),
                     contract_signed=False,
                 )
-        await repository.set_application_status(
+        updated = await repository.set_application_status(
             registration_id,
             status=status,
             start_trial=start_trial,
             volunteer_id=trial_volunteer_id if start_trial else None,
             trial_assignment_id=trial_assignment_id if start_trial else None,
             owns_volunteer_profile=owns_profile if start_trial else None,
+            expected_status=expected_status,
         )
+        if not updated:
+            raise VolunteerApplicationConflictError(_CHANGED_CONCURRENTLY)
         refreshed = await self.get_volunteer_application_detail(registration_id)
         if refreshed is None:
             raise VolunteerApplicationNotFoundError(_REGISTRATION_NOT_FOUND)
@@ -866,6 +877,13 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
         detail = await self.get_volunteer_application_detail(registration_id)
         if detail is None:
             raise VolunteerApplicationNotFoundError(_REGISTRATION_NOT_FOUND)
+        repository = self._require_repository()
+        await repository.lock_registration_emails([detail.email])
+        detail = await self.get_volunteer_application_detail(registration_id)
+        if detail is None:
+            raise VolunteerApplicationNotFoundError(_REGISTRATION_NOT_FOUND)
+        if detail.status != ApplicationState.NEW:
+            raise VolunteerApplicationConflictError(_CHANGED_CONCURRENTLY)
         if detail.pending_volunteer_id is not None:
             raise VolunteerApplicationConflictError(
                 "Submitted applications must be rejected instead of deleted."
