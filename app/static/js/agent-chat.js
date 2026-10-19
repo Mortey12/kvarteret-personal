@@ -59,10 +59,22 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  // Enter sends, Shift+Enter inserts a newline.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    const form = event.target.closest?.("[data-agent-form]");
+    if (!form) return;
+    event.preventDefault();
+    form.requestSubmit();
+  });
+
+  // Capture phase + hx-boost="false" on the form: the body is boosted, and htmx
+  // would otherwise submit the form itself and morph the page, wiping the chat.
   document.addEventListener("submit", async (event) => {
     const form = event.target.closest("[data-agent-form]");
     if (!form) return;
     event.preventDefault();
+    event.stopImmediatePropagation();
     const log = form.parentElement.querySelector("[data-agent-log]");
     const field = form.elements.prompt;
     if (!log.children.length) messages.length = 0; // fresh page render = fresh conversation
@@ -84,5 +96,5 @@
     } finally {
       form.querySelector("button").disabled = false;
     }
-  });
+  }, true);
 })();
