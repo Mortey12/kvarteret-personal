@@ -48,6 +48,13 @@ class MobileCardSessionResponse(BaseModel):
 
     session_token: str
     card: MobileCardResponse
+    refresh_token: str | None = None
+
+
+class MobileCardSessionRefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    refresh_token: str
 
 
 class MobileCardSessionLogoutEventRequest(BaseModel):
@@ -230,7 +237,40 @@ async def create_session(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)
         ) from exc
     return MobileCardSessionResponse(
-        session_token=session.session_token, card=session.card
+        session_token=session.session_token,
+        card=session.card,
+        refresh_token=session.refresh_token,
+    )
+
+
+@router.post(
+    "/sessions/refresh",
+    response_model=MobileCardSessionResponse,
+    response_model_exclude_none=True,
+    operation_id="refreshMobileCardSession",
+)
+async def refresh_session(
+    payload: MobileCardSessionRefreshRequest,
+    include_role_history: bool = False,
+    service: MobileCardService = Depends(get_mobile_card_service),
+) -> MobileCardSessionResponse:
+    try:
+        session = await service.refresh_session(
+            payload.refresh_token, include_role_history=include_role_history
+        )
+    except MobileCardInvalidAccessCodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
+        ) from exc
+    except MobileCardPersonNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session is no longer valid.",
+        ) from exc
+    return MobileCardSessionResponse(
+        session_token=session.session_token,
+        card=session.card,
+        refresh_token=session.refresh_token,
     )
 
 

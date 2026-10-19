@@ -95,6 +95,7 @@ class MobileCardResponse(BaseModel):
 class MobileCardSession:
     session_token: str
     card: MobileCardResponse
+    refresh_token: str | None = None
 
 
 @dataclass(slots=True)

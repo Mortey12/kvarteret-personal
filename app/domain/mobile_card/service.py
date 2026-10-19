@@ -5,7 +5,7 @@ from app.observability import get_logger
 import hmac
 from datetime import UTC, date, datetime, time, timedelta
 from hashlib import sha256
-from secrets import choice
+from secrets import choice, token_urlsafe
 from typing import Any, Protocol
 
 from app.config import Settings
@@ -126,6 +126,12 @@ _LEGACY_PENGUIN_WORD_PREFIXES = [
     "kor",
     "mugge",
 ]
+
+
+def _hash_refresh_token(refresh_token: str) -> str:
+    # Plain SHA-256 on purpose: the token is 256 random bits, and the digest must
+    # not depend on app_secret_key, so refresh tokens survive a key rotation.
+    return sha256(refresh_token.encode("utf-8")).hexdigest()
 
 
 class MobileCardService:
@@ -308,6 +314,12 @@ class MobileCardService:
                 {"trial_application_id": trial_applicant.application_id}
             )
             card = self._build_trial_card(trial_applicant)
+        refresh_token = await self._issue_refresh_token(
+            volunteer_id=volunteer_row["id"] if volunteer_row is not None else None,
+            application_id=trial_applicant.application_id
+            if volunteer_row is None
+            else None,
+        )
         logger.info(
             "mobile_card.session.created",
             extra={
@@ -321,7 +333,53 @@ class MobileCardService:
             },
             after_commit=True,
         )
-        return MobileCardSession(session_token=token, card=card)
+        return MobileCardSession(
+            session_token=token, card=card, refresh_token=refresh_token
+        )
+
+    async def refresh_session(
+        self, refresh_token: str, *, include_role_history: bool = False
+    ) -> MobileCardSession:
+        """Trade a refresh token for a fresh session token without a new code."""
+        now = datetime.now(UTC)
+        subject = await self.repository.use_refresh_token(
+            token_hash=_hash_refresh_token(refresh_token),
+            now=now,
+            new_expires_at=now
+            + timedelta(days=self.settings.mobile_card_refresh_token_ttl_days),
+        )
+        if subject is None:
+            raise MobileCardInvalidAccessCodeError("Invalid refresh token.")
+        payload = (
+            {"person_id": subject["volunteer_id"]}
+            if subject["volunteer_id"] is not None
+            else {"trial_application_id": subject["application_id"]}
+        )
+        token = self.sessions.build_token(payload)
+        # Re-validates the subject (deleted person, ended trial) and handles trial promotion.
+        result = await self.get_current_card(
+            token, include_role_history=include_role_history
+        )
+        return MobileCardSession(
+            session_token=result.renewed_session_token or token,
+            card=result.card,
+            refresh_token=refresh_token,
+        )
+
+    async def _issue_refresh_token(
+        self, *, volunteer_id: int | None, application_id: int | None
+    ) -> str:
+        refresh_token = token_urlsafe(32)
+        now = datetime.now(UTC)
+        await self.repository.store_refresh_token(
+            token_hash=_hash_refresh_token(refresh_token),
+            volunteer_id=volunteer_id,
+            application_id=application_id,
+            created_at=now,
+            expires_at=now
+            + timedelta(days=self.settings.mobile_card_refresh_token_ttl_days),
+        )
+        return refresh_token
 
     async def get_current_card(
         self, session_token: str, *, include_role_history: bool = False

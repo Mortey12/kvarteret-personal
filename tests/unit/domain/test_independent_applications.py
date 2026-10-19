@@ -16,6 +16,7 @@ from app.domain.mobile_card.repository import MobileCardRepository
 from app.domain.mobile_card.tables import (
     mobile_card_trial_access_codes,
     mobile_card_access_codes,
+    mobile_card_refresh_tokens,
 )
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.volunteer_applications.models import (
@@ -68,6 +69,7 @@ async def stack(monkeypatch):
         volunteer_prospect_submissions,
         mobile_card_trial_access_codes,
         mobile_card_access_codes,
+        mobile_card_refresh_tokens,
     ]
     # SQLite's generated IDs and timestamps emulate production defaults in these tests.
     for table in tables:

@@ -1,6 +1,15 @@
 """Tables owned by the mobile_card module."""
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Table, Text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Table,
+    Text,
+)
 
 from app.db.metadata import public_metadata
 
@@ -35,4 +44,28 @@ mobile_card_trial_access_codes = Table(
     ),
     Column("code_hash", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+# Long-lived device credential that survives app-secret rotation and session
+# expiry; exchanged for a fresh signed session token at POST /sessions/refresh.
+mobile_card_refresh_tokens = Table(
+    "mobile_card_refresh_tokens",
+    public_metadata,
+    Column("token_hash", Text, primary_key=True),
+    Column(
+        "volunteer_id",
+        BigInteger,
+        ForeignKey("public.volunteer_records.id", ondelete="CASCADE"),
+    ),
+    Column(
+        "application_id",
+        BigInteger,
+        ForeignKey("public.volunteer_application_invites.id", ondelete="CASCADE"),
+    ),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(
+        "(volunteer_id IS NULL) <> (application_id IS NULL)",
+        name="mobile_card_refresh_tokens_one_subject",
+    ),
 )
