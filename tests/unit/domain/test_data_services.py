@@ -361,10 +361,14 @@ class FakeTrialApplicantProvider:
         self.snapshot = snapshot
         self.approved_volunteer_id = None
 
-    async def find_active_trial_applicant_by_email(self, email: str):
+    async def find_active_trial_applicant_by_email(
+        self, email: str, *, include_expired: bool = False
+    ):
         return self.snapshot
 
-    async def get_active_trial_applicant(self, application_id: int):
+    async def get_active_trial_applicant(
+        self, application_id: int, *, include_expired: bool = False
+    ):
         if self.snapshot and self.snapshot.application_id == application_id:
             return self.snapshot
         return None
@@ -1636,6 +1640,41 @@ async def test_trial_applicant_can_log_in_and_receives_temporary_card(photo_path
     assert session.card.active_roles[0].name == "Prøvefrivillig (Prøvetid)"
     assert session.card.active_roles[0].discount_level == 1
     assert session.card.active_roles[0].signed_contract is False
+
+
+@pytest.mark.asyncio
+async def test_expired_trial_applicant_gets_code_and_card_flagged_expired() -> None:
+    snapshot = TrialApplicantCardSnapshot(
+        application_id=77,
+        first_name="Ada",
+        last_name="Lovelace",
+        birth_date=None,
+        created_at=datetime(2026, 8, 1, tzinfo=UTC),
+        trial_ends_at=datetime.now(UTC) - timedelta(days=1),
+        photo_path="trial.jpg",
+        group_name="Bar",
+        role_name="Prøvefrivillig",
+        discount_level=1,
+    )
+    repository = FakeMobileCardRepository()
+    email_sender = FakeEmailSender()
+    service = MobileCardService(
+        Settings(app_secret_key="test-secret"),
+        repository=repository,  # type: ignore[arg-type]
+        email_sender=email_sender,
+        rate_limiter=InMemoryRateLimiter(),
+        trial_applicant_provider=FakeTrialApplicantProvider(snapshot),
+    )
+
+    await service.request_access_code("trial@example.com")
+    session = await service.create_session("trial@example.com", "123456")
+    current = await service.get_current_card(session.session_token)
+
+    assert len(email_sender.sent_emails) == 1
+    for card in (session.card, current.card):
+        assert card.probation_expired is True
+        assert card.active_roles == []
+        assert card.photo_url is None
 
 
 @pytest.mark.asyncio

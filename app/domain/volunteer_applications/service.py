@@ -891,11 +891,19 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
         await self.repository.delete_volunteer_application(registration_id)
         return detail
 
-    async def find_active_trial_applicant_by_email(self, email: str):
-        return await self.repository.find_active_trial_applicant_by_email(email)
+    async def find_active_trial_applicant_by_email(
+        self, email: str, *, include_expired: bool = False
+    ):
+        return await self.repository.find_active_trial_applicant_by_email(
+            email, include_expired=include_expired
+        )
 
-    async def get_active_trial_applicant(self, application_id: int):
-        return await self.repository.get_active_trial_applicant(application_id)
+    async def get_active_trial_applicant(
+        self, application_id: int, *, include_expired: bool = False
+    ):
+        return await self.repository.get_active_trial_applicant(
+            application_id, include_expired=include_expired
+        )
 
     async def get_approved_volunteer_id(self, application_id: int) -> int | None:
         return await self._require_repository().get_approved_volunteer_id(
