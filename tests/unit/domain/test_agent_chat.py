@@ -33,9 +33,13 @@ class FakeRepo:
         self.contract = (assignment_id, signed)
 
 
+async def counter(only_active=False):
+    return 3 if only_active else 10
+
+
 def make(repo=None, invalidated=None):
     settings = Settings(app_secret_key="k", azure_openai_endpoint="https://x", azure_openai_api_key="y")
-    return AgentChatService(settings, repo or FakeRepo(), (invalidated if invalidated is not None else []).append)
+    return AgentChatService(settings, repo or FakeRepo(), (invalidated if invalidated is not None else []).append, counter)
 
 
 async def test_proposal_changes_nothing_until_applied():
@@ -67,3 +71,10 @@ async def test_rejects_unknown_fields_and_noop():
     assert "error" in await svc._run_tool("propose_update_volunteer", '{"volunteer_id": 1, "changes": {"role": "Admin"}}', 5)
     assert "error" in await svc._run_tool("propose_update_volunteer", '{"volunteer_id": 1, "changes": {"first_name": "Kari"}}', 5)
     assert "error" in await svc._run_tool("nope", "{}", 5)
+
+
+async def test_stats_tool_matches_stats_endpoint_shape():
+    assert await make()._run_tool("get_volunteer_stats", "{}", 5) == {
+        "totalVolunteers": 10,
+        "currentSemesterVolunteers": 3,
+    }
