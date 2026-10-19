@@ -61,9 +61,13 @@ logger = get_logger(__name__)
 
 
 class TrialApplicantProviderProtocol(Protocol):
-    async def find_active_trial_applicant_by_email(self, email: str) -> Any | None: ...
+    async def find_active_trial_applicant_by_email(
+        self, email: str, *, include_expired: bool = False
+    ) -> Any | None: ...
 
-    async def get_active_trial_applicant(self, application_id: int) -> Any | None: ...
+    async def get_active_trial_applicant(
+        self, application_id: int, *, include_expired: bool = False
+    ) -> Any | None: ...
 
     async def get_approved_volunteer_id(self, application_id: int) -> int | None: ...
 
@@ -167,7 +171,7 @@ class MobileCardService:
         trial_applicant = None
         if not volunteers and self.trial_applicant_provider is not None:
             trial_applicant = await self.trial_applicant_provider.find_active_trial_applicant_by_email(
-                normalized_email
+                normalized_email, include_expired=True
             )
         if len(volunteers) > 1:
             raise MobileCardDuplicatePersonError(
@@ -268,7 +272,7 @@ class MobileCardService:
             if application_id is not None:
                 trial_applicant = (
                     await self.trial_applicant_provider.get_active_trial_applicant(
-                        application_id
+                        application_id, include_expired=True
                     )
                 )
         volunteer_row = None
@@ -332,7 +336,7 @@ class MobileCardService:
                 raise MobileCardInvalidAccessCodeError("Trial access has expired.")
             trial_applicant = (
                 await self.trial_applicant_provider.get_active_trial_applicant(
-                    decoded.trial_application_id
+                    decoded.trial_application_id, include_expired=True
                 )
             )
             if trial_applicant is None:
@@ -370,6 +374,12 @@ class MobileCardService:
             if self.media_token_service is not None and snapshot.photo_path
             else None
         )
+        # An expired trial still gets a card so the app can explain why the ID
+        # is not valid, but it carries no roles, discounts or photo.
+        ends_at = snapshot.trial_ends_at
+        if ends_at.tzinfo is None:  # SQLite (tests) returns naive datetimes
+            ends_at = ends_at.replace(tzinfo=UTC)
+        expired = ends_at <= datetime.now(UTC)
         return MobileCardResponse(
             person_id=snapshot.volunteer_id or -snapshot.application_id,
             first_name=snapshot.first_name,
@@ -377,9 +387,12 @@ class MobileCardService:
             birth_date=snapshot.birth_date,
             created_at=snapshot.created_at,
             valid_until=snapshot.trial_ends_at,
-            photo_url=photo_url,
+            photo_url=None if expired else photo_url,
             pingvin_points=0,
-            active_roles=[
+            probation_expired=True if expired else None,
+            active_roles=[]
+            if expired
+            else [
                 MobileCardRole(
                     name=f"{snapshot.role_name} (Prøvetid)",
                     group=snapshot.group_name,

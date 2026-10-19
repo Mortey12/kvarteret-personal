@@ -839,20 +839,25 @@ class VolunteerApplicationsRepository(SqlAlchemyRepository):
         )
 
     async def find_active_trial_applicant_by_email(
-        self, email: str
+        self, email: str, *, include_expired: bool = False
     ) -> TrialApplicantCardSnapshot | None:
-        return await self._find_active_trial_applicant(email=email)
+        return await self._find_active_trial_applicant(
+            email=email, include_expired=include_expired
+        )
 
     async def get_active_trial_applicant(
-        self, application_id: int
+        self, application_id: int, *, include_expired: bool = False
     ) -> TrialApplicantCardSnapshot | None:
-        return await self._find_active_trial_applicant(application_id=application_id)
+        return await self._find_active_trial_applicant(
+            application_id=application_id, include_expired=include_expired
+        )
 
     async def _find_active_trial_applicant(
         self,
         *,
         email: str | None = None,
         application_id: int | None = None,
+        include_expired: bool = False,
     ) -> TrialApplicantCardSnapshot | None:
         accepted_group = groups.alias("trial_group")
         accepted_role = assignment_roles.alias("trial_role")
@@ -915,7 +920,7 @@ class VolunteerApplicationsRepository(SqlAlchemyRepository):
             )
             .where(
                 volunteer_application_invites.c.status == ApplicationState.TRIAL,
-                volunteer_application_invites.c.trial_ends_at > func.now(),
+                volunteer_application_invites.c.trial_ends_at.is_not(None),
             )
             .order_by(
                 volunteer_application_invites.c.trial_ends_at.desc(),
@@ -923,6 +928,8 @@ class VolunteerApplicationsRepository(SqlAlchemyRepository):
             )
             .limit(1)
         )
+        if not include_expired:
+            stmt = stmt.where(volunteer_application_invites.c.trial_ends_at > func.now())
         if email is not None:
             stmt = stmt.where(
                 func.lower(volunteer_application_invites.c.email) == email.lower()

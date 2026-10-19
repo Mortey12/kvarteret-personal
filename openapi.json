@@ -1524,6 +1524,17 @@
             "title": "Pingvin Points",
             "type": "integer"
           },
+          "probation_expired": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probation Expired"
+          },
           "role_history": {
             "anyOf": [
               {

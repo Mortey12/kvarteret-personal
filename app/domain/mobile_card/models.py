@@ -41,6 +41,8 @@ class MobileCardResponse(BaseModel):
     valid_until: datetime
     photo_url: str | None = None
     pingvin_points: int
+    # Only present (true) for expired trials, so older strict clients are unaffected.
+    probation_expired: bool | None = None
     active_roles: list[MobileCardRole]
     role_history: list[MobileCardRoleHistory] | None = None
     word_of_the_day: str
@@ -55,6 +57,7 @@ class MobileCardResponse(BaseModel):
             "gyldigTil": self.valid_until.isoformat(),
             "bildeUrl": self.photo_url,
             "pingvinPoengSum": self.pingvin_points,
+            "proveperiodeUtlopt": bool(self.probation_expired),
             "aktiveVerv": [
                 {
                     "navn": role.name,
