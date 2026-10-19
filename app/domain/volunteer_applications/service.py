@@ -684,6 +684,7 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
                     contract_signed=False,
                 )
             else:
+                await self._reject_phone_duplicate(detail)
                 owns_profile = True
                 (
                     trial_volunteer_id,
@@ -719,6 +720,16 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
         if refreshed is None:
             raise VolunteerApplicationNotFoundError(_REGISTRATION_NOT_FOUND)
         return refreshed
+
+    async def _reject_phone_duplicate(self, detail) -> None:
+        # Same phone but a different email is how a typo'd signup becomes a second
+        # profile. shortcut: blocks shared phones too; admin fixes the profile email.
+        ids = await self._require_repository().find_volunteer_ids_by_phone(detail.phone)
+        if ids:
+            raise VolunteerApplicationConflictError(
+                f"Telefonnummeret tilhører allerede frivillig #{ids[0]}. "
+                "Oppdater e-posten på den profilen slik at den matcher søknaden."
+            )
 
     async def approve_volunteer_application(
         self,
@@ -833,6 +844,8 @@ class VolunteerApplicationsService(VolunteerApplicationsQueries):
                 assignment_id=detail.trial_assignment_id,
             )
         else:
+            if linked_id is None:
+                await self._reject_phone_duplicate(detail)
             volunteer_id, _ = await self.volunteer_creator.create_from_application(
                 first_name=detail.first_name,
                 last_name=detail.last_name or "",

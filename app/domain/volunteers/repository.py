@@ -86,6 +86,14 @@ class VolunteersRepository(SqlAlchemyRepository):
                 postal_code=postal_code,
             )
         )
+        # Applications promoted to this profile keep their own email copy; keep it
+        # in step so a corrected address is not left behind on the application.
+        if email:
+            await self.execute(
+                update(volunteer_application_invites)
+                .where(volunteer_application_invites.c.promoted_volunteer_id == volunteer_id)
+                .values(email=email.lower())
+            )
 
     async def replace_volunteer_relations(
         self,
