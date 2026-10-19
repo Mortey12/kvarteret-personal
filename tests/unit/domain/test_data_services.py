@@ -109,6 +109,7 @@ class FakeVolunteerApplicationsRepository:
         self.created_invites: list[dict[str, object | None]] = []
         self.existing_volunteer_ids_by_email: dict[str, int] = {}
         self.active_registration_ids_by_email: dict[str, int] = {}
+        self.volunteer_ids_by_phone: dict[str, list[int]] = {}
         self.application_photo_sha1: str | None = None
         self.application_photo_filetype: str | None = None
         self.application_photo_url: str | None = None
@@ -254,6 +255,9 @@ class FakeVolunteerApplicationsRepository:
 
     async def find_volunteer_id_by_email(self, email: str) -> int | None:
         return self.existing_volunteer_ids_by_email.get(email.lower())
+
+    async def find_volunteer_ids_by_phone(self, phone: str | None) -> list[int]:
+        return self.volunteer_ids_by_phone.get(phone or "", [])
 
     async def find_active_registration_id_by_email(self, email: str) -> int | None:
         return self.active_registration_ids_by_email.get(email.lower())

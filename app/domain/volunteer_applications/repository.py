@@ -628,6 +628,18 @@ class VolunteerApplicationsRepository(SqlAlchemyRepository):
             )
         return ids[0] if ids else None
 
+    async def find_volunteer_ids_by_phone(self, phone: str | None) -> list[int]:
+        normalized = normalize_phone_number(phone)
+        if not normalized:
+            return []
+        return list(
+            await self.session.scalars(
+                select(volunteer_records.c.id)
+                .where(volunteer_records.c.phone == normalized)
+                .limit(2)
+            )
+        )
+
     async def find_active_registration_id_by_email(self, email: str) -> int | None:
         session = self.session
         return await session.scalar(
