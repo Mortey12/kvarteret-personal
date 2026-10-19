@@ -5,10 +5,12 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+import re
+
+from sqlalchemy import func, or_, select, text, update
+from sqlalchemy.exc import DBAPIError
 
 from app.db.repository import SqlAlchemyRepository
-from app.db.table_defs.warehouse import warehouse_volunteer_counts
 from app.domain.courses.tables import course_completions, courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
@@ -42,7 +44,59 @@ _PROFILE_COLUMNS = (
 )
 
 
-class AgentChatRepository(SqlAlchemyRepository):
+SELECT_MAX_ROWS = 100
+_FORBIDDEN_SQL = re.compile(r"\b(set_config|pg_\w+|dblink\w*|lo_\w+|copy)\b", re.IGNORECASE)
+
+
+class _Done(Exception):
+    """Raised to roll back the savepoint that scoped role and settings."""
+
+
+class SelectRejectedError(Exception):
+    pass
+
+
+def check_select(sql: str) -> str:
+    sql = sql.strip().rstrip(";").strip()
+    if not re.match(r"(select|with)\b", sql, re.IGNORECASE) or ";" in sql:
+        raise SelectRejectedError("Only a single SELECT/WITH statement is allowed.")
+    if _FORBIDDEN_SQL.search(sql):
+        raise SelectRejectedError("That function or keyword is not allowed.")
+    return sql
+
+
+class AgentSelectMixin(SqlAlchemyRepository):
+    """Model-written SELECT, confined by Postgres itself.
+
+    Runs as the NOLOGIN ``agent_reader`` role, which can only SELECT the
+    secret-free views in schema ``agent``. The role, read-only mode, timeout and
+    search path are SET LOCAL inside a savepoint that is always rolled back, so
+    nothing leaks into the rest of the request's transaction.
+    """
+
+    async def run_select(self, sql: str) -> dict[str, Any]:
+        sql = check_select(sql)
+        rows: list[dict[str, Any]] = []
+        error: str | None = None
+        try:
+            async with self.session.begin_nested():
+                await self.execute(text("SET LOCAL transaction_read_only = on"))
+                await self.execute(text("SET LOCAL ROLE agent_reader"))
+                await self.execute(text("SET LOCAL statement_timeout = '5s'"))
+                await self.execute(text("SET LOCAL search_path = agent"))
+                result = await self.session.execute(text(sql))
+                rows = [dict(r) for r in result.mappings().fetchmany(SELECT_MAX_ROWS + 1)]
+                raise _Done
+        except _Done:
+            pass
+        except DBAPIError as exc:
+            error = str(exc.orig).split(": ", 1)[-1].splitlines()[0][:300]
+        if error:
+            return {"error": error}
+        return {"rows": rows[:SELECT_MAX_ROWS], "truncated": len(rows) > SELECT_MAX_ROWS}
+
+
+class AgentChatRepository(AgentSelectMixin):
     async def list_groups(self, query: str | None) -> list[dict[str, Any]]:
         stmt = select(groups.c.id, groups.c.name, groups.c.is_active)
         if query:
@@ -156,32 +210,3 @@ class AgentChatRepository(SqlAlchemyRepository):
             .where(role_assignments.c.id == assignment_id)
             .values(contract_signed=signed)
         )
-
-    async def warehouse_counts(self, semester: int | None) -> list[dict[str, Any]]:
-        """Aggregate counts as exported to the warehouse; small groups are suppressed."""
-        w = warehouse_volunteer_counts
-        stmt = (
-            select(
-                w.c.metric,
-                w.c.semester,
-                w.c.scope_key,
-                groups.c.name.label("group"),
-                w.c.volunteer_count,
-                w.c.is_suppressed,
-            )
-            .select_from(w.outerjoin(groups, groups.c.id == w.c.group_id))
-            .order_by(w.c.semester.desc(), w.c.scope_key, groups.c.name)
-            .limit(200)
-        )
-        if semester is not None:
-            stmt = stmt.where(w.c.semester == semester)
-        rows = await self.fetch_all_mappings(stmt)
-        return [
-            {
-                "metric": r["metric"], "semester": r["semester"], "scope": r["scope_key"],
-                "group": r["group"],
-                "volunteer_count": None if r["is_suppressed"] else r["volunteer_count"],
-                "suppressed": r["is_suppressed"],
-            }
-            for r in rows
-        ]
