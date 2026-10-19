@@ -20,7 +20,7 @@ from app.auth.session_store import (
 from app.auth.supabase_auth import SupabaseAuthGateway, SupabaseAuthGatewayProtocol
 from app.config import Settings, get_settings, validate_production_secrets
 from app.db.rate_limit import PostgresRateLimiter
-from app.db.session import DatabaseRuntimeManager
+from app.db.session import DatabaseRuntimeManager, session_scope
 from app.errors import NotConfiguredError
 from app.media_tokens import MediaTokenService
 from app.infrastructure.email.admin_account_templates import (
@@ -276,6 +276,7 @@ def build_application_container(
             volunteers_service.count_volunteers,
             volunteers_service.list_volunteers,
             role_assignments_service,
+            session_scope=lambda: session_scope(database_runtime_manager.get_runtime()),
         ),
     )
 

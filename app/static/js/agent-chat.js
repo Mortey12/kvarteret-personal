@@ -80,7 +80,9 @@
 
   function proposalCard(log, proposal) {
     const card = document.createElement("div");
-    card.className = "self-start rounded-2xl border border-kvarteret-red/30 p-4 text-sm";
+    card.className =
+      "self-start rounded-2xl border p-4 text-sm " +
+      (proposal.danger ? "border-red-600 bg-red-50" : "border-kvarteret-red/30");
     const title = document.createElement("p");
     title.className = "font-semibold";
     title.textContent = proposal.title;
@@ -96,6 +98,7 @@
       "mt-3 rounded-full bg-kvarteret-red px-4 py-2 text-xs font-semibold text-kvarteret-surface";
     button.textContent = "Bekreft endring";
     button.addEventListener("click", async () => {
+      if (proposal.danger && !window.confirm("Dette kan ikke angres. Utføre: " + proposal.title + "?")) return;
       button.disabled = true;
       try {
         const result = await post("/agent/apply", { token: proposal.token });
@@ -135,17 +138,62 @@
     messages.push({ role: "user", content: text });
     bubble(log, text, true);
     const pending = bubble(log, "Skonk tenker …", false);
+    const status = document.createElement("p");
+    status.className = "self-start text-xs text-kvarteret-night/60";
+    log.appendChild(status);
     form.querySelector("button").disabled = true;
-    try {
-      const data = await post("/agent/chat", { messages });
-      messages.push({ role: "assistant", content: data.reply || "(tomt svar)" });
-      pending.innerHTML = markdown(data.reply || "(tomt svar)");
+    let reply = "";
+    let newStep = false;
+    const render = () => {
+      pending.innerHTML = markdown(reply || "…");
       log.scrollTop = log.scrollHeight;
-      data.proposals.forEach((p) => proposalCard(log, p));
+    };
+    try {
+      const response = await fetch("/agent/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
+        body: JSON.stringify({ messages }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || `Feil ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const handle = (event) => {
+        if (event.type === "delta") {
+          if (newStep && reply) reply += "\n\n";
+          newStep = false;
+          reply += event.text;
+          status.textContent = "";
+          render();
+        } else if (event.type === "step") {
+          newStep = true;
+        } else if (event.type === "tool") {
+          status.textContent = "Bruker " + event.name.replace(/_/g, " ") + " …";
+        } else if (event.type === "proposal") {
+          proposalCard(log, event.proposal);
+        } else if (event.type === "error") {
+          throw new Error(event.message);
+        }
+      };
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (line) handle(JSON.parse(line));
+        }
+      }
+      messages.push({ role: "assistant", content: reply || "(tomt svar)" });
+      render();
     } catch (error) {
-      messages.pop();
-      pending.textContent = error.message;
+      if (reply) messages.push({ role: "assistant", content: reply });
+      else messages.pop();
+      pending.textContent = (reply ? reply + "\n\n" : "") + error.message;
     } finally {
+      status.remove();
       form.querySelector("button").disabled = false;
     }
   }, true);
