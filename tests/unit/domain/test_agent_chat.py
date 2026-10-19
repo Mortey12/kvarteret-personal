@@ -78,3 +78,14 @@ async def test_stats_tool_matches_stats_endpoint_shape():
         "totalVolunteers": 10,
         "currentSemesterVolunteers": 3,
     }
+
+
+def test_check_select_guards():
+    from app.domain.agent_chat.repository import SelectRejectedError, check_select
+
+    assert check_select("select 1;") == "select 1"
+    assert check_select("WITH a AS (select 1) select * from a")
+    for bad in ["delete from groups", "select 1; select 2", "select pg_sleep(1)",
+                "select set_config('role','none',true)", "copy x to stdout"]:
+        with pytest.raises(SelectRejectedError):
+            check_select(bad)
