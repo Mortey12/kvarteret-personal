@@ -850,8 +850,12 @@ async def test_active_trial_profile_gets_temporary_card_until_trial_expires(
             "/api/v1/mobile-card/me",
             headers={"Authorization": f"Bearer {session['session_token']}"},
         )
-        assert response.status_code == 401
-        assert response.json()["detail"] == "Trial access has expired."
+        # Expired trials stay signed in; the card is flagged instead.
+        assert response.status_code == 200, response.text
+        expired_card = response.json()
+        assert expired_card["probation_expired"] is True
+        assert expired_card["active_roles"] == []
+        assert "photo_url" not in expired_card
 
 
 async def test_concurrent_admin_invitations_share_one_application(app, e2e_engine, email_outbox):
