@@ -972,10 +972,15 @@ async def test_trial_assignment_migration_backfills_only_unambiguous_matches(cle
             "(32, 'ambiguous', 'ambiguous@example.com', 'admin_invite', 'trial', :group_id, 12, now())"
         ), {"group_id": group_id})
         migration = importlib.import_module("migrations.versions.20261001_1200_track_trial_assignment")
+        views = importlib.import_module("migrations.versions.20261019_1200_agent_readonly_views")
         def replay(connection):
             monkeypatch.setattr(migration, "op", Operations(MigrationContext.configure(connection)))
+            # agent.applications selects trial_assignment_id, which the downgrade drops.
+            connection.execute(text("DROP VIEW agent.applications"))
             migration.downgrade()
             migration.upgrade()
+            connection.execute(text(f"CREATE VIEW agent.applications AS {views._VIEWS['applications']}"))
+            connection.execute(text("GRANT SELECT ON agent.applications TO agent_reader"))
         await conn.run_sync(replay)
     assert await _fetch_all(e2e_engine,
         "SELECT id, trial_assignment_id FROM public.volunteer_application_invites ORDER BY id"
