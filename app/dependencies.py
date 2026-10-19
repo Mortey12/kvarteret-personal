@@ -14,6 +14,7 @@ from app.auth.models import AuthenticatedUser, WebSession
 from app.auth.roles import UserRole
 from app.media_tokens import MediaTokenService
 from app.runtime import ApplicationContainer
+from app.domain.agent_chat.service import AgentChatService
 from app.domain.event_interest.repository import EventInterestRepository
 from app.domain.event_interest.service import EventInterestService
 from app.domain.feedback.service import FeedbackService
@@ -173,6 +174,10 @@ def get_volunteer_applications_service(
 
 def get_semester_transfer_service(request: Request) -> SemesterTransferService:
     return get_container(request).semester_transfer_service
+
+
+def get_agent_chat_service(request: Request) -> AgentChatService:
+    return get_container(request).agent_chat_service
 
 
 def get_feedback_service(request: Request) -> FeedbackService:

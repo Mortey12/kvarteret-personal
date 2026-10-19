@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     review_bypass_enabled: bool = Field(default=False)
     review_bypass_email: str | None = Field(default=None)
     review_bypass_token: str | None = Field(default=None)
+    # Admin agent chat (Azure OpenAI "skonk" deployment).
+    azure_openai_endpoint: str | None = Field(default=None)
+    azure_openai_api_key: str | None = Field(default=None, repr=False)
+    azure_openai_agent_deployment: str = Field(default="skonk")
     log_level: str = Field(default="INFO")
     posthog_project_token: str | None = Field(default=None)
     posthog_feature_flags_token: str | None = Field(default=None, repr=False)
@@ -152,6 +156,9 @@ class Settings(BaseSettings):
         "spotify_refresh_token",
         "review_bypass_email",
         "review_bypass_token",
+        "azure_openai_endpoint",
+        "azure_openai_api_key",
+        "azure_openai_agent_deployment",
         "log_level",
         "posthog_project_token",
         "posthog_feature_flags_token",

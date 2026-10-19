@@ -49,6 +49,8 @@ from app.domain.volunteers.repository import VolunteersRepository
 from app.domain.volunteer_applications.repository import VolunteerApplicationsRepository
 from app.domain.courses.service import CoursesService
 from app.domain.courses.repository import CoursesRepository
+from app.domain.agent_chat.repository import AgentChatRepository
+from app.domain.agent_chat.service import AgentChatService
 from app.domain.groups.service import GroupsService
 from app.domain.mobile_card.service import MobileCardService
 from app.domain.volunteers.service import VolunteersService
@@ -146,6 +148,7 @@ class ApplicationContainer:
     volunteer_applications_service: VolunteerApplicationsService
     semester_transfer_service: SemesterTransferService
     feedback_service: FeedbackService
+    agent_chat_service: AgentChatService
 
     async def aclose(self) -> None:
         if self.storage_service is not None:
@@ -265,6 +268,11 @@ def build_application_container(
         volunteer_applications_service=volunteer_applications_service,
         semester_transfer_service=SemesterTransferService(),
         feedback_service=FeedbackService(resolved_settings, rate_limiter=rate_limiter),
+        agent_chat_service=AgentChatService(
+            resolved_settings,
+            AgentChatRepository(),
+            volunteers_service.invalidate_volunteer_cache,
+        ),
     )
 
     return container

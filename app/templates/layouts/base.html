@@ -16,6 +16,7 @@
     <script defer src="{{ asset_url('vendor/sortablejs-1.15.6.min.js') }}"></script>
     <script defer src="{{ asset_url('js/application-group-filter.js') }}"></script>
     <script defer src="{{ asset_url('js/application-board.js') }}"></script>
+    <script defer src="{{ asset_url('js/agent-chat.js') }}"></script>
     <script defer src="{{ asset_url('vendor/alpinejs-csp-3.17.4.min.js') }}"></script>
     <script>
       (() => {
@@ -140,6 +141,7 @@
                 {% endif %}
                 {% if request.state.show_admin_tools %}
                   <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'admin-accounts' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/admin-accounts">Admin-kontoer</a>
+                  <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'agent' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/agent">Skonk</a>
                   <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'email-deliveries' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/email-deliveries">E-post</a>
                 {% endif %}
               </nav>
