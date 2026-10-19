@@ -4,6 +4,7 @@ from app.dependencies import load_web_navigation_state
 
 from app.web.routes.admin_accounts.actions import router as admin_account_actions_router
 from app.web.routes.admin_accounts.pages import router as admin_account_pages_router
+from app.web.routes.agent.routes import router as agent_router
 from app.web.routes.auth.routes import router as auth_router
 from app.web.routes.courses.actions import router as course_actions_router
 from app.web.routes.courses.pages import router as course_pages_router
@@ -34,6 +35,7 @@ from app.web.routes.volunteers.search_pages import (
 
 web_router = APIRouter(dependencies=[Depends(load_web_navigation_state)])
 web_router.include_router(auth_router)
+web_router.include_router(agent_router)
 web_router.include_router(feedback_router)
 web_router.include_router(volunteer_search_fragments_router)
 web_router.include_router(volunteer_search_pages_router)

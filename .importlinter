@@ -25,6 +25,7 @@ name = Domain modules are independent (shared tables only)
 type = independence
 modules =
     app.domain.admin_accounts
+    app.domain.agent_chat
     app.domain.booking_requests
     app.domain.courses
     app.domain.feedback

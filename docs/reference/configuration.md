@@ -154,6 +154,9 @@ never calls Spotify and `GET /api/now-playing` reports an authorized-but-idle st
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
+| `AZURE_OPENAI_ENDPOINT` | unset | Azure OpenAI resource root for the admin Skonk chat (`/agent`). Unset disables the chat. |
+| `AZURE_OPENAI_API_KEY` | unset | Azure OpenAI key for Skonk. |
+| `AZURE_OPENAI_AGENT_DEPLOYMENT` | `skonk` | Deployment name used for the admin chat. It serves `gpt-6-luna`; PostHog `$ai_generation` events use that model name so cost is computed. They carry the asking admin's auth user id, token counts, latency and prompt length, never prompts or answers. |
 | `LINEAR_API_KEY` | unset | Linear API key used to create feedback issues. |
 | `LINEAR_TEAM_ID` | unset | Linear team where feedback issues are created. |
 | `LINEAR_PROJECT_ID_PERSONAL` | unset | Linear project for Personalplattformen feedback. |

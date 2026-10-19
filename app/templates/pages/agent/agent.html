@@ -1,0 +1,25 @@
+{% extends "layouts/base.html" %}
+
+{% block page_content %}
+  <section class="space-y-4">
+    <div class="space-y-2">
+      <p class="text-xs font-semibold tracking-[0.28em] text-kvarteret-red uppercase">Admin</p>
+      <h1 class="text-3xl font-semibold text-kvarteret-ink">Skonk</h1>
+      <p class="max-w-2xl text-sm text-kvarteret-night/80">
+        Spør om frivillige, grupper og verv. Endringer vises som forslag og utføres først når du bekrefter.
+        Samtalen lagres ikke og forsvinner når siden lastes på nytt.
+      </p>
+    </div>
+    {% if not configured %}
+      <p class="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">Skonk er ikke konfigurert (AZURE_OPENAI_ENDPOINT og AZURE_OPENAI_API_KEY mangler).</p>
+    {% else %}
+      <div class="flex flex-col gap-4 rounded-[2rem] border border-kvarteret-red/10 bg-kvarteret-surface p-6" id="agent-chat">
+        <div class="flex max-h-[60vh] min-h-48 flex-col gap-3 overflow-y-auto" data-agent-log></div>
+        <form class="flex gap-3" data-agent-form>
+          <textarea class="min-h-11 flex-1 rounded-2xl border border-kvarteret-night/20 px-4 py-2 text-sm" maxlength="4000" name="prompt" required rows="2" placeholder="F.eks. Finn Kari Nordmann og vis vervene hennes"></textarea>
+          <button class="inline-flex min-h-11 items-center justify-center self-end rounded-full bg-kvarteret-red px-5 text-sm font-semibold text-kvarteret-surface transition hover:bg-kvarteret-red-dark" type="submit">Send</button>
+        </form>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}
