@@ -14,6 +14,7 @@ from app.db.repository import SqlAlchemyRepository
 from app.domain.courses.tables import course_completions, courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
+from app.domain.volunteer_applications.tables import volunteer_application_invites
 from app.domain.volunteers.tables import (
     volunteer_cards,
     volunteer_next_of_kin,
@@ -178,8 +179,21 @@ class AgentChatRepository(AgentSelectMixin):
                 volunteer_next_of_kin.c.volunteer_id == volunteer_id
             )
         )
+        applications = await self.fetch_all_mappings(
+            select(
+                volunteer_application_invites.c.id,
+                volunteer_application_invites.c.status,
+                volunteer_application_invites.c.trial_started_at,
+                volunteer_application_invites.c.trial_ends_at,
+                volunteer_application_invites.c.promoted_at,
+            ).where(volunteer_application_invites.c.promoted_volunteer_id == volunteer_id)
+        )
+        for application in applications:
+            application["url"] = f"/volunteer-applications/{application['id']}"
         return {
             **profile,
+            "url": f"/volunteers/{volunteer_id}",
+            "applications": applications,
             "assignments": assignments,
             "course_completions": completions,
             "card_numbers": cards,
@@ -191,8 +205,23 @@ class AgentChatRepository(AgentSelectMixin):
             select(
                 role_assignments.c.id,
                 role_assignments.c.volunteer_id,
+                role_assignments.c.semester,
                 role_assignments.c.contract_signed,
-            ).where(role_assignments.c.id == assignment_id)
+                groups.c.name.label("group"),
+                assignment_roles.c.name.label("role"),
+            )
+            .select_from(
+                role_assignments.join(groups, groups.c.id == role_assignments.c.group_id)
+                .outerjoin(assignment_roles, assignment_roles.c.id == role_assignments.c.role_id)
+            )
+            .where(role_assignments.c.id == assignment_id)
+        )
+
+    async def group_and_role_names(self, group_id: int, role_id: int) -> dict[str, Any] | None:
+        return await self.fetch_first_mapping(
+            select(groups.c.name.label("group"), assignment_roles.c.name.label("role"))
+            .select_from(assignment_roles.join(groups, groups.c.id == assignment_roles.c.group_id))
+            .where(assignment_roles.c.id == role_id, groups.c.id == group_id)
         )
 
     async def update_volunteer_fields(
