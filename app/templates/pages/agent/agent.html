@@ -15,8 +15,8 @@
     {% else %}
       <div class="flex flex-col gap-4 rounded-[2rem] border border-kvarteret-red/10 bg-kvarteret-surface p-6" id="agent-chat">
         <div class="flex max-h-[60vh] min-h-48 flex-col gap-3 overflow-y-auto" data-agent-log></div>
-        <form class="flex gap-3" data-agent-form>
-          <textarea class="min-h-11 flex-1 rounded-2xl border border-kvarteret-night/20 px-4 py-2 text-sm" maxlength="4000" name="prompt" required rows="2" placeholder="F.eks. Finn Kari Nordmann og vis vervene hennes"></textarea>
+        <form class="flex gap-3" data-agent-form hx-boost="false" method="post" action="javascript:void(0)">
+          <textarea class="min-h-11 flex-1 rounded-2xl border border-kvarteret-night/20 px-4 py-2 text-sm" maxlength="4000" name="prompt" required rows="2" placeholder="F.eks. Finn Kari Nordmann og vis vervene hennes (Enter sender, Shift+Enter ny linje)"></textarea>
           <button class="inline-flex min-h-11 items-center justify-center self-end rounded-full bg-kvarteret-red px-5 text-sm font-semibold text-kvarteret-surface transition hover:bg-kvarteret-red-dark" type="submit">Send</button>
         </form>
       </div>
