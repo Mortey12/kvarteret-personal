@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import func, or_, select, update
 
 from app.db.repository import SqlAlchemyRepository
+from app.db.table_defs.warehouse import warehouse_volunteer_counts
 from app.domain.courses.tables import course_completions, courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
@@ -155,3 +156,32 @@ class AgentChatRepository(SqlAlchemyRepository):
             .where(role_assignments.c.id == assignment_id)
             .values(contract_signed=signed)
         )
+
+    async def warehouse_counts(self, semester: int | None) -> list[dict[str, Any]]:
+        """Aggregate counts as exported to the warehouse; small groups are suppressed."""
+        w = warehouse_volunteer_counts
+        stmt = (
+            select(
+                w.c.metric,
+                w.c.semester,
+                w.c.scope_key,
+                groups.c.name.label("group"),
+                w.c.volunteer_count,
+                w.c.is_suppressed,
+            )
+            .select_from(w.outerjoin(groups, groups.c.id == w.c.group_id))
+            .order_by(w.c.semester.desc(), w.c.scope_key, groups.c.name)
+            .limit(200)
+        )
+        if semester is not None:
+            stmt = stmt.where(w.c.semester == semester)
+        rows = await self.fetch_all_mappings(stmt)
+        return [
+            {
+                "metric": r["metric"], "semester": r["semester"], "scope": r["scope_key"],
+                "group": r["group"],
+                "volunteer_count": None if r["is_suppressed"] else r["volunteer_count"],
+                "suppressed": r["is_suppressed"],
+            }
+            for r in rows
+        ]

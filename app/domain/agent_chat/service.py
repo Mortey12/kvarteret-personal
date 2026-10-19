@@ -12,7 +12,7 @@ only the admin's explicit confirmation (``apply``) changes the database.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date
 from time import perf_counter
@@ -86,6 +86,13 @@ TOOLS = [
     _tool("get_volunteer",
           "Full volunteer record: profile, assignments, course completions, cards, next of kin.",
           {"volunteer_id": {"type": "integer"}}, ["volunteer_id"]),
+    _tool("get_volunteer_stats",
+          "Headline volunteer counts, same as the public /api/v1/stats: total "
+          "volunteers ever registered and volunteers active this semester.", {}, []),
+    _tool("get_semester_counts",
+          "Warehouse volunteer counts per semester (organisation-wide and per group). "
+          "Counts under 5 are suppressed (null). Semester code like 20262; null = all.",
+          {"semester": {"type": ["integer", "null"]}}, ["semester"]),
     _tool("propose_update_volunteer",
           "Propose changes to a volunteer profile. Include only fields to change. "
           "Needs admin confirmation.",
@@ -127,10 +134,12 @@ class AgentChatService:
         settings: Settings,
         repository: AgentChatRepository,
         invalidate_volunteer_cache: Callable[[int], None],
+        count_volunteers: Callable[..., Awaitable[int]],
     ) -> None:
         self.settings = settings
         self.repository = repository
         self.invalidate_volunteer_cache = invalidate_volunteer_cache
+        self.count_volunteers = count_volunteers
         self._signer = URLSafeTimedSerializer(
             settings.app_secret_key, salt="kvarteret-agent-proposal"
         )
@@ -264,6 +273,13 @@ class AgentChatService:
                 return await repo.search_volunteers(_clean(args.get("query")), args.get("group_id"))
             if name == "get_volunteer":
                 return await repo.get_volunteer(int(args["volunteer_id"])) or {"error": "not found"}
+            if name == "get_volunteer_stats":
+                return {
+                    "totalVolunteers": await self.count_volunteers(),
+                    "currentSemesterVolunteers": await self.count_volunteers(only_active=True),
+                }
+            if name == "get_semester_counts":
+                return await repo.warehouse_counts(args.get("semester"))
             if name == "propose_update_volunteer":
                 return await self._propose_update(int(args["volunteer_id"]), args["changes"], admin_id)
             if name == "propose_set_contract_signed":

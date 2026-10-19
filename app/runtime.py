@@ -272,6 +272,7 @@ def build_application_container(
             resolved_settings,
             AgentChatRepository(),
             volunteers_service.invalidate_volunteer_cache,
+            volunteers_service.count_volunteers,
         ),
     )
 
