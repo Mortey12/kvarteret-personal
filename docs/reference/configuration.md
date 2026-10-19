@@ -148,6 +148,7 @@ never calls Spotify and `GET /api/now-playing` reports an authorized-but-idle st
 | `MOBILE_CARD_SESSION_ATTEMPT_LIMIT` | `5` | Failed session attempt limit. |
 | `MOBILE_CARD_SESSION_ATTEMPT_WINDOW_SECONDS` | `600` | Failed session attempt window. |
 | `MOBILE_CARD_SESSION_TTL_DAYS` | `90` | Signed mobile-card session lifetime. |
+| `MOBILE_CARD_REFRESH_TOKEN_TTL_DAYS` | `365` | Mobile-card refresh token lifetime; each use extends it. |
 | `MOBILE_CARD_SESSION_RENEWAL_THRESHOLD_DAYS` | `30` | Threshold for returning a renewed session token. |
 
 ## Feedback and Review Bypass

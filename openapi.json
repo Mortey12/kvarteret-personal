@@ -1834,11 +1834,36 @@
         "title": "MobileCardSessionLogoutEventRequest",
         "type": "object"
       },
+      "MobileCardSessionRefreshRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "title": "MobileCardSessionRefreshRequest",
+        "type": "object"
+      },
       "MobileCardSessionResponse": {
         "additionalProperties": false,
         "properties": {
           "card": {
             "$ref": "#/components/schemas/MobileCardResponse"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
           },
           "session_token": {
             "title": "Session Token",
@@ -3394,6 +3419,59 @@
           }
         },
         "summary": "Create Session",
+        "tags": [
+          "mobile-card"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/sessions/refresh": {
+      "post": {
+        "operationId": "refreshMobileCardSession",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_role_history",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Role History",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileCardSessionRefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileCardSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Session",
         "tags": [
           "mobile-card"
         ]

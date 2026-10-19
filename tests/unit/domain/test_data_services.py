@@ -307,6 +307,21 @@ class FakeMobileCardRepository:
         self.stored_access_codes: list[tuple[int, str, datetime]] = []
         self.stored_trial_access_codes: list[tuple[int, str, datetime]] = []
         self.accept_trial_code = True
+        self.refresh_tokens: dict[str, dict] = {}
+
+    async def store_refresh_token(self, *, token_hash, volunteer_id, application_id, created_at, expires_at) -> None:
+        self.refresh_tokens[token_hash] = {
+            "volunteer_id": volunteer_id,
+            "application_id": application_id,
+            "expires_at": expires_at,
+        }
+
+    async def use_refresh_token(self, *, token_hash, now, new_expires_at):
+        row = self.refresh_tokens.get(token_hash)
+        if row is None or row["expires_at"] <= now:
+            return None
+        row["expires_at"] = new_expires_at
+        return row
 
     async def find_volunteers_by_email(self, email: str) -> list[dict]:
         return list(self.volunteers_by_email)
@@ -2236,3 +2251,38 @@ async def test_delete_conflicts_when_application_left_new_concurrently() -> None
         await _service_for(repository).delete_volunteer_application(7)
 
     assert repository.deleted_registration_ids == []
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_renews_session_even_after_secret_rotation() -> None:
+    snapshot = MobileCardSnapshot(
+        volunteer_id=12,
+        first_name="Ada",
+        last_name="Lovelace",
+        birth_date=None,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        photo_path=None,
+        pingvin_points=0,
+        active_roles=[],
+    )
+    repository = FakeMobileCardRepository(
+        volunteer_by_email_and_code={"id": 12}, card_snapshot=snapshot
+    )
+
+    def make(secret: str) -> MobileCardService:
+        return MobileCardService(
+            Settings(app_secret_key=secret),
+            repository=repository,  # type: ignore[arg-type]
+            email_sender=FakeEmailSender(),
+            rate_limiter=InMemoryRateLimiter(),
+        )
+
+    created = await make("old-secret").create_session("a@example.com", "123456")
+    assert created.refresh_token is not None
+
+    refreshed = await make("rotated-secret").refresh_session(created.refresh_token)
+    assert refreshed.card.person_id == 12
+    assert make("rotated-secret").sessions.decode_token(refreshed.session_token).person_id == 12
+
+    with pytest.raises(MobileCardInvalidAccessCodeError):
+        await make("rotated-secret").refresh_session("not-a-real-token")

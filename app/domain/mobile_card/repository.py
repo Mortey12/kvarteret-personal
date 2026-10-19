@@ -5,7 +5,7 @@ from datetime import date, datetime
 import logging
 from time import perf_counter
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db.repository import SqlAlchemyRepository
@@ -15,6 +15,7 @@ from app.domain.volunteers.tables import volunteer_photos, volunteer_records
 from app.domain.volunteer_applications.tables import volunteer_application_invites
 from app.domain.mobile_card.tables import (
     mobile_card_access_codes,
+    mobile_card_refresh_tokens,
     mobile_card_trial_access_codes,
 )
 from app.observability import log_operation_timing
@@ -119,6 +120,45 @@ class MobileCardRepository(SqlAlchemyRepository):
             set_={"code_hash": code_hash, "created_at": created_at},
         )
         await self.session.execute(stmt)
+
+    async def store_refresh_token(
+        self,
+        *,
+        token_hash: str,
+        volunteer_id: int | None,
+        application_id: int | None,
+        created_at: datetime,
+        expires_at: datetime,
+    ) -> None:
+        await self.session.execute(
+            pg_insert(mobile_card_refresh_tokens).values(
+                token_hash=token_hash,
+                volunteer_id=volunteer_id,
+                application_id=application_id,
+                created_at=created_at,
+                expires_at=expires_at,
+            )
+        )
+
+    async def use_refresh_token(
+        self, *, token_hash: str, now: datetime, new_expires_at: datetime
+    ) -> dict | None:
+        """Atomically validate a refresh token and slide its expiry."""
+        row = (
+            await self.session.execute(
+                update(mobile_card_refresh_tokens)
+                .where(
+                    mobile_card_refresh_tokens.c.token_hash == token_hash,
+                    mobile_card_refresh_tokens.c.expires_at > now,
+                )
+                .values(expires_at=new_expires_at)
+                .returning(
+                    mobile_card_refresh_tokens.c.volunteer_id,
+                    mobile_card_refresh_tokens.c.application_id,
+                )
+            )
+        ).mappings().first()
+        return dict(row) if row is not None else None
 
     async def consume_trial_access_code(
         self,
@@ -321,15 +361,17 @@ class MobileCardRepository(SqlAlchemyRepository):
             pingvin_points=int(person_row["pingvin_points"] or 0),
             active_roles=[
                 MobileCardRoleSnapshot(
-                    name=row["verv_navn"],
+                    # An assignment may have no role (role_id is nullable); it still
+                    # carries the group's discount tier, as the admin volunteer page counts it.
+                    name=row["verv_navn"] or "Medlem",
                     group=row["gruppe_navn"],
                     group_id=row["gruppe_id"],
                     discount_level=row["discount_tier"],
                     pingvin_points=int(row["pingvin_poeng"] or 0),
-                    signed_contract=row["contract_signed"],
+                    signed_contract=bool(row["contract_signed"]),
                 )
                 for row in rows
-                if row["verv_navn"] is not None and row["gruppe_navn"] is not None
+                if row["gruppe_navn"] is not None
             ],
             role_history=[
                 MobileCardRoleHistorySnapshot(
