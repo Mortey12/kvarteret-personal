@@ -157,7 +157,8 @@ class MobileCardRepository(SqlAlchemyRepository):
                 func.lower(volunteer_application_invites.c.email)
                 == email.strip().lower(),
                 volunteer_application_invites.c.status == "trial",
-                volunteer_application_invites.c.trial_ends_at > func.now(),
+                # Expired trials may still log in; the card is flagged instead.
+                volunteer_application_invites.c.trial_ends_at.is_not(None),
                 mobile_card_trial_access_codes.c.code_hash == code_hash,
                 mobile_card_trial_access_codes.c.created_at >= expires_after,
             )

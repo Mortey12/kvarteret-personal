@@ -857,6 +857,18 @@ async def test_active_trial_profile_gets_temporary_card_until_trial_expires(
         assert expired_card["active_roles"] == []
         assert "photo_url" not in expired_card
 
+        # A fresh login after expiry must also work, not just the existing session.
+        response = await client.post("/api/v1/mobile-card/access-codes", json={"email": email})
+        assert response.status_code == 202, response.text
+        code_match = re.search(r">\s*(\d{6})\s*<", email_outbox.sent[-1].html_body)
+        assert code_match is not None
+        response = await client.post(
+            "/api/v1/mobile-card/sessions",
+            json={"email": email, "access_code": code_match.group(1)},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["card"]["probation_expired"] is True
+
 
 async def test_concurrent_admin_invitations_share_one_application(app, e2e_engine, email_outbox):
     transport = httpx.ASGITransport(app=app)
