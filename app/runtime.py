@@ -212,6 +212,10 @@ def build_application_container(
         pending_count_cache_ttl_seconds=resolved_settings.pending_volunteer_applications_cache_ttl_seconds,
     )
 
+    role_assignments_service = RoleAssignmentsService(
+        repository=RoleAssignmentsRepository(),
+        invalidate_volunteer_cache=volunteers_service.invalidate_volunteer_cache,
+    )
     container = ApplicationContainer(
         settings=resolved_settings,
         database_runtime_manager=database_runtime_manager,
@@ -236,10 +240,7 @@ def build_application_container(
             admin_account_repository=AdminAccountsRepository(),
         ),
         volunteers_service=volunteers_service,
-        role_assignments_service=RoleAssignmentsService(
-            repository=RoleAssignmentsRepository(),
-            invalidate_volunteer_cache=volunteers_service.invalidate_volunteer_cache,
-        ),
+        role_assignments_service=role_assignments_service,
         groups_service=GroupsService(),
         courses_service=CoursesService(repository=CoursesRepository()),
         volunteer_search_service=VolunteerSearchService(VolunteerSearchRepository()),
@@ -273,6 +274,8 @@ def build_application_container(
             AgentChatRepository(),
             volunteers_service.invalidate_volunteer_cache,
             volunteers_service.count_volunteers,
+            volunteers_service.list_volunteers,
+            role_assignments_service,
         ),
     )
 
