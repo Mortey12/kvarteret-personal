@@ -121,3 +121,50 @@ async def test_update_schema_has_no_implicit_nulls():
 
     tool = next(t for t in TOOLS if t["name"] == "propose_update_volunteer")
     assert tool["parameters"]["properties"]["changes"]["type"] == "array"
+
+
+async def test_chat_stream_emits_deltas_tools_and_proposals():
+    svc = make()
+    calls = {"n": 0}
+
+    async def fake_generate(history, trace_id, prompt_chars, distinct_id):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            yield {"type": "delta", "text": "Sjekker"}
+            yield {"type": "response", "body": {"output": [{
+                "type": "function_call", "name": "propose_set_contract_signed",
+                "call_id": "c1", "arguments": '{"assignment_id": 9, "signed": true}'}]}}
+        else:
+            yield {"type": "delta", "text": "Ferdig"}
+            yield {"type": "response", "body": {"output": [{"type": "message", "content": []}]}}
+
+    svc._stream_generate = fake_generate
+    events = [e async for e in svc.chat_stream(
+        [{"role": "user", "content": "x"}], admin_id=5, distinct_id="d")]
+    assert [e["type"] for e in events] == ["delta", "tool", "proposal", "step", "delta", "done"]
+
+
+async def test_sse_parsing_and_reasoning_retry(monkeypatch):
+    import json as _json
+    import httpx
+    from app.domain.agent_chat import service as mod
+
+    seen = []
+
+    def handler(request):
+        payload = _json.loads(request.content)
+        seen.append("reasoning" in payload)
+        if "reasoning" in payload:
+            return httpx.Response(400, json={"error": "unsupported"})
+        done = {"type": "response.completed", "response": {"status": "completed",
+                "usage": {"input_tokens": 1, "output_tokens": 2}, "output": []}}
+        body = "".join(f"event: x\ndata: {_json.dumps(e)}\n\n" for e in [
+            {"type": "response.output_text.delta", "delta": "Hei"}, done])
+        return httpx.Response(200, text=body)
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(mod.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    svc = make()
+    out = [e async for e in svc._stream_generate([], "t", 1, "d")]
+    assert seen == [True, False]
+    assert [e["type"] for e in out] == ["delta", "response"]
