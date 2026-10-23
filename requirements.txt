@@ -3,8 +3,8 @@
 -e .
 aiosqlite==0.22.1
 annotated-doc==0.0.4
-annotated-types==0.8.0
-anyio==4.12.1
+annotated-types==0.7.0
+anyio==4.14.2
 asgiref==3.12.1
 asyncpg==0.31.0
 azure-core==1.38.3
@@ -43,19 +43,19 @@ opentelemetry-util-http==0.65b0
 packaging==26.0
 passlib==1.7.4
 phonenumbers==9.0.39
-pillow==12.3.0
+pillow==13.0.0
 posthog==7.58.0
 protobuf==7.35.1
 pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
 pydantic==2.12.5
 pydantic-core==2.41.5
 pydantic-settings==2.15.0
-python-dotenv==1.2.3
+python-dotenv==1.2.2
 python-multipart==0.0.32
 requests==2.34.2
 sqlalchemy==2.0.48
 starlette==1.6.0
 typing-extensions==4.15.0
-typing-inspection==0.4.4
-urllib3==2.7.0
+typing-inspection==0.4.2
+urllib3==2.8.0
 wrapt==2.3.0
