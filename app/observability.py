@@ -175,6 +175,15 @@ _EVENT_FIELDS: dict[str, frozenset[str]] = {
         }
     ),
     "feedback.issue.created": frozenset({"feedback_source", "issue_identifier"}),
+    "feedback.issue.graphql_failed": frozenset(
+        {
+            "operation",
+            "graphql_error_count",
+            "graphql_error_codes",
+            "graphql_error_paths",
+        }
+    ),
+    "feedback.issue.http_failed": frozenset({"http_status"}),
     "volunteer.prospect.conflict": frozenset({"conflict_type"}),
     "volunteer.prospect.validation_failed": frozenset(
         {"validation_codes", "validation_fields", "validation_issue_count"}

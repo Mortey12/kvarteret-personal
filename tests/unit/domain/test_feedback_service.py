@@ -60,14 +60,14 @@ def test_create_linear_issue_lets_linear_assign_triage_state_and_includes_email(
         Settings(
             linear_api_key="lin_api_example",
             linear_team_id="team-id",
-            linear_project_id_personal="project-id",
             linear_state_id_triage="triage-state-id",
         ),
     )
 
     issue_input = captured[0]["payload"]["variables"]["input"]
     assert issue_input["teamId"] == "team-id"
-    assert issue_input["projectId"] == "project-id"
+    assert "projectId" not in issue_input
+    assert "internbevis-appen" in issue_input["description"] or "Personalplattformen" in issue_input["description"]
     assert "stateId" not in issue_input
     assert "E-post:** admin.user@example.test" in issue_input["description"]
     assert captured[0]["authorization"] == "lin_api_example"
@@ -78,7 +78,6 @@ def _settings_for_rate_limit_tests(**overrides) -> Settings:
     return Settings(
         linear_api_key="lin_api_example",
         linear_team_id="team-id",
-        linear_project_id_internbevis="project-id",
         feedback_submission_limit=2,
         feedback_submission_window_seconds=600,
         **overrides,
@@ -177,3 +176,37 @@ async def test_submit_feedback_without_source_key_uses_a_shared_fallback_limit(
             source="internbevis-rn",
             source_key=None,
         )
+
+
+def test_graphql_errors_logged_without_sensitive_details(monkeypatch, caplog) -> None:
+    from app.domain.feedback.service import FeedbackDeliveryError, _linear_graphql
+
+    payload = {
+        "errors": [
+            {
+                "message": "secret user message lin_api_xxx",
+                "extensions": {"type": "invalid input", "code": "INVALID_INPUT"},
+                "path": ["issueCreate"],
+            }
+        ]
+    }
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode()
+
+    monkeypatch.setattr(
+        "app.domain.feedback.service.urllib_request.urlopen", lambda r, timeout: Resp()
+    )
+    with caplog.at_level("ERROR"), pytest.raises(FeedbackDeliveryError):
+        _linear_graphql("k", "q", {})
+    rec = next(r for r in caplog.records if r.getMessage() == "feedback.issue.graphql_failed")
+    assert rec.event_data["graphql_error_codes"] == "INVALID_INPUT"
+    assert rec.event_data["graphql_error_paths"] == "issueCreate"
+    assert "secret" not in str(rec.__dict__)

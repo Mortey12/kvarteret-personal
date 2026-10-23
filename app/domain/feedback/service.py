@@ -38,11 +38,11 @@ _CATEGORY_TO_TYPE = {
     "ros": "improvement",
 }
 
-# Maps the `source` field to (settings attribute name, human-readable label)
-_SOURCE_PROJECT = {
-    "personalplattformen": ("linear_project_id_personal", "Personalplattformen"),
-    "internbevis-rn": ("linear_project_id_internbevis", "internbevis-appen"),
-    "nettside": ("linear_project_id_nettside", "kvarteret.no"),
+# Maps the `source` field to the human-readable origin shown in the issue body.
+_SOURCE_LABEL = {
+    "personalplattformen": "Personalplattformen",
+    "internbevis-rn": "internbevis-appen",
+    "nettside": "kvarteret.no",
 }
 
 
@@ -75,7 +75,7 @@ class FeedbackSubmission:
     platform: str | None
     user_id: int | None
     submitted_at: str
-    source: str  # key into _SOURCE_PROJECT
+    source: str  # key into _SOURCE_LABEL
 
 
 class FeedbackService:
@@ -180,7 +180,7 @@ def _normalize_submission(
     normalized_email = _validate_feedback_email(email)
 
     submitted_at = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
-    normalized_source = source if source in _SOURCE_PROJECT else "personalplattformen"
+    normalized_source = source if source in _SOURCE_LABEL else "personalplattformen"
     _valid_types = {"bug", "feature", "improvement"}
     normalized_type = feedback_type if feedback_type in _valid_types else None
     return FeedbackSubmission(
@@ -205,7 +205,7 @@ def _derive_title(message: str) -> str:
 
 
 def _build_description(submission: FeedbackSubmission) -> str:
-    _, source_label = _SOURCE_PROJECT.get(submission.source, ("", "ukjent"))
+    source_label = _SOURCE_LABEL.get(submission.source, "ukjent")
     lines = [
         submission.message,
         "",
@@ -223,6 +223,30 @@ def _build_description(submission: FeedbackSubmission) -> str:
     if submission.email:
         lines.append(f"**E-post:** {submission.email}")
     return "\n".join(lines)
+
+
+_SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_ .-]{1,60}$")
+
+
+def _safe_token(value: object) -> str | None:
+    # Allowlist: short plain tokens only, so messages/PII/secrets can't leak.
+    return value if isinstance(value, str) and _SAFE_TOKEN.match(value) else None
+
+
+def _summarize_graphql_errors(errors: object) -> dict[str, object]:
+    """Bounded diagnostics from Linear errors: codes, paths. No messages."""
+    items = [e for e in errors if isinstance(e, dict)] if isinstance(errors, list) else []
+    codes, paths = [], []
+    for e in items[:5]:
+        ext = e.get("extensions") if isinstance(e.get("extensions"), dict) else {}
+        codes.append(_safe_token(ext.get("code")) or _safe_token(ext.get("type")))
+        path = e.get("path")
+        paths.append(_safe_token(path[0]) if isinstance(path, list) and path else None)
+    return {
+        "graphql_error_count": len(items),
+        "graphql_error_codes": ",".join(c or "?" for c in codes),
+        "graphql_error_paths": ",".join(p or "?" for p in paths),
+    }
 
 
 def _linear_graphql(
@@ -243,7 +267,8 @@ def _linear_graphql(
             result = json.loads(response.read())
     except urllib_error.HTTPError as exc:
         logger.exception(
-            "feedback.issue.http_failed", extra={"event": "feedback.issue.http_failed"}
+            "feedback.issue.http_failed",
+            extra={"event": "feedback.issue.http_failed", "http_status": exc.code},
         )
         raise FeedbackDeliveryError("Linear request failed.") from exc
     except Exception as exc:
@@ -257,7 +282,11 @@ def _linear_graphql(
     if errors:
         logger.error(
             "feedback.issue.graphql_failed",
-            extra={"event": "feedback.issue.graphql_failed"},
+            extra={
+                "event": "feedback.issue.graphql_failed",
+                "operation": "issueCreate",
+                **_summarize_graphql_errors(errors),
+            },
         )
         raise FeedbackDeliveryError("Linear returned GraphQL errors.")
     return result
@@ -268,29 +297,14 @@ def _create_linear_issue(submission: FeedbackSubmission, settings: Settings) -> 
     if not api_key:
         raise FeedbackDeliveryError("LINEAR_API_KEY is not configured.")
 
-    project_attr, _ = _SOURCE_PROJECT.get(
-        submission.source, ("linear_project_id_personal", "")
-    )
     team_id = settings.linear_team_id
-    project_id = getattr(settings, project_attr, None)
 
-    missing_settings = [
-        name
-        for name, value in (
-            ("LINEAR_TEAM_ID", team_id),
-            (project_attr.upper(), project_id),
-        )
-        if not value
-    ]
-    if missing_settings:
-        raise FeedbackDeliveryError(
-            f"Incomplete Linear config: {', '.join(missing_settings)}."
-        )
+    if not team_id:
+        raise FeedbackDeliveryError("Incomplete Linear config: LINEAR_TEAM_ID.")
 
     variables = {
         "input": {
             "teamId": team_id,
-            "projectId": project_id,
             "title": _derive_title(submission.message),
             "description": _build_description(submission),
         }
