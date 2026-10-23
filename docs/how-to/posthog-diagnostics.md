@@ -50,7 +50,9 @@ logs are emitted by the workflow after commit, before optional side effects, so
 an email or cleanup failure cannot hide a completed transition. An idempotent
 public prospect replay does not emit another registration event. Mobile-card
 access-code delivery/session creation and feedback issue creation have named
-outcome events. Request/trace IDs, domain IDs, status, and categorical errors are
+outcome events. Failed Linear feedback deliveries keep the feedback source and
+Linear error codes, types, and field paths, but never Linear error messages.
+Request/trace IDs, domain IDs, status, and categorical errors are
 allowlisted; credentials, personal data, raw exception text, and arbitrary
 messages are excluded by `app/observability.py`.
 

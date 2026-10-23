@@ -80,6 +80,18 @@ _COMMON_FIELDS = frozenset(
     }
 )
 
+_LINEAR_ERROR_FIELDS = frozenset(
+    {
+        "feedback_source",
+        "linear_operation",
+        "linear_error_count",
+        "linear_error_codes",
+        "linear_error_types",
+        "linear_error_paths",
+        "linear_user_error",
+    }
+)
+
 # Every event-specific field is declared here. Callers cannot add arbitrary data.
 _EVENT_FIELDS: dict[str, frozenset[str]] = {
     "auth.login.failed": frozenset({"reason"}),
@@ -175,6 +187,12 @@ _EVENT_FIELDS: dict[str, frozenset[str]] = {
         }
     ),
     "feedback.issue.created": frozenset({"feedback_source", "issue_identifier"}),
+    "feedback.issue.rejected": frozenset({"feedback_source", "linear_operation"}),
+    "feedback.issue.delivery_failed": frozenset(
+        {"feedback_source", "linear_operation"}
+    ),
+    "feedback.issue.http_failed": _LINEAR_ERROR_FIELDS,
+    "feedback.issue.graphql_failed": _LINEAR_ERROR_FIELDS,
     "volunteer.prospect.conflict": frozenset({"conflict_type"}),
     "volunteer.prospect.validation_failed": frozenset(
         {"validation_codes", "validation_fields", "validation_issue_count"}

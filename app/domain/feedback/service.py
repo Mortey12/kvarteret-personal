@@ -23,6 +23,13 @@ MAX_PAGE_LENGTH = 200
 
 _GRAPHQL_ENDPOINT = "https://api.linear.app/graphql"
 
+# Linear error diagnostics keep only short identifier-shaped values. Messages,
+# variables, and raw responses can echo submitted text or contact details.
+_ERROR_CODE_PATTERN = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
+_ERROR_TYPE_PATTERN = re.compile(r"[a-z][a-z ]{0,63}")
+_ERROR_PATH_SEGMENT_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+_MAX_ERROR_DIAGNOSTIC_VALUES = 5
+
 _CREATE_ISSUE_MUTATION = """
 mutation CreateIssue($input: IssueCreateInput!) {
   issueCreate(input: $input) {
@@ -225,8 +232,70 @@ def _build_description(submission: FeedbackSubmission) -> str:
     return "\n".join(lines)
 
 
+def _bounded_token(value: object, pattern: re.Pattern[str]) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and pattern.fullmatch(value):
+        return value.replace(" ", "_")
+    return "other"
+
+
+def _joined(values: set[str | None]) -> str | None:
+    kept = sorted(value for value in values if value)
+    return ",".join(kept[:_MAX_ERROR_DIAGNOSTIC_VALUES]) or None
+
+
+def _graphql_error_fields(errors: object) -> dict[str, object]:
+    if not isinstance(errors, list):
+        return {}
+    codes: set[str | None] = set()
+    types: set[str | None] = set()
+    paths: set[str | None] = set()
+    user_error = False
+    for error in errors:
+        if not isinstance(error, dict):
+            continue
+        extensions = error.get("extensions")
+        if isinstance(extensions, dict):
+            codes.add(_bounded_token(extensions.get("code"), _ERROR_CODE_PATTERN))
+            types.add(_bounded_token(extensions.get("type"), _ERROR_TYPE_PATTERN))
+            user_error = user_error or extensions.get("userError") is True
+        path = error.get("path")
+        if isinstance(path, list):
+            paths.add(
+                ".".join(
+                    segment
+                    for segment in path
+                    if isinstance(segment, str)
+                    and _ERROR_PATH_SEGMENT_PATTERN.fullmatch(segment)
+                )[:200]
+            )
+    return {
+        "linear_error_count": len(errors),
+        "linear_error_codes": _joined(codes),
+        "linear_error_types": _joined(types),
+        "linear_error_paths": _joined(paths),
+        "linear_user_error": user_error,
+    }
+
+
+def _http_error_fields(exc: urllib_error.HTTPError) -> dict[str, object]:
+    fields: dict[str, object] = {"dependency_status_code": exc.code}
+    try:
+        result = json.loads(exc.read())
+    except Exception:
+        return fields
+    if isinstance(result, dict):
+        fields.update(_graphql_error_fields(result.get("errors")))
+    return fields
+
+
 def _linear_graphql(
-    api_key: str, query: str, variables: dict[str, object]
+    api_key: str,
+    query: str,
+    variables: dict[str, object],
+    *,
+    log_fields: dict[str, object],
 ) -> dict[str, object]:
     body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
     req = urllib_request.Request(
@@ -243,13 +312,18 @@ def _linear_graphql(
             result = json.loads(response.read())
     except urllib_error.HTTPError as exc:
         logger.exception(
-            "feedback.issue.http_failed", extra={"event": "feedback.issue.http_failed"}
+            "feedback.issue.http_failed",
+            extra={
+                "event": "feedback.issue.http_failed",
+                **log_fields,
+                **_http_error_fields(exc),
+            },
         )
         raise FeedbackDeliveryError("Linear request failed.") from exc
     except Exception as exc:
         logger.exception(
             "feedback.issue.delivery_failed",
-            extra={"event": "feedback.issue.delivery_failed"},
+            extra={"event": "feedback.issue.delivery_failed", **log_fields},
         )
         raise FeedbackDeliveryError("Linear request failed.") from exc
 
@@ -257,7 +331,11 @@ def _linear_graphql(
     if errors:
         logger.error(
             "feedback.issue.graphql_failed",
-            extra={"event": "feedback.issue.graphql_failed"},
+            extra={
+                "event": "feedback.issue.graphql_failed",
+                **log_fields,
+                **_graphql_error_fields(errors),
+            },
         )
         raise FeedbackDeliveryError("Linear returned GraphQL errors.")
     return result
@@ -296,12 +374,19 @@ def _create_linear_issue(submission: FeedbackSubmission, settings: Settings) -> 
         }
     }
 
-    result = _linear_graphql(api_key, _CREATE_ISSUE_MUTATION, variables)
+    log_fields: dict[str, object] = {
+        "linear_operation": "issueCreate",
+        "feedback_source": submission.source,
+    }
+    result = _linear_graphql(
+        api_key, _CREATE_ISSUE_MUTATION, variables, log_fields=log_fields
+    )
 
     issue_create = result.get("data", {}).get("issueCreate", {})
     if not issue_create.get("success"):
         logger.error(
-            "feedback.issue.rejected", extra={"event": "feedback.issue.rejected"}
+            "feedback.issue.rejected",
+            extra={"event": "feedback.issue.rejected", **log_fields},
         )
         raise FeedbackDeliveryError("Linear issueCreate returned success=false.")
 
