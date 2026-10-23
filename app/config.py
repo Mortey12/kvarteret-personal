@@ -70,15 +70,6 @@ class Settings(BaseSettings):
     # The ids are public workspace identifiers; only the API key is secret.
     linear_api_key: str | None = Field(default=None)
     linear_team_id: str | None = Field(default="6ea0cddf-c6ed-4c10-a9ac-7884249ea35a")
-    linear_project_id_personal: str | None = Field(
-        default="73181b8f-728c-4251-b649-ade7d88d44c5"
-    )
-    linear_project_id_internbevis: str | None = Field(
-        default="76554661-df42-482b-9d84-a794aaebe9e5"
-    )
-    linear_project_id_nettside: str | None = Field(
-        default="6b3c6f1b-c7fa-413e-a982-6a934893045a"
-    )
     linear_state_id_triage: str | None = Field(
         default="396268d4-7abf-4783-801b-a04d3d7db580"
     )
@@ -145,9 +136,6 @@ class Settings(BaseSettings):
         "database_url",
         "linear_api_key",
         "linear_team_id",
-        "linear_project_id_personal",
-        "linear_project_id_internbevis",
-        "linear_project_id_nettside",
         "linear_state_id_triage",
         "resend_api_key",
         "email_sender_name",

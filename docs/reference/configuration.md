@@ -160,9 +160,6 @@ never calls Spotify and `GET /api/now-playing` reports an authorized-but-idle st
 | `AZURE_OPENAI_AGENT_DEPLOYMENT` | `skonk` | Deployment name used for the admin chat. It serves `gpt-6-luna`; PostHog `$ai_generation` events use that model name so cost is computed. They carry the asking admin's auth user id, token counts, latency and prompt length, never prompts or answers. |
 | `LINEAR_API_KEY` | unset | Linear API key used to create feedback issues. |
 | `LINEAR_TEAM_ID` | unset | Linear team where feedback issues are created. |
-| `LINEAR_PROJECT_ID_PERSONAL` | unset | Linear project for Personalplattformen feedback. |
-| `LINEAR_PROJECT_ID_INTERNBEVIS` | unset | Linear project for internbevis app feedback. |
-| `LINEAR_PROJECT_ID_NETTSIDE` | unset | Linear project for kvarteret.no feedback. |
 | `LINEAR_STATE_ID_TRIAGE` | unset | Legacy Linear triage state setting. New feedback issues let Linear assign triage/default state. |
 | `REVIEW_BYPASS_ENABLED` | `false` | Enables the app-store review bypass path for mobile-card review. |
 | `REVIEW_BYPASS_EMAIL` | unset | Review bypass email. |
