@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from app.config import Settings
 from app.dependencies import get_email_outbox_service, get_settings
 from app.email_outbox_service import EmailOutboxService
-from app.db.session import current_session
+from app.db.session import commit_request_session, current_session
+from app.domain.recruitment_digest.service import RecruitmentDigestService
 from app.warehouse_counts import refresh_counts
 
 router = APIRouter()
@@ -51,3 +52,19 @@ async def dispatch_email_deliveries(
         "expired": summary.expired_count,
         "interrupted": summary.interrupted_count,
     }
+
+
+@router.get("/internal/cron/enqueue-recruiter-digests", include_in_schema=False)
+async def enqueue_recruiter_digests(
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+    service: EmailOutboxService = Depends(get_email_outbox_service),
+) -> dict[str, int]:
+    if not settings.cron_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    expected = f"Bearer {settings.cron_secret}"
+    if authorization is None or not secrets.compare_digest(authorization, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    queued = await RecruitmentDigestService(email_outbox=service).enqueue_daily_digests()
+    await commit_request_session()
+    return {"queued": queued}

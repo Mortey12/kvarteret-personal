@@ -130,9 +130,12 @@ class GroupDetail:
     parent_group_id: int | None
     discount_step: int | None
     created_at: datetime | None
+    recruitment_contact_email: str | None
     positions: list[GroupPositionItem]
     recent_members: list[GroupMemberItem]
     delete_blockers: list[str]
+    recruitment_contact_volunteer_id: int | None = None
+    recruitment_contact_volunteer_name: str | None = None
 
 
 
@@ -311,6 +314,24 @@ class GroupsQueries(SqlAlchemyRepository):
             return None
         delete_blockers = await self._get_group_delete_blockers(group_id)
         positions, members = _build_group_detail_lists(rows)
+        contact = await self.fetch_first_mapping(
+            select(
+                groups.c.recruitment_contact_email,
+                groups.c.recruitment_contact_volunteer_id,
+                volunteer_records.c.first_name,
+                volunteer_records.c.last_name,
+            )
+            .select_from(
+                groups.outerjoin(
+                    volunteer_records,
+                    volunteer_records.c.id == groups.c.recruitment_contact_volunteer_id,
+                )
+            )
+            .where(groups.c.id == group_id)
+        ) or {}
+        contact_name = " ".join(
+            filter(None, [contact.get("first_name"), contact.get("last_name")])
+        ).strip()
         return GroupDetail(
             group_id=group_row["group_id"],
             name=group_row["group_name"],
@@ -321,6 +342,9 @@ class GroupsQueries(SqlAlchemyRepository):
             parent_group_id=group_row["group_parent_id"],
             discount_step=group_row["group_discount_step"],
             created_at=coerce_datetime(group_row.get("group_created_at")),
+            recruitment_contact_email=contact.get("recruitment_contact_email"),
+            recruitment_contact_volunteer_id=contact.get("recruitment_contact_volunteer_id"),
+            recruitment_contact_volunteer_name=contact_name or None,
             positions=sorted(
                 positions,
                 key=lambda item: ((item.role_name or "").lower(), item.role_id),

@@ -10,6 +10,7 @@ APPLICANT_INVITATION = "applicant_invitation"
 APPLICANT_FRIEND_INVITATION = "applicant_friend_invitation"
 APPLICANT_PROFILE_COMPLETION = "applicant_profile_completion"
 APPLICANT_APPLICATION_RECEIVED = "applicant_application_received"
+RECRUITER_DAILY_DIGEST = "recruiter_daily_digest"
 
 VOLUNTEER_TEMPLATE_KEYS = frozenset(
     {

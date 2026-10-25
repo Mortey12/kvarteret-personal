@@ -565,7 +565,11 @@ async def test_group_detail_recent_members_are_scoped_to_current_semester(
     async def fake_get_group_delete_blockers(group_id: int) -> list[str]:
         return []
 
+    async def fake_fetch_first_mapping(stmt):
+        return None
+
     monkeypatch.setattr(service, "fetch_all_mappings", fake_fetch_all_mappings)
+    monkeypatch.setattr(service, "fetch_first_mapping", fake_fetch_first_mapping)
     monkeypatch.setattr(service, "_get_group_delete_blockers", fake_get_group_delete_blockers)
     monkeypatch.setattr("app.domain.groups.service.get_current_semester_code", lambda: 20262)
 

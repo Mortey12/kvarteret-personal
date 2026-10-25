@@ -67,6 +67,7 @@ class FakeGroupsService:
             parent_group_id=None,
             discount_step=2,
             created_at=datetime(2026, 3, 13, tzinfo=UTC),
+            recruitment_contact_email=None,
             positions=[
                 GroupPositionItem(
                     role_id=3,
@@ -105,6 +106,7 @@ class FakeGroupsService:
         active_until_semester: int,
         parent_group_id: int | None,
         discount_step: int | None,
+        recruitment_contact_email: str | None = None,
     ) -> bool:
         self.updated_group = (
             group_id,

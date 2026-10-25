@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -16,6 +17,7 @@ from app.email_delivery import (
     APPLICANT_APPLICATION_RECEIVED,
     APPLICANT_INVITATION,
     APPLICANT_PROFILE_COMPLETION,
+    RECRUITER_DAILY_DIGEST,
     VOLUNTEER_TEMPLATE_KEYS,
 )
 from app.infrastructure.email.applicant_templates import (
@@ -62,7 +64,33 @@ class EmailMessagePreparer:
         template_key = delivery["template_key"]
         if template_key in VOLUNTEER_TEMPLATE_KEYS:
             return await self._prepare_volunteer_email(delivery)
+        if template_key == RECRUITER_DAILY_DIGEST:
+            return await self._prepare_recruiter_digest(delivery)
         raise EmailPreparationFailure("unknown_template")
+
+    async def _prepare_recruiter_digest(
+        self, delivery: Mapping[str, Any]
+    ) -> PreparedEmail:
+        from app.domain.recruitment_digest.service import render_digest_sections
+
+        base_url = (self.settings.app_public_base_url or "").rstrip("/")
+        if not base_url:
+            raise EmailPreparationFailure("public_base_url_missing")
+        raw = delivery["encrypted_context"]
+        if not raw:
+            raise EmailPreparationFailure("business_record_missing")
+        sections_html, count = await render_digest_sections(
+            json.loads(bytes(raw)), base_url=base_url
+        )
+        if count == 0:
+            # Every listed application was deleted since enqueue.
+            raise EmailPreparationFailure("business_record_missing")
+        rendered = self.applicant_renderer.render_recruiter_daily_digest_email(
+            sections_html=sections_html, item_count=count
+        )
+        return PreparedEmail(
+            delivery["recipient_email"], rendered.subject, rendered.html_body
+        )
 
     async def _prepare_volunteer_email(
         self, delivery: Mapping[str, Any]

@@ -29,6 +29,10 @@ class ApplicantEmailTemplateRendererProtocol(Protocol):
         self, *, invitation_url: str
     ) -> ApplicantEmail: ...
 
+    def render_recruiter_daily_digest_email(
+        self, *, sections_html: str, item_count: int
+    ) -> ApplicantEmail: ...
+
 
 class ApplicantEmailTemplateRenderer:
     def __init__(self, template_dir: Path | None = None) -> None:
@@ -76,6 +80,16 @@ class ApplicantEmailTemplateRenderer:
             html_body=self._render(
                 "applicant_profile_completion.html",
                 invitation_url=invitation_url,
+            ),
+        )
+
+    def render_recruiter_daily_digest_email(
+        self, *, sections_html: str, item_count: int
+    ) -> ApplicantEmail:
+        return ApplicantEmail(
+            subject=f"Rekruttering: {item_count} {'sak' if item_count == 1 else 'saker'} trenger oppfølging",
+            html_body=self._render(
+                "recruiter_daily_digest.html", sections_html=sections_html
             ),
         )
 

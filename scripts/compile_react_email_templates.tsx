@@ -10,6 +10,7 @@ import AdminOnboarding from "../app/templates/emails/react/admin-account-onboard
 import MobileCardAccessCode from "../app/templates/emails/react/mobile-card-access-code"
 import PersonalAccessCode from "../app/templates/emails/react/personal-access-code"
 import PasswordReset from "../app/templates/emails/react/password-reset"
+import RecruiterDailyDigest from "../app/templates/emails/react/recruiter-daily-digest"
 
 // React authors use normal typed props. Only this build adapter knows about
 // Python's Jinja placeholders, which remain autoescaped at request time.
@@ -25,6 +26,7 @@ const templates: Array<[string, ReactElement, string[]]> = [
   ["mobile_card_access_code", <MobileCardAccessCode access_code={variable("access_code")} expires_in_minutes={variable("expires_in_minutes")} />, ["access_code", "expires_in_minutes"]],
   ["personal_access_code", <PersonalAccessCode access_code={variable("access_code")} expires_in_minutes={variable("expires_in_minutes")} />, ["access_code", "expires_in_minutes"]],
   ["password_reset", <PasswordReset setup_url={setup_url} />, ["setup_url"]],
+  ["recruiter_daily_digest", <RecruiterDailyDigest sections_html={variable("sections_html")} />, ["sections_html"]],
 ]
 
 const outputDir = path.resolve("app/templates/emails/compiled")
@@ -39,7 +41,8 @@ for (const [name, component, variables] of templates) {
   for (const key of variables) {
     const marker = variable(key)
     if (key !== "display_name" && !html.includes(marker)) throw new Error(`${name}: missing ${key}`)
-    html = html.replaceAll(marker, `{{ ${key} }}`)
+    // *_html values are escaped by the Python renderer before they reach Jinja.
+    html = html.replaceAll(marker, key.endsWith("_html") ? `{{ ${key}|safe }}` : `{{ ${key} }}`)
   }
   if (html.includes("__EMAIL_PROP_")) throw new Error(`${name}: unresolved build marker`)
   await writeFile(path.join(outputDir, `${name}.html`), `${(await pretty(html)).trimEnd()}\n`)

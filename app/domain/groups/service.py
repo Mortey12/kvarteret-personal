@@ -111,6 +111,10 @@ class GroupsServiceProtocol(Protocol):
         active_until_semester: int,
         parent_group_id: int | None,
         discount_step: int | None,
+        recruitment_contact_email: str | None = None,
+    ) -> bool: ...
+    async def set_recruitment_contact_volunteer(
+        self, group_id: int, volunteer_id: int | None
     ) -> bool: ...
     async def archive_group(self, group_id: int) -> bool: ...
     async def delete_group(self, group_id: int) -> bool: ...
@@ -161,12 +165,18 @@ class GroupsService(GroupsQueries):
         active_until_semester: int,
         parent_group_id: int | None,
         discount_step: int | None,
+        recruitment_contact_email: str | None = None,
     ) -> bool:
         async def callback(session):
             result = await session.execute(
                 update(groups)
                 .where(groups.c.id == group_id)
                 .values(
+                    recruitment_contact_email=(
+                        recruitment_contact_email.strip().lower()
+                        if recruitment_contact_email and recruitment_contact_email.strip()
+                        else None
+                    ),
                     name=name.strip(),
                     description=(description.strip() if description and description.strip() else None),
                     is_active=active,
@@ -181,6 +191,17 @@ class GroupsService(GroupsQueries):
 
         updated_group_id = await callback(self.session)
         return updated_group_id == group_id
+
+    async def set_recruitment_contact_volunteer(
+        self, group_id: int, volunteer_id: int | None
+    ) -> bool:
+        result = await self.session.execute(
+            update(groups)
+            .where(groups.c.id == group_id)
+            .values(recruitment_contact_volunteer_id=volunteer_id)
+            .returning(groups.c.id)
+        )
+        return result.first() is not None
 
     async def archive_group(self, group_id: int) -> bool:
         current_semester = get_current_semester_code()

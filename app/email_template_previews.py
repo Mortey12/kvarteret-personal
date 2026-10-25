@@ -43,6 +43,10 @@ def build_previews() -> list[EmailPreview]:
         invitation_url="https://personal.samfunnetibergen.no/apply/friend-token-preview",
         inviter_name="Inga Inviter",
     )
+    recruiter_digest_email = applicant_renderer.render_recruiter_daily_digest_email(
+        sections_html="<h2>Nye søkere</h2><ul><li>Inga Inviter</li></ul>",
+        item_count=1,
+    )
     mobile_card_email = mobile_card_renderer.render_access_code_email(
         access_code="483921",
         expires_in_minutes=10,
@@ -82,6 +86,12 @@ def build_previews() -> list[EmailPreview]:
             title="Venneinvitasjon",
             subject=applicant_friend_email.subject,
             html_body=applicant_friend_email.html_body,
+        ),
+        EmailPreview(
+            slug="recruiter_daily_digest",
+            title="Daglig rekrutteringsoppsummering",
+            subject=recruiter_digest_email.subject,
+            html_body=recruiter_digest_email.html_body,
         ),
         EmailPreview(
             slug="admin_account_onboarding",
