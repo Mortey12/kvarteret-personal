@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from html import escape
 from collections.abc import Mapping
@@ -73,7 +72,10 @@ class EmailMessagePreparer:
     async def _prepare_recruiter_digest(
         self, delivery: Mapping[str, Any]
     ) -> PreparedEmail:
-        from app.domain.recruitment_digest.service import render_digest
+        from app.domain.recruitment_digest.service import (
+            parse_digest_context,
+            render_digest,
+        )
 
         base_url = (self.settings.app_public_base_url or "").rstrip("/")
         if not base_url:
@@ -81,7 +83,9 @@ class EmailMessagePreparer:
         raw = delivery["encrypted_context"]
         if not raw:
             raise EmailPreparationFailure("business_record_missing")
-        context = json.loads(bytes(raw))
+        context = parse_digest_context(raw)
+        if context is None:
+            raise EmailPreparationFailure("digest_context_invalid")
         dry_run_for = context.pop("_dry_run_for", None)
         sections_html, group_name, first_name, count = await render_digest(
             context, base_url=base_url, now=datetime.now(UTC)

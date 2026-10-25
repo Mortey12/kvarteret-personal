@@ -100,3 +100,30 @@ async def test_fuse_queues_nothing_when_an_implausible_number_of_digests_would_g
 
     assert await RecruitmentDigestService(email_outbox=Outbox()).enqueue_daily_digests(now=NOW) == 0
     assert Outbox.queued == []
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        {"new": [7], "waiting_3d": [8]},
+        {"new": [7], "_group_id": 1, "_name": None},
+        {"waiting": [7], "_group_id": 1, "_name": "Kari", "_dry_run_for": "a@example.test"},
+        {"_missing_groups": [{"group_id": 1, "name": "Bar", "applicants": 2}]},
+    ],
+)
+def test_digest_context_from_any_released_producer_is_accepted(context):
+    import json
+
+    from app.domain.recruitment_digest.service import parse_digest_context
+
+    assert parse_digest_context(json.dumps(context).encode()) == context
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [b"not json", b"[1]", b'{"new": 5}', b'{"new": ["x"]}', b'{"_group_id": [1]}', b'{"other": [1]}'],
+)
+def test_unknown_digest_context_shape_is_rejected(raw):
+    from app.domain.recruitment_digest.service import parse_digest_context
+
+    assert parse_digest_context(raw) is None
