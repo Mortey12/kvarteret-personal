@@ -487,6 +487,45 @@ _BORDER = "#e4ddd3"
 _FONT = "DM Sans, Arial, Helvetica, sans-serif"
 
 
+def parse_digest_context(raw: bytes) -> dict | None:
+    """Decode a queued digest context, or return None if its shape is unknown.
+
+    The release that queues a digest and the release that renders it can be
+    different, so a context in another shape must fail with a clear category.
+    """
+    try:
+        context = json.loads(bytes(raw))
+    except ValueError:
+        return None
+    if not isinstance(context, dict):
+        return None
+
+    def is_id(value: object) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    known = SECTION_TITLES.keys() | {GROUP_KEY, NAME_KEY, DRY_RUN_KEY, MISSING_KEY}
+    missing = context.get(MISSING_KEY) or []
+    valid = (
+        context.keys() <= known
+        and all(
+            isinstance(ids := context.get(key, []), list) and all(map(is_id, ids))
+            for key in SECTION_TITLES
+        )
+        and (context.get(GROUP_KEY) is None or is_id(context[GROUP_KEY]))
+        and isinstance(context.get(NAME_KEY) or "", str)
+        and isinstance(context.get(DRY_RUN_KEY) or "", str)
+        and isinstance(missing, list)
+        and all(
+            isinstance(item, dict)
+            and is_id(item.get("group_id"))
+            and isinstance(item.get("name"), str)
+            and is_id(item.get("applicants"))
+            for item in missing
+        )
+    )
+    return context if valid else None
+
+
 def _days_ago(moment: datetime, now: datetime) -> int:
     return max(0, (now - _aware(moment)).days)
 
