@@ -448,3 +448,41 @@ async def test_stale_ambiguous_send_expires_without_replaying_after_provider_win
     monkeypatch.setattr(service, "_record_admin_recovery_event", skip_audit)
     successor_id = await service.retry_failed(delivery_id, actor_user_account_id=1)
     assert successor_id != delivery_id
+
+
+@pytest.mark.asyncio
+async def test_failed_delivery_keeps_context_and_admin_retry_copies_it(
+    session, monkeypatch
+) -> None:
+    await _seed_application(session)
+    clock = Clock()
+    service = _service(
+        FakeSender(
+            [ResendDeliveryError("resend_permanent", retryable=False, http_status=422)]
+        ),
+        clock,
+    )
+    delivery_id = await service.enqueue(
+        EmailDeliveryRequest(
+            template_key=APPLICANT_INVITATION,
+            template_version=1,
+            recipient_email="synthetic@example.test",
+            business_type="volunteer_application",
+            business_id="7",
+            idempotency_key="application:7:invitation:ctx",
+            registration_id=7,
+            encrypted_context=b'{"new": [7]}',
+        )
+    )
+    await session.commit()
+    assert (await service.dispatch_due()).failed_count == 1
+    failed = await service.repository.get_delivery_row(delivery_id)
+    assert bytes(failed["encrypted_context"]) == b'{"new": [7]}'
+
+    async def skip_audit(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr(service, "_record_admin_recovery_event", skip_audit)
+    successor_id = await service.retry_failed(delivery_id, actor_user_account_id=1)
+    successor = await service.repository.get_delivery_row(successor_id)
+    assert bytes(successor["encrypted_context"]) == b'{"new": [7]}'

@@ -296,7 +296,8 @@ class EmailOutboxService:
         }
         if should_retry:
             values["next_attempt_at"] = now + _RETRY_DELAYS[attempt_no - 1]
-        else:
+        elif status != "failed":
+            # A failed delivery keeps its context so an admin retry can reuse it.
             values["encrypted_context"] = None
         await self.repository.finish_failure(
             delivery_id,
@@ -510,6 +511,7 @@ class EmailOutboxService:
                 source_domain_event_id=row["source_domain_event_id"],
                 enqueued_trace_id=current_trace_id(),
                 supersedes_delivery_id=row["id"],
+                encrypted_context=row["encrypted_context"],
             )
         )
 
