@@ -84,6 +84,8 @@ async def groups_update(
     discount_step: str | None = Form(default=None),
     active: str | None = Form(default=None),
     recruitment_contact_email: str | None = Form(default=None),
+    recruitment_contact_submitted: bool = Form(default=False),
+    volunteer_ids: list[int] = Form(default=[]),
     current_user=Depends(require_management_user),
     groups_service: GroupsService = Depends(get_groups_service),
 ):
@@ -117,6 +119,21 @@ async def groups_update(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=_GROUP_NOT_FOUND
         )
+    # Only touch the person when the edit form sent it; an empty selection clears it.
+    if recruitment_contact_submitted:
+        if len(volunteer_ids) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Velg nøyaktig én frivillig.",
+            )
+        try:
+            await groups_service.set_recruitment_contact_volunteer(
+                group_id, volunteer_ids[0] if volunteer_ids else None
+            )
+        except IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Volunteer not found."
+            )
     return log_and_redirect(
         request=request,
         user=current_user,
@@ -199,41 +216,6 @@ async def group_roles_create(
         subject_type="group_role",
         subject_id=role_id,
         details={"group_id": group_id},
-        redirect_path=f"/groups/{group_id}",
-    )
-
-
-@router.post("/groups/{group_id}/recruitment-contact-person")
-async def group_recruitment_contact_person_set(
-    request: Request,
-    group_id: int,
-    volunteer_ids: list[int] = Form(default=[]),
-    current_user=Depends(require_management_user),
-    groups_service: GroupsService = Depends(get_groups_service),
-):
-    # An empty selection clears the person; the picker allows at most one.
-    if len(volunteer_ids) > 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Velg nøyaktig én frivillig."
-        )
-    try:
-        updated = await groups_service.set_recruitment_contact_volunteer(
-            group_id, volunteer_ids[0] if volunteer_ids else None
-        )
-    except IntegrityError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Volunteer not found."
-        )
-    if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=_GROUP_NOT_FOUND
-        )
-    return log_and_redirect(
-        request=request,
-        user=current_user,
-        action="group.recruitment_contact_person",
-        subject_type="group",
-        subject_id=group_id,
         redirect_path=f"/groups/{group_id}",
     )
 

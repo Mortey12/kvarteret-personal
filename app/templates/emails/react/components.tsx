@@ -37,6 +37,7 @@ export function EmailLayout({ title, heading, preview, lang = "en", children }: 
               letterSpacing: "-1px", margin: "0 0 24px", overflowWrap: "anywhere",
             }}>{heading}</Heading>
             {children}
+            <Paragraph muted>Med ❤️ fra e-tjenesten</Paragraph>
           </Container>
         </Body>
       </Tailwind>

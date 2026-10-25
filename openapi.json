@@ -312,20 +312,6 @@
         "title": "Body_forgot_password_submit_forgot_password_post",
         "type": "object"
       },
-      "Body_group_recruitment_contact_person_set_groups__group_id__recruitment_contact_person_post": {
-        "properties": {
-          "volunteer_ids": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Volunteer Ids",
-            "type": "array"
-          }
-        },
-        "title": "Body_group_recruitment_contact_person_set_groups__group_id__recruitment_contact_person_post",
-        "type": "object"
-      },
       "Body_group_role_assignments_create_groups__group_id__role_assignments_post": {
         "properties": {
           "contract_signed": {
@@ -580,6 +566,19 @@
               }
             ],
             "title": "Recruitment Contact Email"
+          },
+          "recruitment_contact_submitted": {
+            "default": false,
+            "title": "Recruitment Contact Submitted",
+            "type": "boolean"
+          },
+          "volunteer_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Volunteer Ids",
+            "type": "array"
           }
         },
         "required": [
@@ -4719,52 +4718,6 @@
           }
         },
         "summary": "Group History Delete"
-      }
-    },
-    "/groups/{group_id}/recruitment-contact-person": {
-      "post": {
-        "operationId": "group_recruitment_contact_person_set_groups__group_id__recruitment_contact_person_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "title": "Group Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_group_recruitment_contact_person_set_groups__group_id__recruitment_contact_person_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Group Recruitment Contact Person Set"
       }
     },
     "/groups/{group_id}/role-assignments": {

@@ -4,13 +4,13 @@ function registerVolunteerPicker() {
   }
 
   window.Alpine.__volunteerPickerRegistered = true;
-  Alpine.data("volunteerPicker", ({ searchUrl, minQueryLength = 2, selectionMode = "multiple" }) => ({
+  Alpine.data("volunteerPicker", ({ searchUrl, minQueryLength = 2, selectionMode = "multiple", initialSelected = [] }) => ({
     searchUrl,
     minQueryLength,
     selectionMode,
     query: "",
     results: [],
-    selectedVolunteers: [],
+    selectedVolunteers: [...initialSelected],
     loading: false,
     errorMessage: "",
     showDropdown: false,

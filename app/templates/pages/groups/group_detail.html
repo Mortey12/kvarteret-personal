@@ -34,10 +34,26 @@
               {% call form_field("Rabattrinn") %}
                 <input class="app-input" name="discount_step" min="0" step="1" type="number" value="{{ group.discount_step if group.discount_step is not none else '' }}">
               {% endcall %}
-              {% call form_field("Rekrutteringsansvarlig (e-post)", "md:col-span-2") %}
-                <input class="app-input" name="recruitment_contact_email" type="email" value="{{ group.recruitment_contact_email or '' }}" placeholder="Tom = gruppeleder">
-                <span class="mt-1 block text-sm text-stone-500">Får daglig e-post om nye søkere, påminnelser og prøvetid. Kan brukes sammen med en valgt person under. Hvis begge er tomme, går e-posten til gruppeleder.</span>
-              {% endcall %}
+              <div class="grid gap-4 md:col-span-2">
+                <div>
+                  <h3 class="text-lg font-medium text-stone-900">Rekrutteringsansvarlig</h3>
+                  <p class="mt-1 text-sm text-stone-500">Denne personen får mail om nye søkere og søkere som fortsatt venter på svar. Legg til e-post, et spesifikt medlem, eller begge.</p>
+                </div>
+                {% call form_field("E-post") %}
+                  <input class="app-input" name="recruitment_contact_email" type="email" value="{{ group.recruitment_contact_email or '' }}">
+                {% endcall %}
+                <input name="recruitment_contact_submitted" type="hidden" value="true">
+                {{ volunteer_picker_card(
+                  '',
+                  url_for('volunteer_search_typeahead_options'),
+                  '',
+                  selection_mode='single',
+                  selected_heading='Medlem',
+                  empty_selected_text='Ingen medlem valgt.',
+                  embedded=True,
+                  initial_selected=([{'volunteer_id': group.recruitment_contact_volunteer_id, 'full_name': group.recruitment_contact_volunteer_name}] if group.recruitment_contact_volunteer_id else [])
+                ) }}
+              </div>
               <label class="inline-flex items-center gap-3 text-sm text-stone-700 md:col-span-2">
                 <input class="h-4 w-4 accent-kvarteret-red" name="active" type="checkbox" value="true" {% if group.active %}checked{% endif %}>
                 Aktiv gruppe
@@ -47,27 +63,6 @@
               <button class="app-button" type="submit">Lagre gruppe</button>
             </div>
           </form>
-          <div class="mt-8">
-            <h3 class="text-xl font-medium tracking-tight text-stone-900">Rekrutteringsansvarlig (person)</h3>
-            <p class="mt-1 text-sm text-stone-500">
-              {% if group.recruitment_contact_volunteer_id %}Nåværende: <a href="/volunteers/{{ group.recruitment_contact_volunteer_id }}">{{ group.recruitment_contact_volunteer_name }}</a>.{% else %}Ingen person valgt.{% endif %}
-              E-posten går til personen og e-postadressen over, hvis begge er satt.
-            </p>
-            <div class="mt-4">
-              {% call volunteer_picker_card(
-                '/groups/' ~ group.group_id ~ '/recruitment-contact-person',
-                url_for('volunteer_search_typeahead_options'),
-                'Lagre person',
-                selection_mode='single',
-                title='Velg person'
-              ) %}{% endcall %}
-            </div>
-            {% if group.recruitment_contact_volunteer_id %}
-              <form action="/groups/{{ group.group_id }}/recruitment-contact-person" method="post">
-                <button class="app-button-secondary" type="submit">Fjern person</button>
-              </form>
-            {% endif %}
-          </div>
           {% if can_manage_group %}
             <div class="mt-3 flex flex-wrap gap-3">
               {% if group.active %}

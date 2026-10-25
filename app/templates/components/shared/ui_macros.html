@@ -77,9 +77,15 @@
   empty_selected_text='Ingen valgt.',
   title='Legg til frivillig',
   min_query_length=2,
-  placeholder='Søk etter frivillig'
+  placeholder='Søk etter frivillig',
+  embedded=False,
+  initial_selected=[]
 ) -%}
   {% set resolved_selected_heading = selected_heading or ('Valgt frivillig' if selection_mode == 'single' else 'Valgte frivillige') %}
+  {% set picker_options %}{ searchUrl: {{ search_url|string|tojson }}, minQueryLength: {{ min_query_length|int }}, selectionMode: {{ selection_mode|tojson }}, initialSelected: {{ initial_selected|tojson }} }{% endset %}
+  {% if embedded %}
+  <div class="grid gap-4" data-volunteer-picker-root x-data='volunteerPicker({{ picker_options }})'>
+  {% else %}
   <div class="mb-5 rounded-3xl border-2 border-kvarteret-ink bg-kvarteret-surface/88 p-4 shadow-[0_16px_34px_-28px_rgba(35,43,72,0.18)]">
     <h3 class="text-xl font-medium tracking-tight text-stone-900">{{ title }}</h3>
     {% if error_message %}
@@ -92,8 +98,9 @@
       class="mt-4 grid gap-4"
       method="post"
       data-volunteer-picker-root
-      x-data='volunteerPicker({ searchUrl: {{ search_url|string|tojson }}, minQueryLength: {{ min_query_length|int }}, selectionMode: {{ selection_mode|tojson }} })'
+      x-data='volunteerPicker({{ picker_options }})'
     >
+  {% endif %}
       <div class="grid gap-4">
         <label class="grid gap-1">
           <span class="text-sm text-stone-500">Finn frivillig</span>
@@ -188,9 +195,13 @@
         {% endif %}
       </div>
 
+      {% if not embedded %}
       <div class="flex">
         <button class="app-button" type="submit">{{ submit_label }}</button>
       </div>
     </form>
   </div>
+  {% else %}
+  </div>
+  {% endif %}
 {%- endmacro %}

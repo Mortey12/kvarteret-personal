@@ -92,6 +92,10 @@ class FakeGroupsService:
             delete_blockers=[],
         )
 
+    async def set_recruitment_contact_volunteer(self, group_id: int, volunteer_id: int | None) -> bool:
+        self.recruitment_contact = (group_id, volunteer_id)
+        return True
+
     async def create_group_role(self, group_id: int, *, role_name: str, pingvin_points: int) -> int | None:
         self.created_role = (group_id, role_name, pingvin_points)
         return 14
@@ -460,6 +464,45 @@ def test_group_update_preserves_active_until_when_hidden_field_is_missing() -> N
         None,
         None,
     )
+
+
+def test_group_update_saves_and_clears_recruitment_contact_person() -> None:
+    app = create_app()
+    override_authenticated_user(app, make_authenticated_user())
+    groups_service = FakeGroupsService()
+    app.dependency_overrides[get_groups_service] = lambda: groups_service
+    client = TestClient(app)
+    form = {"name": "Bar", "active": "true", "recruitment_contact_submitted": "true"}
+
+    client.post("/groups/7?_method=PATCH", data={**form, "volunteer_ids": "12"}, follow_redirects=False)
+    assert groups_service.recruitment_contact == (7, 12)
+
+    client.post("/groups/7?_method=PATCH", data=form, follow_redirects=False)
+    assert groups_service.recruitment_contact == (7, None)
+
+
+def test_group_update_without_recruitment_marker_leaves_person_alone() -> None:
+    app = create_app()
+    override_authenticated_user(app, make_authenticated_user())
+    groups_service = FakeGroupsService()
+    app.dependency_overrides[get_groups_service] = lambda: groups_service
+    client = TestClient(app)
+
+    client.post("/groups/7?_method=PATCH", data={"name": "Bar", "active": "true"}, follow_redirects=False)
+
+    assert not hasattr(groups_service, "recruitment_contact")
+
+
+def test_group_detail_shows_recruitment_contact_in_one_section() -> None:
+    app = create_app()
+    override_authenticated_user(app, make_authenticated_user())
+    app.dependency_overrides[get_groups_service] = lambda: FakeGroupsService()
+    response = TestClient(app).get("/groups/7")
+
+    assert response.status_code == 200
+    assert response.text.count("Rekrutteringsansvarlig") == 1
+    assert 'name="recruitment_contact_email"' in response.text
+    assert "Lagre person" not in response.text
 
 
 def test_group_role_actions_redirect_and_call_service() -> None:
