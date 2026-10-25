@@ -27,7 +27,7 @@ idna==3.20
 isodate==0.7.2
 itsdangerous==2.2.0
 jinja2==3.1.6
-markupsafe==3.0.3
+markupsafe==3.0.4
 opentelemetry-api==1.45.1
 opentelemetry-exporter-http-transport==0.66b1
 opentelemetry-exporter-otlp-common==0.66b1
