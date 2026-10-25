@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, timedelta
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
@@ -150,9 +150,7 @@ async def test_daily_digest_round_trip_reaches_sent(session) -> None:
     sender = FakeSender()
     service, renderer = _digest_service(sender, clock)
 
-    queued = await RecruitmentDigestService(email_outbox=service).enqueue_daily_digests(
-        now=clock.value.astimezone(UTC)
-    )
+    queued = await RecruitmentDigestService(email_outbox=service).enqueue_daily_digests(now=clock.value)
     await session.commit()
     summary = await service.dispatch_due()
 
