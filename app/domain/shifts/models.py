@@ -55,6 +55,9 @@ class SlotView:
     open_places: int
     training_places: int
     blocked_by_training: bool
+    group_id: int
+    open_for_samf: bool
+    open_label: str
 
 
 @dataclass(slots=True)
@@ -68,6 +71,40 @@ class ShiftView:
     training_replaces_slot: bool
     open_places: int
     slots: list[SlotView]
+
+
+@dataclass(slots=True)
+class PoolPerson:
+    volunteer_id: int
+    name: str
+    group_name: str
+    role_name: str
+    shifts_this_week: int
+    # "group_id:kind:open" tokens for places this person can take; the page
+    # uses them to highlight drop targets, the server checks again on save.
+    allowed_tokens: list[str]
+
+
+@dataclass(slots=True)
+class MemberRole:
+    volunteer_id: int
+    name: str
+    group_id: int
+    group_name: str
+    role_name: str | None
+
+
+@dataclass(slots=True)
+class AssignmentRef:
+    assignment_id: int
+    slot_id: int
+    shift_id: int
+    volunteer_id: int
+
+
+@dataclass(slots=True)
+class PlacementResult:
+    message: str
 
 
 @dataclass(slots=True)
@@ -94,3 +131,4 @@ class WeekPlan:
     days: list[DayBlock]
     open_places: int
     swap_requests: int
+    pool: list[PoolPerson] = field(default_factory=list)

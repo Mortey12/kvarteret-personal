@@ -737,6 +737,37 @@
         "title": "Body_set_password_submit_set_password_post",
         "type": "object"
       },
+      "Body_shift_assignment_create_shifts_assignments_post": {
+        "properties": {
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot_id",
+          "volunteer_id"
+        ],
+        "title": "Body_shift_assignment_create_shifts_assignments_post",
+        "type": "object"
+      },
+      "Body_shift_assignment_move_shifts_assignments__assignment_id__move_post": {
+        "properties": {
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot_id"
+        ],
+        "title": "Body_shift_assignment_move_shifts_assignments__assignment_id__move_post",
+        "type": "object"
+      },
       "Body_volunteer_add_course_completion_volunteers__volunteer_id__course_completions_post": {
         "properties": {
           "course_id": {
@@ -5724,6 +5755,126 @@
           }
         },
         "summary": "Shifts Week"
+      }
+    },
+    "/shifts/assignments": {
+      "post": {
+        "operationId": "shift_assignment_create_shifts_assignments_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_shift_assignment_create_shifts_assignments_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Assignment Create"
+      }
+    },
+    "/shifts/assignments/{assignment_id}/delete": {
+      "post": {
+        "operationId": "shift_assignment_delete_shifts_assignments__assignment_id__delete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Assignment Delete"
+      }
+    },
+    "/shifts/assignments/{assignment_id}/move": {
+      "post": {
+        "operationId": "shift_assignment_move_shifts_assignments__assignment_id__move_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_shift_assignment_move_shifts_assignments__assignment_id__move_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Assignment Move"
       }
     },
     "/spotify/callback": {

@@ -6,8 +6,11 @@ from fastapi.testclient import TestClient
 
 from app.auth.roles import UserRole
 from app.dependencies import get_shifts_service
+from app.domain.shifts.errors import ShiftPlacementError
 from app.domain.shifts.models import (
     AssignedPerson,
+    PlacementResult,
+    PoolPerson,
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
@@ -15,12 +18,17 @@ from app.domain.shifts.models import (
 )
 from app.domain.shifts.planning import format_week, group_into_days, monday_of
 from app.main import create_app
-from tests.support.helpers import make_authenticated_user, override_authenticated_user
+from tests.support.helpers import (
+    csrf_headers,
+    make_authenticated_user,
+    override_authenticated_user,
+    prime_csrf,
+)
 
 
 class FakeShiftsService:
     def __init__(self) -> None:
-        self.calls: list[tuple[date, int | None]] = []
+        self.calls: list[tuple] = []
 
     async def get_week_plan(self, week: date, group_id: int | None = None) -> WeekPlan:
         self.calls.append((week, group_id))
@@ -67,7 +75,31 @@ class FakeShiftsService:
             days=group_into_days([record]),
             open_places=0,
             swap_requests=1,
+            pool=[
+                PoolPerson(
+                    volunteer_id=3,
+                    name="Sander Skjenker",
+                    group_name="Stjerne",
+                    role_name="Skjenker",
+                    shifts_this_week=0,
+                    allowed_tokens=["7:skjenker:1"],
+                )
+            ],
         )
+
+    async def assign(self, *, slot_id: int, volunteer_id: int) -> PlacementResult:
+        self.calls.append(("assign", slot_id, volunteer_id))
+        if slot_id == 1:
+            raise ShiftPlacementError("Kun for skiftledere i gruppen.")
+        return PlacementResult("Sander Skjenker er satt opp som skjenker.")
+
+    async def move(self, *, assignment_id: int, slot_id: int) -> PlacementResult:
+        self.calls.append(("move", assignment_id, slot_id))
+        return PlacementResult("Flyttet.")
+
+    async def remove(self, *, assignment_id: int) -> PlacementResult:
+        self.calls.append(("remove", assignment_id))
+        return PlacementResult("Tatt av.")
 
 
 def _client(role: UserRole) -> tuple[TestClient, FakeShiftsService]:
@@ -108,3 +140,51 @@ def test_shift_plan_is_for_managers_only() -> None:
     response = client.get("/shifts")
 
     assert response.status_code == 403
+
+
+def test_shift_plan_shows_volunteer_pool_and_drop_targets() -> None:
+    client, _ = _client(UserRole.ADMIN)
+    response = client.get("/shifts")
+
+    assert "Sander Skjenker" in response.text
+    assert 'data-allowed="7:skjenker:1"' in response.text
+    assert 'data-shift-slot data-slot-id="2" data-group-id="7" data-kind="skjenker" data-open="1"' in response.text
+    assert 'data-remove-assignment="1"' in response.text
+    assert "js/shift-board.js" in response.text
+
+
+def test_shift_actions_save_and_report_rules() -> None:
+    client, service = _client(UserRole.ADMIN)
+    prime_csrf(client, path="/shifts")
+
+    ok = client.post(
+        "/shifts/assignments", data={"slot_id": "2", "volunteer_id": "3"}, headers=csrf_headers(client)
+    )
+    refused = client.post(
+        "/shifts/assignments", data={"slot_id": "1", "volunteer_id": "3"}, headers=csrf_headers(client)
+    )
+    moved = client.post("/shifts/assignments/1/move", data={"slot_id": "2"}, headers=csrf_headers(client))
+    removed = client.post("/shifts/assignments/1/delete", headers=csrf_headers(client))
+
+    assert ok.status_code == 200
+    assert ok.json() == {"message": "Sander Skjenker er satt opp som skjenker."}
+    assert refused.status_code == 400
+    assert refused.json()["detail"] == "Kun for skiftledere i gruppen."
+    assert moved.json() == {"message": "Flyttet."}
+    assert removed.json() == {"message": "Tatt av."}
+    assert ("move", 1, 2) in service.calls and ("remove", 1) in service.calls
+
+
+def test_shift_actions_need_csrf_and_management_role() -> None:
+    client, service = _client(UserRole.ADMIN)
+    # CSRF applies to signed-in browsers, recognised by the session cookie.
+    client.cookies.set(client.app.state.container.settings.session_cookie_name, "signed-in")
+    assert client.post("/shifts/assignments", data={"slot_id": "2", "volunteer_id": "3"}).status_code == 403
+
+    volunteer_client, _ = _client(UserRole.VOLUNTEER)
+    prime_csrf(volunteer_client, path="/")
+    response = volunteer_client.post(
+        "/shifts/assignments/1/delete", headers=csrf_headers(volunteer_client)
+    )
+    assert response.status_code == 403
+    assert not any(call[0] == "remove" for call in service.calls if isinstance(call[0], str))

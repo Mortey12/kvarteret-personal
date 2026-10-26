@@ -99,3 +99,37 @@ def test_week_helpers() -> None:
     assert format_week(date(2026, 11, 2)) == "Uke 45 · 2.–8. november"
     assert format_week(date(2026, 10, 26)) == "Uke 44 · 26. oktober–1. november"
     assert format_day(date(2026, 10, 27)) == "Tirsdag 27. oktober"
+
+
+def test_only_skiftledere_take_skiftleder_places() -> None:
+    from app.domain.shifts.planning import placement_problem
+
+    assert placement_problem("skiftleder", 1, False, {1: {"Skiftleder"}}) is None
+    assert placement_problem("skiftleder", 1, False, {1: {"Skjenker"}}) == "Kun for skiftledere i gruppen"
+    assert placement_problem("skiftleder", 1, False, {2: {"Skiftleder"}}) is not None
+
+
+def test_trainees_use_the_training_place() -> None:
+    from app.domain.shifts.planning import placement_problem
+
+    assert placement_problem("opplaering", 1, False, {1: {"Opplæring"}}) is None
+    assert placement_problem("skjenker", 1, True, {1: {"Opplæring"}}) == "I opplæring: bruk opplæringsplassen"
+
+
+def test_crew_places_are_for_skjenke_unless_open_for_samf() -> None:
+    from app.domain.shifts.planning import placement_problem
+
+    assert placement_problem("skjenker", 1, False, {2: {"Skjenker"}}) is None
+    assert placement_problem("skjenker", 1, False, {}) == "Kun for Skjenke"
+    assert placement_problem("skjenker", 1, True, {}) is None
+    assert placement_problem("kokk", 1, True, {1: {"Skjenker"}}) == "Kun for kokker"
+
+
+def test_allowed_tokens_match_the_rules() -> None:
+    from app.domain.shifts.planning import allowed_tokens
+
+    tokens = allowed_tokens({1: {"Skiftleder"}}, [1, 2])
+    assert "1:skiftleder:0" in tokens
+    assert "2:skiftleder:0" not in tokens
+    assert "2:skjenker:0" in tokens
+    assert "1:kokk:1" not in tokens

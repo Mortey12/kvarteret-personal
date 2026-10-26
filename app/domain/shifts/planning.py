@@ -171,6 +171,9 @@ def build_shift_view(shift: ShiftRecord) -> ShiftView:
                     and free == 0
                     and len(slot.people) < slot.count
                 ),
+                group_id=shift.group_id,
+                open_for_samf=slot.open_for_samf,
+                open_label=_open_label(shift, slot),
             )
         )
     return ShiftView(
@@ -217,3 +220,58 @@ def group_into_days(shifts: list[ShiftRecord]) -> list[DayBlock]:
             )
         )
     return blocks
+
+
+def _open_label(shift: ShiftRecord, slot: SlotRecord) -> str:
+    """The text on an empty place. A trainee place that shares the crew
+    count is the same physical place as the empty crew place, so say so."""
+    if slot.kind == "opplaering" and training_takes_place(shift):
+        crew = _crew_slot(shift.slots)
+        crew_label = slot_kind(crew.kind).label.lower() if crew else "vanlig"
+        return f"Ledig (tar en {crew_label}plass)"
+    return "Ledig"
+
+
+# Verv names in Personal that give access to each kind of place.
+SKIFTLEDER_ROLE = "Skiftleder"
+TRAINEE_ROLE = "Opplæring"
+CHEF_ROLE = "Kokk"
+
+
+def placement_problem(
+    kind: str,
+    shift_group_id: int,
+    open_for_samf: bool,
+    roles_by_group: dict[int, set[str]],
+) -> str | None:
+    """Why this person cannot take this kind of place, or None if they can.
+
+    ``roles_by_group`` holds the person's verv this semester in groups that
+    have shifts (group id to verv names; a member without verv has an
+    empty set).
+    """
+    own = roles_by_group.get(shift_group_id)
+    member_anywhere = any(roles - {TRAINEE_ROLE} for roles in roles_by_group.values()) or any(
+        not roles for roles in roles_by_group.values()
+    )
+    if kind == "skiftleder":
+        return None if own and SKIFTLEDER_ROLE in own else "Kun for skiftledere i gruppen"
+    if kind == "opplaering":
+        return None if own and TRAINEE_ROLE in own else "Kun for de som er i opplæring i gruppen"
+    if kind == "kokk":
+        return None if own and CHEF_ROLE in own else "Kun for kokker"
+    if own is not None and own == {TRAINEE_ROLE}:
+        return "I opplæring: bruk opplæringsplassen"
+    if member_anywhere or open_for_samf:
+        return None
+    return "Kun for Skjenke"
+
+
+def allowed_tokens(roles_by_group: dict[int, set[str]], shift_group_ids: list[int]) -> list[str]:
+    tokens: list[str] = []
+    for group_id in shift_group_ids:
+        for kind in SLOT_KINDS:
+            for open_for_samf in (False, True):
+                if placement_problem(kind, group_id, open_for_samf, roles_by_group) is None:
+                    tokens.append(f"{group_id}:{kind}:{int(open_for_samf)}")
+    return tokens

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, insert, select, update
 
 from app.db.repository import SqlAlchemyRepository
 from app.domain.groups.tables import groups
+from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.models import (
     AssignedPerson,
+    AssignmentRef,
+    MemberRole,
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
@@ -39,24 +42,19 @@ class ShiftsRepository(SqlAlchemyRepository):
         group_id: int | None = None,
     ) -> list[ShiftRecord]:
         shift_stmt = (
-            select(
-                shifts.c.id,
-                shifts.c.group_id,
-                groups.c.name.label("group_name"),
-                shifts.c.venue,
-                shifts.c.title,
-                shifts.c.starts_at,
-                shifts.c.ends_at,
-                shifts.c.note,
-                shifts.c.is_closed,
-                shifts.c.training_replaces_slot,
-            )
-            .select_from(shifts.join(groups, groups.c.id == shifts.c.group_id))
+            _shift_select()
             .where(shifts.c.starts_at >= starts_from, shifts.c.starts_at < starts_before)
             .order_by(shifts.c.starts_at.asc(), shifts.c.id.asc())
         )
         if group_id is not None:
             shift_stmt = shift_stmt.where(shifts.c.group_id == group_id)
+        return await self._load_shifts(shift_stmt)
+
+    async def get_shift(self, shift_id: int) -> ShiftRecord | None:
+        found = await self._load_shifts(_shift_select().where(shifts.c.id == shift_id))
+        return found[0] if found else None
+
+    async def _load_shifts(self, shift_stmt) -> list[ShiftRecord]:
         shift_rows = await self.fetch_all_mappings(shift_stmt)
         if not shift_rows:
             return []
@@ -130,6 +128,129 @@ class ShiftsRepository(SqlAlchemyRepository):
                     )
                 )
         return list(records.values())
+
+
+    async def get_slot_shift_id(self, slot_id: int) -> int | None:
+        return await self.fetch_scalar(
+            select(shift_slots.c.shift_id).where(shift_slots.c.id == slot_id)
+        )
+
+    async def get_assignment(self, assignment_id: int) -> AssignmentRef | None:
+        row = await self.fetch_first_mapping(
+            select(
+                shift_assignments.c.id,
+                shift_assignments.c.slot_id,
+                shift_assignments.c.volunteer_id,
+                shift_slots.c.shift_id,
+            )
+            .select_from(
+                shift_assignments.join(shift_slots, shift_slots.c.id == shift_assignments.c.slot_id)
+            )
+            .where(shift_assignments.c.id == assignment_id)
+        )
+        if row is None:
+            return None
+        return AssignmentRef(
+            assignment_id=row["id"],
+            slot_id=row["slot_id"],
+            shift_id=row["shift_id"],
+            volunteer_id=row["volunteer_id"],
+        )
+
+    async def list_shift_members(self, semester: int, group_ids: list[int]) -> list[MemberRole]:
+        """Members of the given groups this semester, with their verv."""
+        if not group_ids:
+            return []
+        rows = await self.fetch_all_mappings(
+            select(
+                volunteer_records.c.id.label("volunteer_id"),
+                volunteer_records.c.first_name,
+                volunteer_records.c.last_name,
+                groups.c.id.label("group_id"),
+                groups.c.name.label("group_name"),
+                assignment_roles.c.name.label("role_name"),
+            )
+            .select_from(
+                role_assignments.join(
+                    volunteer_records, volunteer_records.c.id == role_assignments.c.volunteer_id
+                )
+                .join(groups, groups.c.id == role_assignments.c.group_id)
+                .outerjoin(assignment_roles, assignment_roles.c.id == role_assignments.c.role_id)
+            )
+            .where(
+                role_assignments.c.semester == semester,
+                role_assignments.c.group_id.in_(group_ids),
+            )
+            .order_by(volunteer_records.c.first_name.asc(), volunteer_records.c.last_name.asc())
+        )
+        return [
+            MemberRole(
+                volunteer_id=row["volunteer_id"],
+                name=build_full_name(row["first_name"], row["last_name"]),
+                group_id=row["group_id"],
+                group_name=row["group_name"],
+                role_name=row["role_name"],
+            )
+            for row in rows
+        ]
+
+    async def count_shifts_by_volunteer(
+        self, starts_from: datetime, starts_before: datetime
+    ) -> dict[int, int]:
+        rows = await self.fetch_all_mappings(
+            select(
+                shift_assignments.c.volunteer_id,
+                func.count(func.distinct(shift_slots.c.shift_id)).label("shift_count"),
+            )
+            .select_from(
+                shift_assignments.join(
+                    shift_slots, shift_slots.c.id == shift_assignments.c.slot_id
+                ).join(shifts, shifts.c.id == shift_slots.c.shift_id)
+            )
+            .where(shifts.c.starts_at >= starts_from, shifts.c.starts_at < starts_before)
+            .group_by(shift_assignments.c.volunteer_id)
+        )
+        return {row["volunteer_id"]: row["shift_count"] for row in rows}
+
+    async def get_volunteer_name(self, volunteer_id: int) -> str | None:
+        row = await self.fetch_first_mapping(
+            select(volunteer_records.c.first_name, volunteer_records.c.last_name).where(
+                volunteer_records.c.id == volunteer_id
+            )
+        )
+        return build_full_name(row["first_name"], row["last_name"]) if row else None
+
+    async def add_assignment(self, slot_id: int, volunteer_id: int) -> int:
+        return await self.fetch_scalar(
+            insert(shift_assignments)
+            .values(slot_id=slot_id, volunteer_id=volunteer_id, swap_requested=False)
+            .returning(shift_assignments.c.id)
+        )
+
+    async def move_assignment(self, assignment_id: int, slot_id: int) -> None:
+        await self.execute(
+            update(shift_assignments)
+            .where(shift_assignments.c.id == assignment_id)
+            .values(slot_id=slot_id, swap_requested=False)
+        )
+
+    async def remove_assignment(self, assignment_id: int) -> None:
+        await self.execute(delete(shift_assignments).where(shift_assignments.c.id == assignment_id))
+
+
+def _shift_select():
+    return select(
+        shifts.c.id,
+        shifts.c.group_id,
+        groups.c.name.label("group_name"),
+        shifts.c.venue,
+        shifts.c.title,
+        shifts.c.starts_at,
+        shifts.c.ends_at,
+        shifts.c.note,
+        shifts.c.is_closed,
+        shifts.c.training_replaces_slot,
+    ).select_from(shifts.join(groups, groups.c.id == shifts.c.group_id))
 
 
 def _aware(value: datetime | str | None) -> datetime:
