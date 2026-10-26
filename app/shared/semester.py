@@ -29,3 +29,13 @@ def get_next_semester_code(value: int) -> int:
     if season == 2:
         return (year + 1) * 10 + 1
     raise ValueError(f"Unsupported semester code: {value}")
+
+
+def get_previous_semester_code(value: int) -> int:
+    year = value // 10
+    season = value % 10
+    if season == 2:
+        return year * 10 + 1
+    if season == 1:
+        return (year - 1) * 10 + 2
+    raise ValueError(f"Unsupported semester code: {value}")

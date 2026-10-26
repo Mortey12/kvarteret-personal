@@ -34,6 +34,7 @@ modules =
     app.domain.mobile_card
     app.domain.role_assignments
     app.domain.search
+    app.domain.shifts
     app.domain.spotify
     app.domain.volunteer_applications
     app.domain.volunteers

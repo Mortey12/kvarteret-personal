@@ -136,6 +136,9 @@
                 <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'volunteers' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/volunteers">Frivillige</a>
                 <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'groups' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/groups">Grupper</a>
                 <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'courses' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/courses">Kurs</a>
+                {% if request.state.show_management_tools %}
+                  <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'shifts' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/shifts">Skiftplan</a>
+                {% endif %}
                 {% if current_user and current_user.role == "Admin" %}
                   <a class="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-medium whitespace-nowrap {% if section == 'spotify' %}bg-kvarteret-red text-kvarteret-surface shadow-[0_14px_28px_-18px_rgba(245,75,75,0.55)]{% else %}bg-kvarteret-red/10 text-kvarteret-night hover:bg-[#e2d0b3]{% endif %}" href="/spotify/now-playing">Spotify</a>
                 {% endif %}

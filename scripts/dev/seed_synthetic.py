@@ -39,7 +39,7 @@ from app.db.tables import (
     volunteer_application_submissions,
     volunteer_records,
 )
-from app.shared.semester import get_current_semester_code
+from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 
 DEV_ADMIN_EMAIL = os.environ.get("DEV_ADMIN_EMAIL", "dev@kvarteret.dev")
@@ -126,7 +126,10 @@ async def seed(database_url: str) -> None:
     runtime = build_database_runtime(settings)
     now = datetime.now(UTC)
     current_semester = get_current_semester_code()
-    semesters = sorted({current_semester - 10, current_semester - 9, current_semester})
+    previous_semester = get_previous_semester_code(current_semester)
+    semesters = sorted(
+        {get_previous_semester_code(previous_semester), previous_semester, current_semester}
+    )
 
     try:
         async with session_scope(runtime) as session:

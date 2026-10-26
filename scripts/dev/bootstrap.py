@@ -103,6 +103,7 @@ async def main() -> None:
     await wait_for_database()
     migrate()
 
+    from seed_shifts import seed_shifts  # noqa: PLC0415
     from seed_synthetic import ensure_dev_admin, seed  # noqa: PLC0415
 
     if await is_seeded():
@@ -112,6 +113,11 @@ async def main() -> None:
     else:
         print("No seeds/dev-snapshot.sql found — using the synthetic seed.")
         await seed(DEV_DATABASE_URL)
+
+    if not SNAPSHOT_PATH.exists():
+        # Skiftlista test data; skipped for real (anonymized) snapshots so
+        # fake subgroups never mix with real group structure.
+        await seed_shifts(DEV_DATABASE_URL)
 
     from app.config import Settings  # noqa: PLC0415
     from app.db.session import build_database_runtime  # noqa: PLC0415

@@ -47,6 +47,13 @@ from app.domain.mobile_card.tables import (
     mobile_card_trial_access_codes,
 )
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
+from app.domain.shifts.tables import (
+    shift_assignments,
+    shift_slots,
+    shift_template_slots,
+    shift_templates,
+    shifts,
+)
 from app.domain.spotify.tables import integration_tokens
 from app.domain.volunteer_applications.tables import (
     domain_events,
@@ -92,6 +99,11 @@ __all__ = [
     "public_metadata",
     "rate_limits",
     "role_assignments",
+    "shift_assignments",
+    "shift_slots",
+    "shift_template_slots",
+    "shift_templates",
+    "shifts",
     "storage_metadata",
     "storage_objects",
     "user_accounts",
