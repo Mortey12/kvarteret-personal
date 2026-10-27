@@ -19,7 +19,9 @@ WISH_ANSWERS: dict[str, str] = {
     "nei": "Kan ikke",
 }
 
-# Monthly allocation status. No row in shift_month_status = published.
+# Monthly allocation status. No row in shift_month_status: the current month
+# and earlier count as published, later months as open (see effective_month_status).
+MONTH_OPEN = "open"
 MONTH_PUBLISHED = "published"
 MONTH_STATUSES: dict[str, tuple[str, str]] = {
     "open": (
@@ -42,6 +44,26 @@ def month_start(day: date) -> date:
 def add_months(day: date, months: int) -> date:
     index = day.year * 12 + day.month - 1 + months
     return date(index // 12, index % 12 + 1, 1)
+
+
+def effective_month_status(stored: str | None, month: date, today: date) -> str:
+    """Stored status wins; without a row, later months take wishes and the rest is published."""
+    if stored is not None:
+        return stored
+    return MONTH_OPEN if month > month_start(today) else MONTH_PUBLISHED
+
+
+def wish_months(today: date) -> list[date]:
+    """Current month through the end of the semester, and at least next month."""
+    first = month_start(today)
+    last = date(today.year, 6 if today.month <= 6 else 12, 1)
+    last = max(last, add_months(first, 1))
+    return [
+        add_months(first, offset)
+        for offset in range(
+            (last.year * 12 + last.month) - (first.year * 12 + first.month) + 1
+        )
+    ]
 
 
 def month_label(month: date) -> str:

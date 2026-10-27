@@ -66,6 +66,7 @@ from app.domain.shifts.app_rules import (
     cannot_attend_window_open,
     counts_as_samf,
     course_valid_in,
+    effective_month_status,
     iso_week_key,
     last_valid_semester,
     month_label,
@@ -79,6 +80,7 @@ from app.domain.shifts.app_rules import (
     session_label,
     short_date,
     utc_now,
+    wish_months,
 )
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
@@ -108,7 +110,6 @@ logger = get_logger("app.audit")
 
 MAX_OPEN_DAYS = 92
 COURSE_HORIZON_DAYS = 180
-WISH_MONTHS_AHEAD = 4
 
 
 # ---------------------------------------------------------------- context
@@ -491,15 +492,15 @@ class ShiftsAppService:
         group_ids = person.member_enabled_ids
         weekdays = await self.repository.list_template_weekdays(group_ids)
         rules = await self.repository.list_rules(person.volunteer_id, person.semester)
-        first = month_start(now.astimezone(OSLO).date())
-        months = [add_months(first, offset) for offset in range(WISH_MONTHS_AHEAD)]
+        today = now.astimezone(OSLO).date()
+        months = wish_months(today)
         statuses = await self.repository.month_statuses(group_ids, months)
 
         month_rows: list[WishMonth] = []
         accepting: set[tuple[int, date]] = set()
         for group_id in group_ids:
             for month in months:
-                status = statuses.get((group_id, month), MONTH_PUBLISHED)
+                status = effective_month_status(statuses.get((group_id, month)), month, today)
                 label, note = MONTH_STATUSES.get(status, MONTH_STATUSES[MONTH_PUBLISHED])
                 accepts = status in WISHES_ACCEPTED
                 if accepts:
@@ -567,7 +568,8 @@ class ShiftsAppService:
             raise ShiftPlacementError("Skiftet har allerede vært.")
         month = month_start(record.starts_at.astimezone(OSLO).date())
         statuses = await self.repository.month_statuses([record.group_id], [month])
-        if statuses.get((record.group_id, month), MONTH_PUBLISHED) not in WISHES_ACCEPTED:
+        today = self._now().astimezone(OSLO).date()
+        if effective_month_status(statuses.get((record.group_id, month)), month, today) not in WISHES_ACCEPTED:
             raise ShiftPlacementError("Planen for denne måneden er publisert. Be om bytte i stedet.")
         await self.repository.set_wish(person.volunteer_id, shift_id, answer)
         return await self.get_wishes(volunteer_id)
@@ -682,15 +684,14 @@ class ShiftsAppService:
             return []
         months = sorted({month_start(r.starts_at.astimezone(OSLO).date()) for r in records})
         statuses = await self.repository.month_statuses(sorted({r.group_id for r in records}), months)
-        return [
-            record
-            for record in records
-            if statuses.get(
-                (record.group_id, month_start(record.starts_at.astimezone(OSLO).date())),
-                MONTH_PUBLISHED,
-            )
-            == MONTH_PUBLISHED
-        ]
+        today = self._now().astimezone(OSLO).date()
+        published: list[ShiftRecord] = []
+        for record in records:
+            month = month_start(record.starts_at.astimezone(OSLO).date())
+            status = effective_month_status(statuses.get((record.group_id, month)), month, today)
+            if status == MONTH_PUBLISHED:
+                published.append(record)
+        return published
 
     async def _mine(self, person: _Person) -> _Mine:
         start, _ = semester_bounds(person.semester)

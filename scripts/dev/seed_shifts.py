@@ -37,12 +37,14 @@ from app.db.tables import (
     role_assignments,
     shift_assignments,
     shift_group_settings,
+    shift_month_status,
     shift_slots,
     shift_template_slots,
     shift_templates,
     shifts,
     volunteer_records,
 )
+from app.domain.shifts.app_rules import MONTH_PUBLISHED, add_months, month_start
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 from seed_synthetic import FIRST_NAMES, LAST_NAMES
@@ -370,6 +372,16 @@ async def seed_shifts(database_url: str) -> None:
                     meeting_point="Møt skiftleder i Stjernesalen 30 minutter før.",
                 )
             )
+            # Next month is allocated by the 20th, so it is published. Later
+            # months have no row and stay open for wishes.
+            for group_name in ("Stjerne",):
+                await session.execute(
+                    insert(shift_month_status).values(
+                        group_id=group_ids[group_name],
+                        month=add_months(month_start(today), 1),
+                        status=MONTH_PUBLISHED,
+                    )
+                )
 
             # Brann- and barkurs with a few coming dates, and completions for
             # most Skjenke members (some missing, so the app shows sign-up).

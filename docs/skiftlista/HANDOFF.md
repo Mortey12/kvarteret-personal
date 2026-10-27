@@ -56,7 +56,8 @@ Also fixed: dev seed produced semester code `20253` (now
   bartender, kokk.
 - App (step 1): `shift_group_settings` (per group: `app_enabled`,
   `samf_enabled`, `meeting_point`), `shift_month_status` (per group and
-  month: `open` / `allocating` / `published`; no row = published),
+  month: `open` / `allocating` / `published`; no row: the current month and
+  earlier are published, later months are open),
   `shift_availability_rules` (weekday answers per semester),
   `shift_wishes` (per-shift answers), `course_sessions` +
   `course_session_signups` (owned by the courses module), and on
@@ -140,6 +141,15 @@ Postgres and run `uv run pytest tests/e2e`.
   satt) plus per-shift override. Monthly allocation is made and published
   between the 15th and 20th of the previous month. Volunteers can set
   wishes for the whole semester.
+- Months without a `shift_month_status` row get their status from the date
+  (Oslo time): the current month and earlier are `published`, every later
+  month is `open` (takes wishes; its shifts cannot be claimed, so no first
+  come, first served before allocation). A leader publishes a month with an
+  explicit `published` row. Explicit rows (`open`, `allocating`, `published`)
+  always win. `GET /wishes` covers the current month through the end of the
+  semester (spring Jan–Jun, autumn Jul–Dec) and at least next month, so
+  January takes wishes in December (`effective_month_status` and
+  `wish_months` in `app_rules.py`).
 - Privacy: wishes visible only to the person and the group's leaders;
   "nei" never has a reason; swap/sick messages optional and visible only to
   Skjenkeleder and the leder/personalansvarlig of that bar or kitchen (not
@@ -162,7 +172,15 @@ where Stjerne is switched on (also for samfunnettjeneste) with course dates.
 
 Known gaps, deliberately left to later steps:
 
-- **Switching on** a group, setting a month to `open`/`allocating` and adding
+- **Publishing a month** has no screen yet (step 5). Until then, SQL:
+  `INSERT INTO shift_month_status (group_id, month, status) VALUES
+  (<group id>, '2026-12-01', 'published');`. Shifts leaders put people on in
+  an open month are drafts and do not show in the app's Mine until the month
+  is published.
+- **Pilot step when switching a group on:** mark the months already planned
+  in the old sheet as published, or their shifts stay hidden from Ledige and
+  Mine and open for wishes.
+- **Switching on** a group, setting a month to `allocating` and adding
   course dates has no screen in Personal yet (steps 4–6). Until then, SQL:
   `INSERT INTO shift_group_settings (group_id, app_enabled, samf_enabled)
   VALUES (<stjerne id>, true, false);`

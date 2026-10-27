@@ -140,9 +140,10 @@ shift_group_settings = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 
-# Monthly allocation status per group. No row means "published": leaders
-# who plan live in Personal need nothing more. "open" = taking wishes,
-# "allocating" = leaders are allocating; volunteers do not see the draft.
+# Monthly allocation status per group. Without a row the current month and
+# earlier are "published" and later months "open" (effective_month_status).
+# "open" = taking wishes, "allocating" = leaders are allocating; volunteers
+# do not see the draft. A leader publishes a month with an explicit row.
 shift_month_status = Table(
     "shift_month_status",
     public_metadata,

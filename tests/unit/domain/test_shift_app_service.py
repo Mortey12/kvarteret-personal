@@ -355,14 +355,43 @@ async def test_samf_sees_only_open_places_with_course_status(world: World) -> No
     assert bartender.open_places == 2
 
 
-async def test_december_is_hidden_while_taking_wishes(world: World) -> None:
+async def test_unallocated_months_are_open_by_default(world: World) -> None:
+    # Clock is 2 Nov: November has no row and counts as published, December as open.
     listing = await world.service.list_open(SIGRID, scope="own", days=40)
-    assert world.shift_ids["dec"] in {s.shift_id for s in listing.shifts}
+    ids = {s.shift_id for s in listing.shifts}
+    assert world.shift_ids["tue"] in ids
+    assert world.shift_ids["dec"] not in ids
+
+    with pytest.raises(ShiftNotFoundError):
+        await world.service.claim(SANDER, world.slots[("dec", "skjenker")], ClaimPlaceRequest())
+
+    wishes = await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "vil")
+    assert wishes.shifts[0].shift_id == world.shift_ids["dec"] and wishes.shifts[0].answer == "vil"
+    with pytest.raises(ShiftPlacementError, match="publisert"):
+        await world.service.set_shift_wish(SANDER, world.shift_ids["tue"], "vil")
+
+
+async def test_explicit_published_row_overrides_the_open_default(world: World) -> None:
     await world.session.execute(
-        insert(shift_month_status).values(group_id=STJERNE, month=date(2026, 12, 1), status="open")
+        insert(shift_month_status).values(group_id=STJERNE, month=date(2026, 12, 1), status="published")
     )
     listing = await world.service.list_open(SIGRID, scope="own", days=40)
-    assert world.shift_ids["dec"] not in {s.shift_id for s in listing.shifts}
+    assert world.shift_ids["dec"] in {s.shift_id for s in listing.shifts}
+    with pytest.raises(ShiftPlacementError, match="publisert"):
+        await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "vil")
+
+
+async def test_wishes_window_reaches_the_end_of_the_semester(world: World) -> None:
+    world.clock.now = oslo(date(2026, 8, 10), 9)
+    wishes = await world.service.get_wishes(SANDER)
+    months = sorted({m.month for m in wishes.months})
+    assert months == [date(2026, m, 1) for m in range(8, 13)]
+
+
+async def test_wishes_in_december_include_january(world: World) -> None:
+    world.clock.now = oslo(date(2026, 12, 3), 9)
+    wishes = await world.service.get_wishes(SANDER)
+    assert sorted({m.month for m in wishes.months}) == [date(2026, 12, 1), date(2027, 1, 1)]
 
 
 async def test_trainee_gets_the_training_place_not_the_crew_place(world: World) -> None:
@@ -523,15 +552,12 @@ async def test_swap_is_not_possible_after_start(world: World) -> None:
 async def test_weekday_rules_and_shift_wishes(world: World) -> None:
     wishes = await world.service.get_wishes(SANDER)
     assert [r.weekday for r in wishes.rules] == [1, 2, 3]
-    assert wishes.shifts == []
-    assert {m.status for m in wishes.months} == {"published"}
+    assert [x.shift_id for x in wishes.shifts] == [world.shift_ids["dec"]]
+    assert {m.month: m.status for m in wishes.months} == {date(2026, 11, 1): "published", date(2026, 12, 1): "open"}
 
     wishes = await world.service.set_weekday_rule(SANDER, 2, "kan")
     assert next(r for r in wishes.rules if r.weekday == 2).answer == "kan"
 
-    await world.session.execute(
-        insert(shift_month_status).values(group_id=STJERNE, month=date(2026, 12, 1), status="open")
-    )
     wishes = await world.service.get_wishes(SANDER)
     december = next(m for m in wishes.months if m.month == date(2026, 12, 1))
     assert december.accepts_wishes and december.status_label == "Åpen for ønsker"

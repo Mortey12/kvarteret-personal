@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from app.domain.shifts.app_rules import (
     cannot_attend_window_open,
     course_valid_in,
+    effective_month_status,
     last_valid_semester,
     quota_for,
     required_course_keys,
@@ -12,6 +13,7 @@ from app.domain.shifts.app_rules import (
     semester_of,
     session_label,
     short_date,
+    wish_months,
 )
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
 from app.domain.shifts.planning import (
@@ -125,3 +127,25 @@ def test_absent_trainee_frees_the_shared_crew_place() -> None:
     shift = _shift(crew, training)
     assert open_places(shift, crew) == 1
     assert absent_to_replace(shift, crew).assignment_id == 2
+
+
+def test_month_without_a_row_depends_on_the_date() -> None:
+    today = date(2026, 11, 15)
+    assert effective_month_status(None, date(2026, 11, 1), today) == "published"
+    assert effective_month_status(None, date(2026, 10, 1), today) == "published"
+    assert effective_month_status(None, date(2026, 12, 1), today) == "open"
+
+
+def test_explicit_month_status_wins() -> None:
+    today = date(2026, 11, 15)
+    assert effective_month_status("open", date(2026, 11, 1), today) == "open"
+    assert (
+        effective_month_status("allocating", date(2026, 10, 1), today) == "allocating"
+    )
+    assert effective_month_status("published", date(2026, 12, 1), today) == "published"
+
+
+def test_wish_months_cover_the_semester_and_at_least_next_month() -> None:
+    assert wish_months(date(2026, 2, 10))[-1] == date(2026, 6, 1)
+    assert wish_months(date(2026, 6, 30)) == [date(2026, 6, 1), date(2026, 7, 1)]
+    assert wish_months(date(2026, 12, 3)) == [date(2026, 12, 1), date(2027, 1, 1)]
