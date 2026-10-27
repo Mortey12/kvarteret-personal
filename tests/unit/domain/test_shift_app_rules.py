@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from app.domain.shifts.app_rules import (
     cannot_attend_window_open,
     course_valid_in,
-    effective_month_status,
+    effective_week_status,
     last_valid_semester,
     quota_for,
     required_course_keys,
@@ -13,10 +13,12 @@ from app.domain.shifts.app_rules import (
     semester_of,
     session_label,
     short_date,
-    wish_months,
+    week_start,
+    wish_window_end,
 )
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
 from app.domain.shifts.planning import (
+    OSLO,
     absent_to_replace,
     age_on,
     age_problem,
@@ -129,23 +131,30 @@ def test_absent_trainee_frees_the_shared_crew_place() -> None:
     assert absent_to_replace(shift, crew).assignment_id == 2
 
 
-def test_month_without_a_row_depends_on_the_date() -> None:
-    today = date(2026, 11, 15)
-    assert effective_month_status(None, date(2026, 11, 1), today) == "published"
-    assert effective_month_status(None, date(2026, 10, 1), today) == "published"
-    assert effective_month_status(None, date(2026, 12, 1), today) == "open"
+def test_week_without_a_row_depends_on_the_date() -> None:
+    today = date(2026, 11, 18)  # Wednesday, week of 16 Nov
+    assert effective_week_status(None, date(2026, 11, 16), today) == "published"
+    assert effective_week_status(None, date(2026, 11, 9), today) == "published"
+    assert effective_week_status(None, date(2026, 11, 23), today) == "open"
 
 
-def test_explicit_month_status_wins() -> None:
-    today = date(2026, 11, 15)
-    assert effective_month_status("open", date(2026, 11, 1), today) == "open"
-    assert (
-        effective_month_status("allocating", date(2026, 10, 1), today) == "allocating"
-    )
-    assert effective_month_status("published", date(2026, 12, 1), today) == "published"
+def test_explicit_week_status_wins() -> None:
+    today = date(2026, 11, 18)
+    assert effective_week_status("open", date(2026, 11, 16), today) == "open"
+    assert effective_week_status("allocating", date(2026, 11, 9), today) == "allocating"
+    assert effective_week_status("published", date(2026, 11, 23), today) == "published"
 
 
-def test_wish_months_cover_the_semester_and_at_least_next_month() -> None:
-    assert wish_months(date(2026, 2, 10))[-1] == date(2026, 6, 1)
-    assert wish_months(date(2026, 6, 30)) == [date(2026, 6, 1), date(2026, 7, 1)]
-    assert wish_months(date(2026, 12, 3)) == [date(2026, 12, 1), date(2027, 1, 1)]
+def test_sunday_night_shift_belongs_to_the_sunday_week() -> None:
+    starts_at = datetime(2026, 11, 8, 22, 0, tzinfo=UTC)  # 23:00 Oslo, Sunday
+    ends_at = datetime(2026, 11, 9, 1, 0, tzinfo=UTC)  # 02:00 Oslo, Monday
+    assert week_start(starts_at.astimezone(OSLO).date()) == date(2026, 11, 2)
+    assert week_start(ends_at.astimezone(OSLO).date()) == date(2026, 11, 9)
+    assert week_start(datetime(2026, 11, 9, 0, 30, tzinfo=UTC).astimezone(OSLO).date()) == date(2026, 11, 9)
+
+
+def test_wish_window_runs_to_the_end_of_the_semester_and_next_month() -> None:
+    assert wish_window_end(date(2026, 2, 10)) == date(2026, 6, 30)
+    assert wish_window_end(date(2026, 8, 10)) == date(2026, 12, 31)
+    assert wish_window_end(date(2026, 6, 30)) == date(2026, 7, 31)
+    assert wish_window_end(date(2026, 12, 3)) == date(2027, 1, 31)

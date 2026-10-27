@@ -78,13 +78,17 @@ courses and visibility.
 What the app shows is data-driven so the store release does not need
 updates: per-group `shift_group_settings.app_enabled` (members see the
 group) and `samf_enabled` (everyone with a verv this semester sees its places
-open for samfunnettjeneste), and per-month `shift_month_status`. A month with no
-row gets its status from the date (Oslo time): the current month and earlier
-are `published`, every later month is `open`. Explicit rows always win, and a
-leader publishes a month by setting a `published` row. `open`/`allocating`
-months are hidden from Ledige, Mine and claim, and take wishes. `GET /wishes`
-covers the current month through the end of the semester (January to June,
-July to December), and always at least next month. Keep these
+open for samfunnettjeneste), and per-week `shift_week_status` (per group, keyed by the
+Monday in Oslo time; a shift belongs to the week of its Oslo start date). A
+week with no row gets its status from the date: the current week and earlier
+are `published`, every later week is `open`. Explicit rows always win, and a
+leader publishes a week by setting a `published` row (a month by publishing
+its weeks). `open`/`allocating` weeks are hidden from Ledige, Mine and claim,
+and take wishes. `GET /wishes` returns `weeks` (only weeks with at least one
+shift: `group_id`, `group_name`, `week_start`, `week_number`, `label`,
+`status`, `status_label`, `note`, `accepts_wishes`) from today through the end
+of the semester (January to June, July to December) and at least through next
+month. Keep these
 responses additive: installed app versions keep parsing old fields.
 
 ### Now-playing API

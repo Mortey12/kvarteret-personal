@@ -31,7 +31,7 @@ from app.domain.shifts.tables import (
     shift_assignments,
     shift_availability_rules,
     shift_group_settings,
-    shift_month_status,
+    shift_week_status,
     shift_slots,
     shift_template_slots,
     shift_templates,
@@ -75,7 +75,7 @@ TABLES = [
     shift_slots,
     shift_assignments,
     shift_group_settings,
-    shift_month_status,
+    shift_week_status,
     shift_availability_rules,
     shift_wishes,
 ]
@@ -355,25 +355,63 @@ async def test_samf_sees_only_open_places_with_course_status(world: World) -> No
     assert bartender.open_places == 2
 
 
-async def test_unallocated_months_are_open_by_default(world: World) -> None:
-    # Clock is 2 Nov: November has no row and counts as published, December as open.
+async def add_stjerne_shift(world: World, starts_at: datetime, ends_at: datetime) -> tuple[int, int]:
+    shift_id = (
+        await world.session.execute(
+            insert(shifts)
+            .values(
+                group_id=STJERNE,
+                venue="Stjernesalen",
+                title="Skift",
+                starts_at=starts_at,
+                ends_at=ends_at,
+                is_closed=False,
+                training_replaces_slot=True,
+            )
+            .returning(shifts.c.id)
+        )
+    ).scalar_one()
+    slot_id = (
+        await world.session.execute(
+            insert(shift_slots)
+            .values(shift_id=shift_id, kind="skjenker", count=1, open_for_samf=False, sort_order=0)
+            .returning(shift_slots.c.id)
+        )
+    ).scalar_one()
+    return shift_id, slot_id
+
+
+async def test_unallocated_weeks_are_open_by_default(world: World) -> None:
+    # Clock is Monday 2 Nov. This week (tue) has no row and counts as published;
+    # next week and later (dec) are open.
+    next_week, next_slot = await add_stjerne_shift(world, oslo(date(2026, 11, 10), 11), oslo(date(2026, 11, 10), 17))
     listing = await world.service.list_open(SIGRID, scope="own", days=40)
     ids = {s.shift_id for s in listing.shifts}
     assert world.shift_ids["tue"] in ids
-    assert world.shift_ids["dec"] not in ids
+    assert next_week not in ids and world.shift_ids["dec"] not in ids
 
     with pytest.raises(ShiftNotFoundError):
-        await world.service.claim(SANDER, world.slots[("dec", "skjenker")], ClaimPlaceRequest())
+        await world.service.claim(SANDER, next_slot, ClaimPlaceRequest())
 
-    wishes = await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "vil")
-    assert wishes.shifts[0].shift_id == world.shift_ids["dec"] and wishes.shifts[0].answer == "vil"
+    wishes = await world.service.set_shift_wish(SANDER, next_week, "vil")
+    assert next_week in {s.shift_id for s in wishes.shifts}
     with pytest.raises(ShiftPlacementError, match="publisert"):
         await world.service.set_shift_wish(SANDER, world.shift_ids["tue"], "vil")
 
 
-async def test_explicit_published_row_overrides_the_open_default(world: World) -> None:
+async def test_shift_past_midnight_sunday_belongs_to_the_sunday_week(world: World) -> None:
+    # Sunday 8 Nov 23:00 to Monday 9 Nov 02:00: this week, which is published,
+    # although it ends in the open week.
+    shift_id, _ = await add_stjerne_shift(world, oslo(date(2026, 11, 8), 23), oslo(date(2026, 11, 9), 2))
+    listing = await world.service.list_open(SIGRID, scope="own", days=40)
+    assert shift_id in {s.shift_id for s in listing.shifts}
+    with pytest.raises(ShiftPlacementError, match="publisert"):
+        await world.service.set_shift_wish(SANDER, shift_id, "vil")
+
+
+async def test_explicit_published_week_overrides_the_open_default(world: World) -> None:
     await world.session.execute(
-        insert(shift_month_status).values(group_id=STJERNE, month=date(2026, 12, 1), status="published")
+        insert(shift_week_status).values(group_id=STJERNE, week_start=date(2026, 11, 30), status="published")
     )
     listing = await world.service.list_open(SIGRID, scope="own", days=40)
     assert world.shift_ids["dec"] in {s.shift_id for s in listing.shifts}
@@ -381,17 +419,33 @@ async def test_explicit_published_row_overrides_the_open_default(world: World) -
         await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "vil")
 
 
-async def test_wishes_window_reaches_the_end_of_the_semester(world: World) -> None:
+async def test_explicit_open_week_hides_a_current_week(world: World) -> None:
+    await world.session.execute(
+        insert(shift_week_status).values(group_id=STJERNE, week_start=date(2026, 11, 2), status="allocating")
+    )
+    listing = await world.service.list_open(SIGRID, scope="own", days=40)
+    assert world.shift_ids["tue"] not in {s.shift_id for s in listing.shifts}
+
+
+async def test_wishes_list_weeks_with_shifts_up_to_the_end_of_the_semester(world: World) -> None:
     world.clock.now = oslo(date(2026, 8, 10), 9)
+    await add_stjerne_shift(world, oslo(date(2026, 12, 30), 11), oslo(date(2026, 12, 30), 17))
+    await add_stjerne_shift(world, oslo(date(2027, 1, 5), 11), oslo(date(2027, 1, 5), 17))
     wishes = await world.service.get_wishes(SANDER)
-    months = sorted({m.month for m in wishes.months})
-    assert months == [date(2026, m, 1) for m in range(8, 13)]
+    # Only weeks with shifts, and nothing after the semester (January is next semester).
+    assert [w.week_start for w in wishes.weeks] == [date(2026, 11, 2), date(2026, 11, 30), date(2026, 12, 28)]
+    assert {w.status for w in wishes.weeks} == {"open"}
+    assert all(w.group_id == STJERNE and w.group_name == "Stjerne" for w in wishes.weeks)
 
 
-async def test_wishes_in_december_include_january(world: World) -> None:
+async def test_wishes_in_december_reach_into_january(world: World) -> None:
     world.clock.now = oslo(date(2026, 12, 3), 9)
+    jan, _ = await add_stjerne_shift(world, oslo(date(2027, 1, 26), 11), oslo(date(2027, 1, 26), 17))
+    feb, _ = await add_stjerne_shift(world, oslo(date(2027, 2, 2), 11), oslo(date(2027, 2, 2), 17))
     wishes = await world.service.get_wishes(SANDER)
-    assert sorted({m.month for m in wishes.months}) == [date(2026, 12, 1), date(2027, 1, 1)]
+    ids = {s.shift_id for s in wishes.shifts}
+    assert jan in ids and feb not in ids
+    assert wishes.weeks[-1].week_start == date(2027, 1, 25)
 
 
 async def test_trainee_gets_the_training_place_not_the_crew_place(world: World) -> None:
@@ -553,13 +607,14 @@ async def test_weekday_rules_and_shift_wishes(world: World) -> None:
     wishes = await world.service.get_wishes(SANDER)
     assert [r.weekday for r in wishes.rules] == [1, 2, 3]
     assert [x.shift_id for x in wishes.shifts] == [world.shift_ids["dec"]]
-    assert {m.month: m.status for m in wishes.months} == {date(2026, 11, 1): "published", date(2026, 12, 1): "open"}
+    assert {w.week_start: w.status for w in wishes.weeks} == {date(2026, 11, 2): "published", date(2026, 11, 30): "open"}
 
     wishes = await world.service.set_weekday_rule(SANDER, 2, "kan")
     assert next(r for r in wishes.rules if r.weekday == 2).answer == "kan"
 
     wishes = await world.service.get_wishes(SANDER)
-    december = next(m for m in wishes.months if m.month == date(2026, 12, 1))
+    december = next(w for w in wishes.weeks if w.week_start == date(2026, 11, 30))
+    assert december.week_number == 49 and december.label == "Uke 49 · 30. nov–6. des"
     assert december.accepts_wishes and december.status_label == "Åpen for ønsker"
     [shift] = wishes.shifts
     assert shift.shift_id == world.shift_ids["dec"] and shift.answer == "kan" and shift.from_rule

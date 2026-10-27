@@ -25,7 +25,7 @@ from app.domain.shifts.tables import (
     shift_assignments,
     shift_availability_rules,
     shift_group_settings,
-    shift_month_status,
+    shift_week_status,
     shift_slots,
     shift_templates,
     shift_wishes,
@@ -171,20 +171,20 @@ class ShiftsAppRepository(ShiftsRepository):
         """Hold the shift row until commit so two claims cannot fill one place."""
         await self.fetch_scalar(select(shifts.c.id).where(shifts.c.id == shift_id).with_for_update())
 
-    async def month_statuses(self, group_ids: list[int], months: list[date]) -> dict[tuple[int, date], str]:
-        if not group_ids or not months:
+    async def week_statuses(self, group_ids: list[int], weeks: list[date]) -> dict[tuple[int, date], str]:
+        if not group_ids or not weeks:
             return {}
         rows = await self.fetch_all_mappings(
             select(
-                shift_month_status.c.group_id,
-                shift_month_status.c.month,
-                shift_month_status.c.status,
+                shift_week_status.c.group_id,
+                shift_week_status.c.week_start,
+                shift_week_status.c.status,
             ).where(
-                shift_month_status.c.group_id.in_(group_ids),
-                shift_month_status.c.month.in_(months),
+                shift_week_status.c.group_id.in_(group_ids),
+                shift_week_status.c.week_start.in_(weeks),
             )
         )
-        return {(row["group_id"], _as_date(row["month"])): row["status"] for row in rows}
+        return {(row["group_id"], _as_date(row["week_start"])): row["status"] for row in rows}
 
     async def get_assignment_state(self, assignment_id: int) -> AssignmentState | None:
         row = await self.fetch_first_mapping(

@@ -3420,13 +3420,6 @@
       "ShiftWishesResponse": {
         "additionalProperties": false,
         "properties": {
-          "months": {
-            "items": {
-              "$ref": "#/components/schemas/WishMonth"
-            },
-            "title": "Months",
-            "type": "array"
-          },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/WeekdayRule"
@@ -3448,13 +3441,20 @@
             },
             "title": "Shifts",
             "type": "array"
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/WishWeek"
+            },
+            "title": "Weeks",
+            "type": "array"
           }
         },
         "required": [
           "semester",
           "semester_label",
           "rules",
-          "months",
+          "weeks",
           "shifts"
         ],
         "title": "ShiftWishesResponse",
@@ -3629,61 +3629,6 @@
         "title": "WishAnswerRequest",
         "type": "object"
       },
-      "WishMonth": {
-        "additionalProperties": false,
-        "properties": {
-          "accepts_wishes": {
-            "title": "Accepts Wishes",
-            "type": "boolean"
-          },
-          "group_id": {
-            "title": "Group Id",
-            "type": "integer"
-          },
-          "group_name": {
-            "title": "Group Name",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          },
-          "month": {
-            "format": "date",
-            "title": "Month",
-            "type": "string"
-          },
-          "note": {
-            "title": "Note",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "open",
-              "allocating",
-              "published"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "status_label": {
-            "title": "Status Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "group_id",
-          "group_name",
-          "month",
-          "label",
-          "status",
-          "status_label",
-          "note",
-          "accepts_wishes"
-        ],
-        "title": "WishMonth",
-        "type": "object"
-      },
       "WishShift": {
         "additionalProperties": false,
         "properties": {
@@ -3795,6 +3740,66 @@
           "from_rule"
         ],
         "title": "WishShift",
+        "type": "object"
+      },
+      "WishWeek": {
+        "additionalProperties": false,
+        "properties": {
+          "accepts_wishes": {
+            "title": "Accepts Wishes",
+            "type": "boolean"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "allocating",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_label": {
+            "title": "Status Label",
+            "type": "string"
+          },
+          "week_number": {
+            "title": "Week Number",
+            "type": "integer"
+          },
+          "week_start": {
+            "format": "date",
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "group_id",
+          "group_name",
+          "week_start",
+          "week_number",
+          "label",
+          "status",
+          "status_label",
+          "note",
+          "accepts_wishes"
+        ],
+        "title": "WishWeek",
         "type": "object"
       }
     },

@@ -42,7 +42,7 @@ from app.domain.shifts.app_models import (
     ShiftSummary,
     ShiftWishesResponse,
     WeekdayRule,
-    WishMonth,
+    WishWeek,
     WishShift,
 )
 from app.domain.shifts.app_repository import (
@@ -55,22 +55,19 @@ from app.domain.shifts.app_rules import (
     BAR_COURSE,
     COURSE_RULES,
     FIRE_COURSE,
-    MONTH_PUBLISHED,
-    MONTH_STATUSES,
+    PERIOD_STATUSES,
+    STATUS_PUBLISHED,
     SAMF_TARGET,
     SLOT_DESCRIPTIONS,
     TRAINING_SHIFTS_NEEDED,
     WISH_ANSWERS,
     WISHES_ACCEPTED,
-    add_months,
     cannot_attend_window_open,
     counts_as_samf,
     course_valid_in,
-    effective_month_status,
+    effective_week_status,
     iso_week_key,
     last_valid_semester,
-    month_label,
-    month_start,
     oslo_midnight,
     quota_for,
     required_course_keys,
@@ -80,7 +77,9 @@ from app.domain.shifts.app_rules import (
     session_label,
     short_date,
     utc_now,
-    wish_months,
+    week_label,
+    week_start,
+    wish_window_end,
 )
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
@@ -493,43 +492,46 @@ class ShiftsAppService:
         weekdays = await self.repository.list_template_weekdays(group_ids)
         rules = await self.repository.list_rules(person.volunteer_id, person.semester)
         today = now.astimezone(OSLO).date()
-        months = wish_months(today)
-        statuses = await self.repository.month_statuses(group_ids, months)
+        records = await self.repository.list_shifts_between(
+            now, oslo_midnight(wish_window_end(today) + timedelta(days=1)), group_ids=sorted(group_ids)
+        )
+        by_week: dict[tuple[int, date], list[ShiftRecord]] = {}
+        for record in records:
+            week = week_start(record.starts_at.astimezone(OSLO).date())
+            by_week.setdefault((record.group_id, week), []).append(record)
+        statuses = await self.repository.week_statuses(
+            sorted(group_ids), sorted({week for _, week in by_week})
+        )
 
-        month_rows: list[WishMonth] = []
+        week_rows: list[WishWeek] = []
         accepting: set[tuple[int, date]] = set()
-        for group_id in group_ids:
-            for month in months:
-                status = effective_month_status(statuses.get((group_id, month)), month, today)
-                label, note = MONTH_STATUSES.get(status, MONTH_STATUSES[MONTH_PUBLISHED])
-                accepts = status in WISHES_ACCEPTED
-                if accepts:
-                    accepting.add((group_id, month))
-                month_rows.append(
-                    WishMonth(
-                        group_id=group_id,
-                        group_name=person.group_names[group_id],
-                        month=month,
-                        label=month_label(month),
-                        status=status,  # type: ignore[arg-type]
-                        status_label=label,
-                        note=note,
-                        accepts_wishes=accepts,
-                    )
+        for group_id, week in sorted(by_week, key=lambda key: (key[1], person.group_names[key[0]])):
+            status = effective_week_status(statuses.get((group_id, week)), week, today)
+            label, note = PERIOD_STATUSES.get(status, PERIOD_STATUSES[STATUS_PUBLISHED])
+            accepts = status in WISHES_ACCEPTED
+            if accepts:
+                accepting.add((group_id, week))
+            week_rows.append(
+                WishWeek(
+                    group_id=group_id,
+                    group_name=person.group_names[group_id],
+                    week_start=week,
+                    week_number=week.isocalendar().week,
+                    label=week_label(week),
+                    status=status,  # type: ignore[arg-type]
+                    status_label=label,
+                    note=note,
+                    accepts_wishes=accepts,
                 )
+            )
 
         shift_rows: list[WishShift] = []
-        if accepting:
-            start = oslo_midnight(min(month for _, month in accepting))
-            end = oslo_midnight(add_months(max(month for _, month in accepting), 1))
-            records = await self.repository.list_shifts_between(
-                max(start, now), end, group_ids=sorted({gid for gid, _ in accepting})
-            )
-            records = [
-                record
-                for record in records
-                if (record.group_id, month_start(record.starts_at.astimezone(OSLO).date())) in accepting
-            ]
+        records = [
+            record
+            for record in records
+            if (record.group_id, week_start(record.starts_at.astimezone(OSLO).date())) in accepting
+        ]
+        if records:
             wishes = await self.repository.list_wishes(
                 person.volunteer_id, [record.shift_id for record in records]
             )
@@ -550,7 +552,7 @@ class ShiftsAppService:
                 WeekdayRule(weekday=day, label=WEEKDAYS_NO[day], answer=rules.get(day))  # type: ignore[arg-type]
                 for day in sorted(weekdays | set(rules))
             ],
-            months=month_rows,
+            weeks=week_rows,
             shifts=shift_rows,
         )
 
@@ -566,11 +568,11 @@ class ShiftsAppService:
             raise ShiftNotFoundError("Finner ikke skiftet.")
         if record.starts_at <= self._now():
             raise ShiftPlacementError("Skiftet har allerede vært.")
-        month = month_start(record.starts_at.astimezone(OSLO).date())
-        statuses = await self.repository.month_statuses([record.group_id], [month])
+        week = week_start(record.starts_at.astimezone(OSLO).date())
+        statuses = await self.repository.week_statuses([record.group_id], [week])
         today = self._now().astimezone(OSLO).date()
-        if effective_month_status(statuses.get((record.group_id, month)), month, today) not in WISHES_ACCEPTED:
-            raise ShiftPlacementError("Planen for denne måneden er publisert. Be om bytte i stedet.")
+        if effective_week_status(statuses.get((record.group_id, week)), week, today) not in WISHES_ACCEPTED:
+            raise ShiftPlacementError("Planen for denne uka er publisert. Be om bytte i stedet.")
         await self.repository.set_wish(person.volunteer_id, shift_id, answer)
         return await self.get_wishes(volunteer_id)
 
@@ -679,17 +681,17 @@ class ShiftsAppService:
         return record, slot
 
     async def _published_only(self, records: list[ShiftRecord]) -> list[ShiftRecord]:
-        """Drop shifts in months that are still taking wishes or being allocated."""
+        """Drop shifts in weeks that are still taking wishes or being allocated."""
         if not records:
             return []
-        months = sorted({month_start(r.starts_at.astimezone(OSLO).date()) for r in records})
-        statuses = await self.repository.month_statuses(sorted({r.group_id for r in records}), months)
+        weeks = sorted({week_start(r.starts_at.astimezone(OSLO).date()) for r in records})
+        statuses = await self.repository.week_statuses(sorted({r.group_id for r in records}), weeks)
         today = self._now().astimezone(OSLO).date()
         published: list[ShiftRecord] = []
         for record in records:
-            month = month_start(record.starts_at.astimezone(OSLO).date())
-            status = effective_month_status(statuses.get((record.group_id, month)), month, today)
-            if status == MONTH_PUBLISHED:
+            week = week_start(record.starts_at.astimezone(OSLO).date())
+            status = effective_week_status(statuses.get((record.group_id, week)), week, today)
+            if status == STATUS_PUBLISHED:
                 published.append(record)
         return published
 

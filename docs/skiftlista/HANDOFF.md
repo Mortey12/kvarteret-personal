@@ -55,9 +55,9 @@ Also fixed: dev seed produced semester code `20253` (now
   `garderobe` (`SLOT_KINDS` in `planning.py`). Crew kinds = skjenker,
   bartender, kokk.
 - App (step 1): `shift_group_settings` (per group: `app_enabled`,
-  `samf_enabled`, `meeting_point`), `shift_month_status` (per group and
-  month: `open` / `allocating` / `published`; no row: the current month and
-  earlier are published, later months are open),
+  `samf_enabled`, `meeting_point`), `shift_week_status` (per group and
+  week, `week_start` is the Monday: `open` / `allocating` / `published`; no
+  row: the current week and earlier are published, later weeks are open),
   `shift_availability_rules` (weekday answers per semester),
   `shift_wishes` (per-shift answers), `course_sessions` +
   `course_session_signups` (owned by the courses module), and on
@@ -141,15 +141,20 @@ Postgres and run `uv run pytest tests/e2e`.
   satt) plus per-shift override. Monthly allocation is made and published
   between the 15th and 20th of the previous month. Volunteers can set
   wishes for the whole semester.
-- Months without a `shift_month_status` row get their status from the date
-  (Oslo time): the current month and earlier are `published`, every later
-  month is `open` (takes wishes; its shifts cannot be claimed, so no first
-  come, first served before allocation). A leader publishes a month with an
-  explicit `published` row. Explicit rows (`open`, `allocating`, `published`)
-  always win. `GET /wishes` covers the current month through the end of the
-  semester (spring Jan–Jun, autumn Jul–Dec) and at least next month, so
-  January takes wishes in December (`effective_month_status` and
-  `wish_months` in `app_rules.py`).
+- Allocation status is per group and **week**, not per month (the 15th–20th
+  monthly routine stays as the leaders' process, the code does not depend on
+  it; a leader publishes a month by publishing its weeks). A week is
+  identified by its Monday in Oslo time, and a shift belongs to the week of
+  its Oslo start date, also when it ends after midnight. Weeks without a
+  `shift_week_status` row get their status from the date: the current week
+  and earlier are `published`, every later week is `open` (takes wishes; its
+  shifts cannot be claimed, so no first come, first served before
+  allocation). Explicit rows (`open`, `allocating`, `published`) always win.
+  Wishes are unchanged: per shift plus weekday rules. `GET /wishes` lists
+  weeks that have shifts, from today through the end of the semester (spring
+  Jan–Jun, autumn Jul–Dec) and at least through next month, so January takes
+  wishes in December (`effective_week_status`, `week_start`,
+  `wish_window_end` in `app_rules.py`; migration `20261029_1200`).
 - Privacy: wishes visible only to the person and the group's leaders;
   "nei" never has a reason; swap/sick messages optional and visible only to
   Skjenkeleder and the leder/personalansvarlig of that bar or kitchen (not
@@ -172,15 +177,25 @@ where Stjerne is switched on (also for samfunnettjeneste) with course dates.
 
 Known gaps, deliberately left to later steps:
 
-- **Publishing a month** has no screen yet (step 5). Until then, SQL:
-  `INSERT INTO shift_month_status (group_id, month, status) VALUES
-  (<group id>, '2026-12-01', 'published');`. Shifts leaders put people on in
-  an open month are drafts and do not show in the app's Mine until the month
-  is published.
-- **Pilot step when switching a group on:** mark the months already planned
-  in the old sheet as published, or their shifts stay hidden from Ledige and
-  Mine and open for wishes.
-- **Switching on** a group, setting a month to `allocating` and adding
+- **Publishing a week** has no screen yet (step 5). Until then, SQL, where
+  `week_start` must be a Monday (one row per week; this publishes November
+  2026 for one group):
+  `INSERT INTO shift_week_status (group_id, week_start, status)
+  SELECT <group id>, d::date, 'published'
+  FROM generate_series('2026-11-02'::date, '2026-11-30'::date, interval '7 days') d
+  ON CONFLICT (group_id, week_start) DO UPDATE SET status = 'published', updated_at = now();`
+  Shifts leaders put people on in an unpublished (future) week are drafts and
+  do not show in the app's Mine until the week is published.
+- **Warn leaders about unpublished weeks:** an unpublished week becomes
+  published by default on its Monday, whether or not it is allocated. From
+  about 10 days before, the leader board should show "Uke 49 er ikke
+  publisert. Den blir åpen for alle mandag 30. november." with a "Publiser"
+  button and a "Publiser måneden" button (publishes all its weeks). Email
+  reminders come with step 8.
+- **Pilot step when switching a group on:** mark the weeks already planned in
+  the old sheet as published (SQL above), or their shifts stay hidden from
+  Ledige and Mine and open for wishes.
+- **Switching on** a group, setting a week to `allocating` and adding
   course dates has no screen in Personal yet (steps 4–6). Until then, SQL:
   `INSERT INTO shift_group_settings (group_id, app_enabled, samf_enabled)
   VALUES (<stjerne id>, true, false);`
@@ -212,10 +227,13 @@ Known gaps, deliberately left to later steps:
 4. **Templates and series editing** in Personal: create/edit templates,
    generate a semester, edit one shift or the whole weekday series (time,
    staffing, note, closed, opplæring mode). Also the per-group app switches
-   and meeting point (`shift_group_settings`).
-5. **Wishes and monthly allocation**: port `suggest()` and
+   and meeting point (`shift_group_settings`). The semester generator needs
+   closed periods (from date, to date, per group) so holidays get no shifts.
+5. **Wishes and weekly allocation**: port `suggest()` and
    `fordelingWarnings()` from the prototype's `logic.js`; set
-   `shift_month_status` (open → allocating → published). Wishes are already
+   `shift_week_status` (open → allocating → published) per week, with a
+   "Publiser måneden" shortcut that publishes all weeks of a month, and the
+   unpublished-week warning described under known gaps. Wishes are already
    stored by the app.
 6. **Courses**: leader screens for `course_sessions` (date, place, capacity,
    cancel) and the sign-up lists. Sign-up and expiry are in the app API.

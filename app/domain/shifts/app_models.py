@@ -17,7 +17,7 @@ Tone = Literal["ok", "info", "warn", "off"]
 RequirementState = Literal["ok", "warn", "block"]
 Audience = Literal["skjenke", "samfunnettjeneste", "none"]
 OpenScope = Literal["own", "other", "all"]
-MonthStatus = Literal["open", "allocating", "published"]
+PeriodStatus = Literal["open", "allocating", "published"]
 
 
 class _Model(BaseModel):
@@ -208,12 +208,13 @@ class WeekdayRule(_Model):
     answer: WishAnswer | None
 
 
-class WishMonth(_Model):
+class WishWeek(_Model):
     group_id: int
     group_name: str
-    month: date
+    week_start: date
+    week_number: int
     label: str
-    status: MonthStatus
+    status: PeriodStatus
     status_label: str
     note: str
     accepts_wishes: bool
@@ -228,7 +229,7 @@ class ShiftWishesResponse(_Model):
     semester: int
     semester_label: str
     rules: list[WeekdayRule]
-    months: list[WishMonth]
+    weeks: list[WishWeek]
     shifts: list[WishShift]
 
 

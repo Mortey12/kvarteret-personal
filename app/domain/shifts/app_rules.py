@@ -7,9 +7,9 @@ Like ``planning.py`` these follow the prototype (mstene.no/skiftliste,
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 
-from app.domain.shifts.planning import BAR_KINDS, MONTHS_NO, OSLO, RESTRICTED_KINDS
+from app.domain.shifts.planning import BAR_KINDS, MONTHS_NO, OSLO, RESTRICTED_KINDS, monday_of
 
 # ---------------------------------------------------------------- wishes
 
@@ -19,26 +19,28 @@ WISH_ANSWERS: dict[str, str] = {
     "nei": "Kan ikke",
 }
 
-# Monthly allocation status. No row in shift_month_status: the current month
-# and earlier count as published, later months as open (see effective_month_status).
-MONTH_OPEN = "open"
-MONTH_PUBLISHED = "published"
-MONTH_STATUSES: dict[str, tuple[str, str]] = {
+# Allocation status per group and week (shift_week_status). No row: the
+# current week and earlier count as published, later weeks as open (see
+# effective_week_status).
+STATUS_OPEN = "open"
+STATUS_PUBLISHED = "published"
+PERIOD_STATUSES: dict[str, tuple[str, str]] = {
     "open": (
         "Åpen for ønsker",
-        "Lederen fordeler måneden mellom 15. og 20. måneden før. Trykk på et skift for å si vil, kan eller nei.",
+        "Lederen fordeler skiftene og publiserer dem uke for uke. Trykk på et skift for å si vil, kan eller nei.",
     ),
     "allocating": (
         "Fordeles nå",
-        "Lederen holder på med fordelingen. Du kan justere ønskene til planen er publisert.",
+        "Lederen holder på med fordelingen. Du kan justere ønskene til uka er publisert.",
     ),
-    MONTH_PUBLISHED: ("Fordelt", "Planen er publisert. Skiftene dine ligger under Mine."),
+    STATUS_PUBLISHED: ("Fordelt", "Uka er publisert. Skiftene dine ligger under Mine."),
 }
 WISHES_ACCEPTED = frozenset({"open", "allocating"})
 
 
-def month_start(day: date) -> date:
-    return day.replace(day=1)
+def week_start(day: date) -> date:
+    """The Monday of the week."""
+    return monday_of(day)
 
 
 def add_months(day: date, months: int) -> date:
@@ -46,28 +48,29 @@ def add_months(day: date, months: int) -> date:
     return date(index // 12, index % 12 + 1, 1)
 
 
-def effective_month_status(stored: str | None, month: date, today: date) -> str:
-    """Stored status wins; without a row, later months take wishes and the rest is published."""
+def week_label(week: date) -> str:
+    """Short label for the app, for example "Uke 49 · 30. nov–6. des"."""
+    last = week + timedelta(days=6)
+    first_month = MONTHS_NO[week.month - 1][:3]
+    last_month = MONTHS_NO[last.month - 1][:3]
+    if week.month == last.month:
+        span = f"{week.day}.–{last.day}. {last_month}"
+    else:
+        span = f"{week.day}. {first_month}–{last.day}. {last_month}"
+    return f"Uke {week.isocalendar().week} · {span}"
+
+
+def effective_week_status(stored: str | None, week: date, today: date) -> str:
+    """Stored status wins; without a row, later weeks take wishes and the rest is published."""
     if stored is not None:
         return stored
-    return MONTH_OPEN if month > month_start(today) else MONTH_PUBLISHED
+    return STATUS_OPEN if week > week_start(today) else STATUS_PUBLISHED
 
 
-def wish_months(today: date) -> list[date]:
-    """Current month through the end of the semester, and at least next month."""
-    first = month_start(today)
-    last = date(today.year, 6 if today.month <= 6 else 12, 1)
-    last = max(last, add_months(first, 1))
-    return [
-        add_months(first, offset)
-        for offset in range(
-            (last.year * 12 + last.month) - (first.year * 12 + first.month) + 1
-        )
-    ]
-
-
-def month_label(month: date) -> str:
-    return f"{MONTHS_NO[month.month - 1].capitalize()} {month.year}"
+def wish_window_end(today: date) -> date:
+    """Last day that takes wishes: end of the semester, and at least end of next month."""
+    semester_end = date(today.year, 6, 30) if today.month <= 6 else date(today.year, 12, 31)
+    return max(semester_end, add_months(today, 2) - timedelta(days=1))
 
 
 # ---------------------------------------------------------------- slot texts

@@ -2,7 +2,9 @@
 
 Adds Skjenke's subgroups (Stjerne, Kjøkken, Grøndahls, Halvtimen) under
 Skjenkegruppen, their verv, made-up members for this semester, the H26
-shift templates and six weeks of shifts from this week, partly filled.
+shift templates and shifts from this week to the end of the semester (none
+from 19 December), partly filled. This and next month's weeks are published;
+later weeks stay open for wishes.
 Stjerne is switched on for the app (also for samfunnettjeneste), with
 brann- and barkurs dates and brannkurs completions for most members.
 
@@ -37,20 +39,20 @@ from app.db.tables import (
     role_assignments,
     shift_assignments,
     shift_group_settings,
-    shift_month_status,
     shift_slots,
     shift_template_slots,
     shift_templates,
+    shift_week_status,
     shifts,
     volunteer_records,
 )
-from app.domain.shifts.app_rules import MONTH_PUBLISHED, add_months, month_start
+from app.domain.shifts.app_rules import STATUS_PUBLISHED, add_months, wish_window_end
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 from seed_synthetic import FIRST_NAMES, LAST_NAMES
 
 OSLO = ZoneInfo("Europe/Oslo")
-WEEKS = 6
+CHRISTMAS_BREAK_FROM = (12, 19)  # no shifts from this day to the end of the semester
 
 # name, description, {verv: number of members}
 SUBGROUPS: list[tuple[str, str, dict[str, int]]] = [
@@ -271,11 +273,15 @@ async def seed_shifts(database_url: str) -> None:
             # place), then the rest of the crew. One shift a week each.
             shift_count = 0
             swap_marked = False
-            for week in range(WEEKS):
+            semester_end = wish_window_end(today)
+            weeks = (semester_end - first_monday).days // 7 + 1
+            for week in range(weeks):
                 monday = first_monday + timedelta(days=7 * week)
                 busy: set[int] = set()
                 for day_offset in range(7):
                     day = monday + timedelta(days=day_offset)
+                    if day > semester_end or (day.month, day.day) >= CHRISTMAS_BREAK_FROM:
+                        continue
                     for (group_name, title, weekday), template_id in template_ids.items():
                         if weekday != day.weekday():
                             continue
@@ -372,16 +378,20 @@ async def seed_shifts(database_url: str) -> None:
                     meeting_point="Møt skiftleder i Stjernesalen 30 minutter før.",
                 )
             )
-            # Next month is allocated by the 20th, so it is published. Later
-            # months have no row and stay open for wishes.
-            for group_name in ("Stjerne",):
+            # Weeks starting in this or next month are allocated and published;
+            # later weeks have no row and stay open for wishes.
+            this_month = today.replace(day=1)
+            after_next = add_months(this_month, 2)
+            published_monday = this_month + timedelta(days=(7 - this_month.weekday()) % 7)
+            while published_monday < after_next:
                 await session.execute(
-                    insert(shift_month_status).values(
-                        group_id=group_ids[group_name],
-                        month=add_months(month_start(today), 1),
-                        status=MONTH_PUBLISHED,
+                    insert(shift_week_status).values(
+                        group_id=group_ids["Stjerne"],
+                        week_start=published_monday,
+                        status=STATUS_PUBLISHED,
                     )
                 )
+                published_monday += timedelta(days=7)
 
             # Brann- and barkurs with a few coming dates, and completions for
             # most Skjenke members (some missing, so the app shows sign-up).

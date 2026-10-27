@@ -140,16 +140,16 @@ shift_group_settings = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 
-# Monthly allocation status per group. Without a row the current month and
-# earlier are "published" and later months "open" (effective_month_status).
+# Allocation status per group and week. Without a row the current week and
+# earlier are "published" and later weeks "open" (effective_week_status).
 # "open" = taking wishes, "allocating" = leaders are allocating; volunteers
-# do not see the draft. A leader publishes a month with an explicit row.
-shift_month_status = Table(
-    "shift_month_status",
+# do not see the draft. A leader publishes a week with an explicit row.
+shift_week_status = Table(
+    "shift_week_status",
     public_metadata,
     Column("group_id", BigInteger, ForeignKey("public.groups.id"), primary_key=True),
-    # First day of the month.
-    Column("month", Date, primary_key=True),
+    # The Monday of the week, Oslo time.
+    Column("week_start", Date, primary_key=True),
     Column("status", Text, nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
