@@ -11,3 +11,7 @@ class ShiftPlacementError(ValueError):
 
 class ShiftAccessError(PermissionError):
     """The person cannot use Skiftlista in the app (no group switched on)."""
+
+
+class ShiftForbiddenError(PermissionError):
+    """The leader may not manage this shift's group. The message is shown to them."""

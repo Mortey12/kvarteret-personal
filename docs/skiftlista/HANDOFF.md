@@ -164,6 +164,8 @@ Postgres and run `uv run pytest tests/e2e`.
 - Sick on the day: "Kan ikke i dag" keeps the person on the shift, marked,
   notifies the leaders, and opens the place to everyone incl.
   samfunnettjeneste; they come off when someone takes it.
+- Leader permissions: Admin all groups; Gruppeadmin own groups plus
+  subgroups; nobody else (step 3).
 - Ownership is role based (Skjenkeleder, HS leder/driftsansvarlig); role
   admins can grant access; a maintenance role for etjenesten.
 - Notifications: email for the pilot. Push to be built together with
@@ -221,9 +223,19 @@ Known gaps, deliberately left to later steps:
    server-side per-group switch. Copy the flows from the prototype. Use the
    generated client (branch `skiftlista/api-client`); `GET /config` decides
    tabs and labels.
-3. **Group-scoped permissions**: today any Admin/Gruppeadmin can edit every
-   group's shifts (same as the rest of Personal). Limit leaders to their
-   own groups; add HS samfunnettjeneste and the maintenance role.
+3. **Group-scoped permissions**: done, except the HS samfunnettjeneste role
+   and the maintenance role. Admin manages every group. Gruppeadmin manages
+   the groups in their group-admin assignment (`group_admin_memberships`)
+   and all subgroups (`groups.parent_group_id`, any depth); others are
+   refused. `app/domain/shifts/permissions.py` (pure `manageable_groups`,
+   `GroupScope`), `get_shift_scope` in `app/dependencies.py`, and every
+   leader page and action takes `scope=` (required, no default). The plan and
+   its group filter and volunteer pool only include permitted groups;
+   assign, move (both shifts) and delete answer 403 with a Norwegian message;
+   a Gruppeadmin with no groups sees an empty state. Eligibility checks still
+   look at the person's verv in all shift groups. The app API is unchanged.
+   Not seeded locally: the dev auth gateway only accepts one login
+   (`DEV_ADMIN_EMAIL`), see `app/auth/dev_auth.py`.
 4. **Templates and series editing** in Personal: create/edit templates,
    generate a semester, edit one shift or the whole weekday series (time,
    staffing, note, closed, opplæring mode). Also the per-group app switches

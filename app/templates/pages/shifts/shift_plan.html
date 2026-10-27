@@ -119,7 +119,7 @@
           </section>
         {% else %}
           <section class="app-panel">
-            <div class="py-10 text-center text-sm text-stone-600">Ingen skift denne uka.</div>
+            <div class="py-10 text-center text-sm text-stone-600">{% if no_groups %}Du er ikke gruppeadmin for noen grupper med skift. Be en administrator om tilgang.{% else %}Ingen skift denne uka.{% endif %}</div>
           </section>
         {% endfor %}
       </div>

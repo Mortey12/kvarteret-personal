@@ -20,6 +20,7 @@ from app.domain.event_interest.service import EventInterestService
 from app.domain.feedback.service import FeedbackService
 from app.domain.courses.service import CoursesService
 from app.domain.shifts.app_service import ShiftsAppService
+from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.service import ShiftsService
 from app.domain.groups.service import GroupsService
 from app.domain.mobile_card.service import MobileCardService
@@ -148,6 +149,14 @@ def get_courses_service(request: Request) -> CoursesService:
 
 def get_shifts_service(request: Request) -> ShiftsService:
     return get_container(request).shifts_service
+
+
+async def get_shift_scope(
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+) -> GroupScope:
+    """The groups the signed-in leader may plan shifts for."""
+    return await shifts_service.manageable_scope(current_user.role, current_user.auth_user_id)
 
 
 def get_shifts_app_service(request: Request) -> ShiftsAppService:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from uuid import UUID
 
 from sqlalchemy import delete, func, insert, select, update
 
 from app.db.repository import SqlAlchemyRepository
+from app.domain.admin_accounts.tables import group_admin_memberships
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.models import (
@@ -34,6 +36,21 @@ class ShiftsRepository(SqlAlchemyRepository):
         )
         rows = await self.fetch_all_mappings(stmt)
         return [ShiftGroupOption(group_id=row["id"], name=row["name"]) for row in rows]
+
+    async def list_group_admin_group_ids(self, auth_user_id: UUID) -> list[int]:
+        """Active groups assigned to a Gruppeadmin (group_admin_memberships)."""
+        rows = await self.fetch_all_mappings(
+            select(groups.c.id)
+            .join(group_admin_memberships, group_admin_memberships.c.group_id == groups.c.id)
+            .where(group_admin_memberships.c.auth_user_id == auth_user_id, groups.c.is_active.is_(True))
+        )
+        return [row["id"] for row in rows]
+
+    async def list_group_parents(self) -> dict[int, int | None]:
+        rows = await self.fetch_all_mappings(
+            select(groups.c.id, groups.c.parent_group_id).where(groups.c.is_active.is_(True))
+        )
+        return {row["id"]: row["parent_group_id"] for row in rows}
 
     async def list_shifts_between(
         self,

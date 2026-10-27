@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from app.auth.roles import UserRole
 from app.dependencies import get_shifts_service
-from app.domain.shifts.errors import ShiftPlacementError
+from app.domain.shifts.errors import ShiftForbiddenError, ShiftPlacementError
+from app.domain.shifts.permissions import ALL_GROUPS, NO_GROUPS, GroupScope
 from app.domain.shifts.models import (
     AssignedPerson,
     PlacementResult,
@@ -29,8 +30,22 @@ from tests.support.helpers import (
 class FakeShiftsService:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
+        self.scope = ALL_GROUPS
+        self.forbidden = False
 
-    async def get_week_plan(self, week: date, group_id: int | None = None) -> WeekPlan:
+    async def manageable_scope(self, role, auth_user_id) -> GroupScope:
+        self.calls.append(("scope", role))
+        return self.scope
+
+    def _check(self, scope: GroupScope) -> None:
+        assert scope == self.scope
+        if self.forbidden:
+            raise ShiftForbiddenError("Du har ikke tilgang til å endre skift for Grøndahls.")
+
+    async def get_week_plan(
+        self, week: date, group_id: int | None = None, *, scope: GroupScope
+    ) -> WeekPlan:
+        self._check(scope)
         self.calls.append((week, group_id))
         start = datetime(2026, 11, 2, 10, 30, tzinfo=UTC)
         record = ShiftRecord(
@@ -102,17 +117,20 @@ class FakeShiftsService:
             ],
         )
 
-    async def assign(self, *, slot_id: int, volunteer_id: int) -> PlacementResult:
+    async def assign(self, *, slot_id: int, volunteer_id: int, scope: GroupScope) -> PlacementResult:
+        self._check(scope)
         self.calls.append(("assign", slot_id, volunteer_id))
         if slot_id == 1:
             raise ShiftPlacementError("Kun for skiftledere i gruppen.")
         return PlacementResult("Sander Skjenker er satt opp som skjenker.")
 
-    async def move(self, *, assignment_id: int, slot_id: int) -> PlacementResult:
+    async def move(self, *, assignment_id: int, slot_id: int, scope: GroupScope) -> PlacementResult:
+        self._check(scope)
         self.calls.append(("move", assignment_id, slot_id))
         return PlacementResult("Flyttet.")
 
-    async def remove(self, *, assignment_id: int) -> PlacementResult:
+    async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult:
+        self._check(scope)
         self.calls.append(("remove", assignment_id))
         return PlacementResult("Tatt av.")
 
@@ -130,7 +148,7 @@ def test_shift_plan_renders_week_for_managers() -> None:
     response = client.get("/shifts?week=2026-11-04&group=7")
 
     assert response.status_code == 200
-    assert service.calls == [(date(2026, 11, 4), 7)]
+    assert (date(2026, 11, 4), 7) in service.calls
     assert "Skiftplan" in response.text
     assert "Uke 45 · 2.–8. november" in response.text
     assert "Mandag 2. november" in response.text
@@ -151,7 +169,7 @@ def test_shift_plan_ignores_bad_query_values() -> None:
     response = client.get("/shifts?week=not-a-date&group=abc")
 
     assert response.status_code == 200
-    assert service.calls[0][1] is None
+    assert [c for c in service.calls if c[0] != "scope"][0][1] is None
 
 
 def test_shift_plan_is_for_managers_only() -> None:
@@ -207,3 +225,49 @@ def test_shift_actions_need_csrf_and_management_role() -> None:
     )
     assert response.status_code == 403
     assert not any(call[0] == "remove" for call in service.calls if isinstance(call[0], str))
+
+
+
+def test_gruppeadmin_scope_is_passed_to_the_service() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    service.scope = GroupScope(frozenset({7}))
+    assert client.get("/shifts").status_code == 200
+    assert ("scope", UserRole.GROUP_ADMIN) in service.calls
+
+
+def test_actions_on_a_forbidden_group_return_403_with_a_message() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    prime_csrf(client, path="/shifts")
+    service.forbidden = True
+
+    responses = [
+        client.post(
+            "/shifts/assignments", data={"slot_id": "2", "volunteer_id": "3"}, headers=csrf_headers(client)
+        ),
+        client.post("/shifts/assignments/1/move", data={"slot_id": "2"}, headers=csrf_headers(client)),
+        client.post("/shifts/assignments/1/delete", headers=csrf_headers(client)),
+    ]
+
+    for response in responses:
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Du har ikke tilgang til å endre skift for Grøndahls."
+
+
+def test_gruppeadmin_without_groups_sees_an_empty_state() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    service.scope = NO_GROUPS
+    empty = FakeShiftsService.get_week_plan
+
+    async def no_plan(self, week, group_id=None, *, scope):
+        plan = await empty(self, week, group_id, scope=scope)
+        plan.groups, plan.days, plan.pool = [], [], []
+        return plan
+
+    FakeShiftsService.get_week_plan = no_plan
+    try:
+        response = client.get("/shifts")
+    finally:
+        FakeShiftsService.get_week_plan = empty
+
+    assert response.status_code == 200
+    assert "Du er ikke gruppeadmin for noen grupper med skift" in response.text

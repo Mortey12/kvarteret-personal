@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from typing import Protocol
+from uuid import UUID
 
+from app.auth.roles import UserRole
 from app.domain.shifts.errors import ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.models import (
     MemberRole,
@@ -12,6 +14,7 @@ from app.domain.shifts.models import (
     SlotRecord,
     WeekPlan,
 )
+from app.domain.shifts.permissions import GroupScope, manageable_groups
 from app.domain.shifts.planning import (
     OSLO,
     MISSING_BIRTH_DATE_WARNING,
@@ -34,10 +37,13 @@ from app.shared.semester import get_current_semester_code
 
 
 class ShiftsServiceProtocol(Protocol):
-    async def get_week_plan(self, week: date, group_id: int | None = None) -> WeekPlan: ...
-    async def assign(self, *, slot_id: int, volunteer_id: int) -> PlacementResult: ...
-    async def move(self, *, assignment_id: int, slot_id: int) -> PlacementResult: ...
-    async def remove(self, *, assignment_id: int) -> PlacementResult: ...
+    async def manageable_scope(self, role: UserRole, auth_user_id: UUID) -> GroupScope: ...
+    async def get_week_plan(
+        self, week: date, group_id: int | None = None, *, scope: GroupScope
+    ) -> WeekPlan: ...
+    async def assign(self, *, slot_id: int, volunteer_id: int, scope: GroupScope) -> PlacementResult: ...
+    async def move(self, *, assignment_id: int, slot_id: int, scope: GroupScope) -> PlacementResult: ...
+    async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult: ...
 
 
 def _week_bounds(day: date) -> tuple[datetime, datetime]:
@@ -63,14 +69,30 @@ class ShiftsService:
     def __init__(self, repository: ShiftsRepository) -> None:
         self.repository = repository
 
-    async def get_week_plan(self, week: date, group_id: int | None = None) -> WeekPlan:
+    async def manageable_scope(self, role: UserRole, auth_user_id: UUID) -> GroupScope:
+        if role != UserRole.GROUP_ADMIN:
+            return manageable_groups(role, [], {})
+        assigned = await self.repository.list_group_admin_group_ids(auth_user_id)
+        return manageable_groups(role, assigned, await self.repository.list_group_parents())
+
+    async def get_week_plan(
+        self, week: date, group_id: int | None = None, *, scope: GroupScope
+    ) -> WeekPlan:
         week_start = monday_of(week)
         starts_from, starts_before = _week_bounds(week_start)
-        group_options = await self.repository.list_shift_groups()
+        all_groups = await self.repository.list_shift_groups()
+        group_options = [option for option in all_groups if scope.allows(option.group_id)]
         if group_id is not None and all(option.group_id != group_id for option in group_options):
             group_id = None
-        records = await self.repository.list_shifts_between(
-            starts_from, starts_before, group_id=group_id
+        records = (
+            []
+            if not group_options
+            else await self.repository.list_shifts_between(
+                starts_from,
+                starts_before,
+                group_id=group_id,
+                group_ids=[option.group_id for option in group_options],
+            )
         )
         week_counts = await self.repository.count_shifts_by_volunteer(starts_from, starts_before)
         await self._attach_warnings(records, week_counts)
@@ -85,7 +107,12 @@ class ShiftsService:
             for person in slot.people
             if person.swap_requested
         )
-        pool = await self._pool([option.group_id for option in group_options], group_id, week_counts)
+        pool = await self._pool(
+            [option.group_id for option in all_groups],
+            [option.group_id for option in group_options],
+            group_id,
+            week_counts,
+        )
         return WeekPlan(
             week_start=week_start,
             week_label=format_week(week_start),
@@ -102,6 +129,7 @@ class ShiftsService:
     async def _pool(
         self,
         shift_group_ids: list[int],
+        visible_group_ids: list[int],
         selected_group_id: int | None,
         week_counts: dict[int, int],
     ) -> list[PoolPerson]:
@@ -112,6 +140,8 @@ class ShiftsService:
         pool: list[PoolPerson] = []
         seen: set[int] = set()
         for member in members:
+            if member.group_id not in visible_group_ids:
+                continue
             if selected_group_id is not None and member.group_id != selected_group_id:
                 continue
             if member.volunteer_id in seen:
@@ -124,7 +154,7 @@ class ShiftsService:
                     group_name=member.group_name,
                     role_name=member.role_name or "Medlem",
                     shifts_this_week=week_counts.get(member.volunteer_id, 0),
-                    allowed_tokens=allowed_tokens(roles[member.volunteer_id], shift_group_ids),
+                    allowed_tokens=allowed_tokens(roles[member.volunteer_id], visible_group_ids),
                 )
             )
         return pool
@@ -156,12 +186,13 @@ class ShiftsService:
                     ):
                         person.warnings.append(MISSING_BIRTH_DATE_WARNING)
 
-    async def _load_slot(self, slot_id: int) -> tuple[ShiftRecord, SlotRecord]:
+    async def _load_slot(self, slot_id: int, scope: GroupScope) -> tuple[ShiftRecord, SlotRecord]:
         shift_id = await self.repository.get_slot_shift_id(slot_id)
         shift = await self.repository.get_shift(shift_id) if shift_id is not None else None
         slot = next((item for item in shift.slots if item.slot_id == slot_id), None) if shift else None
         if shift is None or slot is None:
             raise ShiftNotFoundError("Plassen finnes ikke lenger. Oppdater siden.")
+        scope.require(shift.group_id, shift.group_name)
         return shift, slot
 
     async def _check(
@@ -226,8 +257,10 @@ class ShiftsService:
         day = format_day(shift.starts_at.astimezone(OSLO).date()).lower()
         return f"{slot_kind(slot.kind).label.lower()}, {shift.title.lower()} {day}"
 
-    async def assign(self, *, slot_id: int, volunteer_id: int) -> PlacementResult:
-        shift, slot = await self._load_slot(slot_id)
+    async def assign(
+        self, *, slot_id: int, volunteer_id: int, scope: GroupScope
+    ) -> PlacementResult:
+        shift, slot = await self._load_slot(slot_id, scope)
         name = await self.repository.get_volunteer_name(volunteer_id)
         if name is None:
             raise ShiftNotFoundError("Personen finnes ikke.")
@@ -242,13 +275,16 @@ class ShiftsService:
         if absent is not None:
             await self.repository.remove_assignment(absent.assignment_id)
 
-    async def move(self, *, assignment_id: int, slot_id: int) -> PlacementResult:
+    async def move(
+        self, *, assignment_id: int, slot_id: int, scope: GroupScope
+    ) -> PlacementResult:
         assignment = await self.repository.get_assignment(assignment_id)
         if assignment is None:
             raise ShiftNotFoundError("Tildelingen finnes ikke lenger. Oppdater siden.")
+        await self._load_slot(assignment.slot_id, scope)
         if assignment.slot_id == slot_id:
             return PlacementResult("Ingen endring.")
-        shift, slot = await self._load_slot(slot_id)
+        shift, slot = await self._load_slot(slot_id, scope)
         warnings = await self._check(
             shift, slot, assignment.volunteer_id, moving_assignment_id=assignment_id
         )
@@ -257,11 +293,11 @@ class ShiftsService:
         name = await self.repository.get_volunteer_name(assignment.volunteer_id) or "Personen"
         return PlacementResult(_message(f"{name} er flyttet til {self._describe(shift, slot)}.", warnings))
 
-    async def remove(self, *, assignment_id: int) -> PlacementResult:
+    async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult:
         assignment = await self.repository.get_assignment(assignment_id)
         if assignment is None:
             raise ShiftNotFoundError("Tildelingen finnes ikke lenger. Oppdater siden.")
-        shift, slot = await self._load_slot(assignment.slot_id)
+        shift, slot = await self._load_slot(assignment.slot_id, scope)
         await self.repository.remove_assignment(assignment_id)
         name = await self.repository.get_volunteer_name(assignment.volunteer_id) or "Personen"
         return PlacementResult(f"{name} er tatt av {self._describe(shift, slot)}. Plassen er ledig igjen.")

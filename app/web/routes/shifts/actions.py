@@ -8,8 +8,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 
-from app.dependencies import get_shifts_service, require_management_user
-from app.domain.shifts.errors import ShiftNotFoundError, ShiftPlacementError
+from app.dependencies import get_shift_scope, get_shifts_service, require_management_user
+from app.domain.shifts.errors import (
+    ShiftForbiddenError,
+    ShiftNotFoundError,
+    ShiftPlacementError,
+)
+from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.models import PlacementResult
 from app.domain.shifts.service import ShiftsService
 from app.observability import log_admin_activity
@@ -27,10 +32,15 @@ async def shift_assignment_create(
     slot_id: int = Form(...),
     volunteer_id: int = Form(...),
     current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
     shifts_service: ShiftsService = Depends(get_shifts_service),
 ):
     try:
-        result = await shifts_service.assign(slot_id=slot_id, volunteer_id=volunteer_id)
+        result = await shifts_service.assign(
+            slot_id=slot_id, volunteer_id=volunteer_id, scope=scope
+        )
+    except ShiftForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ShiftNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ShiftPlacementError as exc:
@@ -52,10 +62,15 @@ async def shift_assignment_move(
     assignment_id: int,
     slot_id: int = Form(...),
     current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
     shifts_service: ShiftsService = Depends(get_shifts_service),
 ):
     try:
-        result = await shifts_service.move(assignment_id=assignment_id, slot_id=slot_id)
+        result = await shifts_service.move(
+            assignment_id=assignment_id, slot_id=slot_id, scope=scope
+        )
+    except ShiftForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ShiftNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ShiftPlacementError as exc:
@@ -76,10 +91,13 @@ async def shift_assignment_delete(
     request: Request,
     assignment_id: int,
     current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
     shifts_service: ShiftsService = Depends(get_shifts_service),
 ):
     try:
-        result = await shifts_service.remove(assignment_id=assignment_id)
+        result = await shifts_service.remove(assignment_id=assignment_id, scope=scope)
+    except ShiftForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ShiftNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     log_admin_activity(

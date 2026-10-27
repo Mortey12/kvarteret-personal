@@ -4,7 +4,8 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Request
 
-from app.dependencies import get_shifts_service, require_management_user
+from app.dependencies import get_shift_scope, get_shifts_service, require_management_user
+from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.planning import OSLO
 from app.domain.shifts.service import ShiftsService
 from app.errors import NotConfiguredError
@@ -35,10 +36,13 @@ async def shifts_week(
     week: str | None = None,
     group: str | None = None,
     current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
     shifts_service: ShiftsService = Depends(get_shifts_service),
 ):
     try:
-        plan = await shifts_service.get_week_plan(_parse_week(week), _parse_group(group))
+        plan = await shifts_service.get_week_plan(
+            _parse_week(week), _parse_group(group), scope=scope
+        )
     except NotConfiguredError:
         raise not_configured_http_exception("Skiftplanen er ikke satt opp ennå.")
     return templates.TemplateResponse(
@@ -49,5 +53,6 @@ async def shifts_week(
             "section": "shifts",
             "current_user": current_user,
             "plan": plan,
+            "no_groups": scope.is_empty,
         },
     )
