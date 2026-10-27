@@ -1,4 +1,5 @@
 {% extends "layouts/base.html" %}
+{% from "components/shared/ui_macros.html" import flash_notice %}
 
 {% block page_content %}
   <section class="grid gap-7">
@@ -6,6 +7,24 @@
       <h1 class="text-5xl leading-none font-light tracking-tight text-stone-900 md:text-7xl">Skiftplan</h1>
       <p class="text-sm text-stone-700">Dra en frivillig fra lista til en ledig plass, eller mellom plasser. Dra tilbake til lista for å ta personen av skiftet.</p>
     </header>
+
+    {% if not no_groups %}
+      <p class="text-center text-sm"><a href="/shifts/settings">Innstillinger for Skiftlista i appen</a></p>
+    {% endif %}
+    {{ flash_notice(notice, 'success', 'mb-0') }}
+    {{ flash_notice(error, 'error', 'mb-0') }}
+
+    {% for banner in plan.banners %}
+      <form action="/shifts/weeks/status" class="flex flex-wrap items-center justify-between gap-3 border-2 px-4 py-3 text-sm {% if banner.urgent %}border-amber-500 bg-amber-100 text-amber-950{% else %}border-stone-300 bg-white text-stone-800{% endif %}" data-week-banner method="post" role="{{ 'alert' if banner.urgent else 'status' }}">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="hidden" name="group_id" value="{{ banner.group_id }}">
+        <input type="hidden" name="week" value="{{ banner.week_start.isoformat() }}">
+        <input type="hidden" name="status" value="published">
+        {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
+        <span>{% if plan.groups | length > 1 %}<strong>{{ banner.group_name }}:</strong> {% endif %}{{ banner.text }}</span>
+        <button class="app-button" type="submit">Publiser</button>
+      </form>
+    {% endfor %}
 
     <form action="/shifts" class="app-panel" method="get">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end">
@@ -29,6 +48,43 @@
         <button class="app-button" type="submit">Vis</button>
       </div>
     </form>
+
+    {% if plan.statuses %}
+      <section class="app-panel grid gap-3" aria-label="Status for uka" data-week-statuses>
+        <h2 class="text-lg font-semibold text-stone-900">Status for {{ plan.week_label }}</h2>
+        {% for item in plan.statuses %}
+          <div class="grid gap-2 border-b border-stone-300 pb-3 last:border-b-0 last:pb-0" data-week-status data-group-id="{{ item.group_id }}">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-semibold text-stone-900">{{ item.group_name }}</span>
+              <span class="app-badge" data-status="{{ item.status }}">{{ item.label }}</span>
+              {% if not item.explicit %}<span class="text-xs text-stone-500">(satt automatisk etter datoen)</span>{% endif %}
+            </div>
+            {% if item.is_past %}<p class="text-xs text-amber-800">Uka er allerede over. Du kan fortsatt endre status.</p>{% endif %}
+            <div class="flex flex-wrap gap-2">
+              {% for form_status, form_label, primary in [('open', 'Åpne for ønsker', false), ('allocating', 'Fordeles nå', false), ('published', 'Publiser uka', true)] %}
+                <form action="/shifts/weeks/status" method="post">
+                  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                  <input type="hidden" name="group_id" value="{{ item.group_id }}">
+                  <input type="hidden" name="week" value="{{ plan.week_start.isoformat() }}">
+                  <input type="hidden" name="status" value="{{ form_status }}">
+                  {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
+                  <button class="{{ 'app-button' if primary else 'app-button-secondary' }}" type="submit" {% if item.status == form_status and item.explicit %}disabled{% endif %}>{{ form_label }}</button>
+                </form>
+              {% endfor %}
+              <form action="/shifts/weeks/status" method="post">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <input type="hidden" name="group_id" value="{{ item.group_id }}">
+                <input type="hidden" name="week" value="{{ plan.week_start.isoformat() }}">
+                <input type="hidden" name="status" value="published">
+                <input type="hidden" name="whole_month" value="true">
+                {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
+                <button class="app-button-secondary" type="submit" data-publish-month>Publiser måneden</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+    {% endif %}
 
     <div id="shift-board-root" class="grid items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
       <aside class="app-panel grid gap-3 lg:sticky lg:top-4" aria-label="Frivillige">

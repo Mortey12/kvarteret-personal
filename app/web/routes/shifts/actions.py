@@ -6,6 +6,9 @@ is a 400 with the reason in ``detail``, which the board shows as is.
 
 from __future__ import annotations
 
+from datetime import date
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 
 from app.dependencies import get_shift_scope, get_shifts_service, require_management_user
@@ -18,6 +21,7 @@ from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.models import PlacementResult
 from app.domain.shifts.service import ShiftsService
 from app.observability import log_admin_activity
+from app.web.route_helpers import redirect_to
 
 router = APIRouter()
 
@@ -108,3 +112,78 @@ async def shift_assignment_delete(
         subject_id=assignment_id,
     )
     return _result(result)
+
+
+def _back(path: str, **params: str | int | None) -> str:
+    query = urlencode({key: value for key, value in params.items() if value not in (None, "")})
+    return f"{path}?{query}" if query else path
+
+
+@router.post("/shifts/settings/{group_id}")
+async def shift_settings_save(
+    request: Request,
+    group_id: int,
+    app_enabled: bool = Form(False),
+    samf_enabled: bool = Form(False),
+    meeting_point: str = Form(""),
+    current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+):
+    try:
+        message = await shifts_service.save_group_settings(
+            group_id,
+            app_enabled=app_enabled,
+            samf_enabled=samf_enabled,
+            meeting_point=meeting_point,
+            scope=scope,
+        )
+    except ShiftForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ShiftNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ShiftPlacementError as exc:
+        return redirect_to(_back("/shifts/settings", error=str(exc)))
+    log_admin_activity(
+        request=request,
+        user=current_user,
+        action="shift.settings",
+        subject_type="group",
+        subject_id=group_id,
+        details={"app_enabled": app_enabled, "samf_enabled": samf_enabled},
+    )
+    return redirect_to(_back("/shifts/settings", notice=message))
+
+
+@router.post("/shifts/weeks/status")
+async def shift_week_status_save(
+    request: Request,
+    group_id: int = Form(...),
+    week: date = Form(...),
+    new_status: str = Form(..., alias="status"),
+    whole_month: bool = Form(False),
+    view_group: int | None = Form(None),
+    current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+):
+    board = "/shifts"
+    try:
+        message = await shifts_service.set_week_status(
+            group_id=group_id, week=week, status=new_status, whole_month=whole_month, scope=scope
+        )
+    except ShiftForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ShiftNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ShiftPlacementError as exc:
+        return redirect_to(_back(board, week=week.isoformat(), group=view_group, error=str(exc)))
+    log_admin_activity(
+        request=request,
+        user=current_user,
+        action="shift.week_status",
+        subject_type="group",
+        subject_id=group_id,
+        details={"week": week.isoformat(), "status": new_status, "whole_month": whole_month},
+    )
+    return redirect_to(_back(board, week=week.isoformat(), group=view_group, notice=message))

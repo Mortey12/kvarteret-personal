@@ -1,20 +1,34 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from collections.abc import Callable
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Protocol
 from uuid import UUID
 
 from app.auth.roles import UserRole
-from app.domain.shifts.errors import ShiftNotFoundError, ShiftPlacementError
+from app.domain.shifts.app_rules import PERIOD_STATUSES, effective_week_status
+from app.domain.shifts.errors import (
+    ShiftForbiddenError,
+    ShiftNotFoundError,
+    ShiftPlacementError,
+)
 from app.domain.shifts.models import (
+    GroupSettingsView,
     MemberRole,
     PlacementResult,
     PoolPerson,
     ShiftRecord,
     SlotRecord,
+    WeekBanner,
     WeekPlan,
+    WeekStatusView,
 )
-from app.domain.shifts.permissions import GroupScope, manageable_groups
+from app.domain.shifts.permissions import (
+    SKJENKE_SLUGS,
+    GroupScope,
+    manageable_groups,
+    with_subgroups,
+)
 from app.domain.shifts.planning import (
     OSLO,
     MISSING_BIRTH_DATE_WARNING,
@@ -24,6 +38,7 @@ from app.domain.shifts.planning import (
     age_problem,
     allowed_tokens,
     format_day,
+    MONTHS_NO,
     format_week,
     group_into_days,
     monday_of,
@@ -33,6 +48,13 @@ from app.domain.shifts.planning import (
     slot_kind,
 )
 from app.domain.shifts.repository import ShiftsRepository
+from app.domain.shifts.week_status import (
+    BANNER_DAYS,
+    SETTABLE_STATUSES,
+    is_past_week,
+    mondays_in_month,
+    unpublished_week_banner,
+)
 from app.shared.semester import get_current_semester_code
 
 
@@ -44,6 +66,19 @@ class ShiftsServiceProtocol(Protocol):
     async def assign(self, *, slot_id: int, volunteer_id: int, scope: GroupScope) -> PlacementResult: ...
     async def move(self, *, assignment_id: int, slot_id: int, scope: GroupScope) -> PlacementResult: ...
     async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult: ...
+    async def list_group_settings(self, scope: GroupScope) -> list[GroupSettingsView]: ...
+    async def save_group_settings(
+        self,
+        group_id: int,
+        *,
+        app_enabled: bool,
+        samf_enabled: bool,
+        meeting_point: str,
+        scope: GroupScope,
+    ) -> str: ...
+    async def set_week_status(
+        self, *, group_id: int, week: date, status: str, whole_month: bool, scope: GroupScope
+    ) -> str: ...
 
 
 def _week_bounds(day: date) -> tuple[datetime, datetime]:
@@ -66,14 +101,28 @@ def _roles_by_group(members: list[MemberRole]) -> dict[int, dict[int, set[str]]]
 
 
 class ShiftsService:
-    def __init__(self, repository: ShiftsRepository) -> None:
+    def __init__(
+        self,
+        repository: ShiftsRepository,
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
         self.repository = repository
+        self._now = now
 
     async def manageable_scope(self, role: UserRole, auth_user_id: UUID) -> GroupScope:
         if role != UserRole.GROUP_ADMIN:
             return manageable_groups(role, [], {})
         assigned = await self.repository.list_group_admin_group_ids(auth_user_id)
-        return manageable_groups(role, assigned, await self.repository.list_group_parents())
+        parents = await self.repository.list_group_parents()
+        scope = manageable_groups(role, assigned, parents)
+        if scope.is_empty:
+            return scope
+        # Skiftlista is for Skjenke and its subgroups; other groups give no access.
+        return scope.narrowed_to(await self._skjenke_group_ids(parents))
+
+    async def _skjenke_group_ids(self, parents: dict[int, int | None]) -> frozenset[int]:
+        roots = await self.repository.list_skjenke_root_ids(SKJENKE_SLUGS)
+        return with_subgroups(roots, parents)
 
     async def get_week_plan(
         self, week: date, group_id: int | None = None, *, scope: GroupScope
@@ -107,12 +156,18 @@ class ShiftsService:
             for person in slot.people
             if person.swap_requested
         )
-        pool = await self._pool(
-            [option.group_id for option in all_groups],
-            [option.group_id for option in group_options],
-            group_id,
-            week_counts,
+        pool = (
+            []
+            if scope.is_empty
+            else await self._pool(
+                [option.group_id for option in all_groups],
+                [option.group_id for option in group_options],
+                group_id,
+                week_counts,
+            )
         )
+        shown = [o for o in group_options if group_id is None or o.group_id == group_id]
+        statuses, banners = await self._week_statuses(week_start, group_options, shown)
         return WeekPlan(
             week_start=week_start,
             week_label=format_week(week_start),
@@ -124,7 +179,51 @@ class ShiftsService:
             open_places=open_count,
             swap_requests=swap_requests,
             pool=pool,
+            statuses=statuses,
+            banners=banners,
         )
+
+    async def _week_statuses(
+        self, week_start: date, group_options: list, shown: list
+    ) -> tuple[list[WeekStatusView], list[WeekBanner]]:
+        today = self._now().astimezone(OSLO).date()
+        first_ahead = monday_of(today) + timedelta(days=7)
+        coming = [first_ahead + timedelta(days=7 * n) for n in range(2)]
+        coming = [week for week in coming if (week - today).days <= BANNER_DAYS]
+        all_ids = [option.group_id for option in group_options]
+        stored = await self.repository.get_week_statuses(all_ids, [week_start, *coming])
+        statuses = []
+        for option in shown:
+            row = stored.get((option.group_id, week_start))
+            status = effective_week_status(row, week_start, today)
+            statuses.append(
+                WeekStatusView(
+                    group_id=option.group_id,
+                    group_name=option.name,
+                    status=status,
+                    label=PERIOD_STATUSES[status][0],
+                    explicit=row is not None,
+                    is_past=is_past_week(week_start, today),
+                )
+            )
+        banners: list[WeekBanner] = []
+        if coming:
+            with_shifts = await self.repository.list_shift_group_weeks(
+                datetime.combine(coming[0], time.min, tzinfo=OSLO),
+                datetime.combine(coming[-1] + timedelta(days=7), time.min, tzinfo=OSLO),
+                all_ids,
+            )
+            weeks_with_shifts = {(gid, monday_of(day)) for gid, day in with_shifts}
+            for week in coming:
+                for option in group_options:
+                    if (option.group_id, week) not in weeks_with_shifts:
+                        continue
+                    banner = unpublished_week_banner(
+                        option.group_id, option.name, week, stored.get((option.group_id, week)), today
+                    )
+                    if banner:
+                        banners.append(banner)
+        return statuses, banners
 
     async def _pool(
         self,
@@ -140,8 +239,6 @@ class ShiftsService:
         pool: list[PoolPerson] = []
         seen: set[int] = set()
         for member in members:
-            if member.group_id not in visible_group_ids:
-                continue
             if selected_group_id is not None and member.group_id != selected_group_id:
                 continue
             if member.volunteer_id in seen:
@@ -301,6 +398,75 @@ class ShiftsService:
         await self.repository.remove_assignment(assignment_id)
         name = await self.repository.get_volunteer_name(assignment.volunteer_id) or "Personen"
         return PlacementResult(f"{name} er tatt av {self._describe(shift, slot)}. Plassen er ledig igjen.")
+
+
+    async def set_week_status(
+        self, *, group_id: int, week: date, status: str, whole_month: bool, scope: GroupScope
+    ) -> str:
+        if status not in SETTABLE_STATUSES or (whole_month and status != "published"):
+            raise ShiftPlacementError("Ugyldig status.")
+        name = await self.repository.get_group_name(group_id)
+        if name is None:
+            raise ShiftNotFoundError("Gruppen finnes ikke.")
+        scope.require(group_id, name)
+        monday = monday_of(week)
+        weeks = mondays_in_month(monday) if whole_month else [monday]
+        await self.repository.set_week_statuses(group_id, weeks, status)
+        label = PERIOD_STATUSES[status][0].lower()
+        if whole_month:
+            text = f"{MONTHS_NO[monday.month - 1].capitalize()} er publisert for {name} ({len(weeks)} uker)."
+        else:
+            text = f"Uke {monday.isocalendar().week} for {name}: {label}."
+        today = self._now().astimezone(OSLO).date()
+        if any(is_past_week(w, today) for w in weeks):
+            text += " Merk: uka er allerede over."
+        return text
+
+    async def list_group_settings(self, scope: GroupScope) -> list[GroupSettingsView]:
+        parents = await self.repository.list_group_parents()
+        tree = await self._skjenke_group_ids(parents)
+        roots = {gid for gid in tree if parents.get(gid) not in tree}
+        rows = await self.repository.list_groups_with_settings()
+        return [
+            GroupSettingsView(
+                group_id=row["id"],
+                name=row["name"],
+                is_subgroup=row["id"] not in roots,
+                app_enabled=bool(row["app_enabled"]),
+                samf_enabled=bool(row["samf_enabled"]),
+                meeting_point=row["meeting_point"] or "",
+            )
+            for row in rows
+            if row["id"] in tree and scope.allows(row["id"])
+        ]
+
+    async def save_group_settings(
+        self,
+        group_id: int,
+        *,
+        app_enabled: bool,
+        samf_enabled: bool,
+        meeting_point: str,
+        scope: GroupScope,
+    ) -> str:
+        name = await self.repository.get_group_name(group_id)
+        if name is None:
+            raise ShiftNotFoundError("Gruppen finnes ikke.")
+        scope.require(group_id, name)
+        tree = await self._skjenke_group_ids(await self.repository.list_group_parents())
+        if group_id not in tree:
+            raise ShiftForbiddenError("Skiftlista kan bare slås på for Skjenke og undergruppene.")
+        point = meeting_point.strip()
+        if len(point) > MEETING_POINT_MAX:
+            raise ShiftPlacementError(f"Oppmøtested kan ha opptil {MEETING_POINT_MAX} tegn.")
+        await self.repository.save_group_settings(
+            group_id, app_enabled=app_enabled, samf_enabled=samf_enabled, meeting_point=point or None
+        )
+        state = "på" if app_enabled else "av"
+        return f"Innstillingene for {name} er lagret. Skiftlista er {state} i appen."
+
+
+MEETING_POINT_MAX = 200
 
 
 def _message(text: str, warnings: list[str]) -> str:

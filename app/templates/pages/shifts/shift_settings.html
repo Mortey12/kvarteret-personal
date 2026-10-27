@@ -1,0 +1,50 @@
+{% extends "layouts/base.html" %}
+{% from "components/shared/ui_macros.html" import flash_notice %}
+
+{% block page_content %}
+  <section class="grid gap-7">
+    <header class="grid justify-items-center gap-3 pt-3 text-center">
+      <h1 class="text-5xl leading-none font-light tracking-tight text-stone-900 md:text-7xl">Innstillinger</h1>
+      <p class="text-sm text-stone-700">Skiftlista i appen, per gruppe. <a href="/shifts">Tilbake til skiftplanen</a></p>
+    </header>
+
+    {{ flash_notice(notice, 'success', 'mb-0') }}
+    {{ flash_notice(error, 'error', 'mb-0') }}
+
+    <p class="border-2 border-stone-300 bg-white px-4 py-3 text-sm text-stone-800">
+      Når du slår på Skiftlista for en gruppe, blir skiftene synlige for medlemmene i den gruppa i appen.
+      «Åpen for samfunnettjeneste» viser i tillegg plassene som er åpne for samfunnettjeneste til alle frivillige.
+    </p>
+
+    {% for item in group_settings %}
+      <form action="/shifts/settings/{{ item.group_id }}" class="app-panel grid gap-4" data-group-settings data-group-id="{{ item.group_id }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-xl font-medium tracking-tight text-stone-900">{{ item.name }}</h2>
+          {% if item.is_subgroup %}<span class="text-xs text-stone-500">undergruppe</span>{% endif %}
+          <span class="app-badge" data-app-state>{{ "På i appen" if item.app_enabled else "Av i appen" }}</span>
+          {% if item.samf_enabled %}<span class="app-badge">Åpen for samfunnettjeneste</span>{% endif %}
+        </div>
+        <label class="flex items-center gap-2 text-sm text-stone-900">
+          <input type="checkbox" name="app_enabled" value="true" {% if item.app_enabled %}checked{% endif %}>
+          Skiftlista er på i appen for denne gruppa
+        </label>
+        <label class="flex items-center gap-2 text-sm text-stone-900">
+          <input type="checkbox" name="samf_enabled" value="true" {% if item.samf_enabled %}checked{% endif %}>
+          Åpen for samfunnettjeneste (plasser som er åpne for samfunnettjeneste vises for alle frivillige)
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm text-stone-500">Oppmøtested (vises på skiftet i appen)</span>
+          <input class="app-input" maxlength="200" name="meeting_point" type="text" value="{{ item.meeting_point }}" placeholder="For eksempel: Møt skiftleder 30 minutter før">
+        </label>
+        <div><button class="app-button" type="submit">Lagre</button></div>
+      </form>
+    {% else %}
+      <section class="app-panel">
+        <div class="py-10 text-center text-sm text-stone-600">
+          {% if no_groups %}Du er ikke gruppeadmin for noen grupper med skift. Be en administrator om tilgang.{% else %}Ingen grupper å vise.{% endif %}
+        </div>
+      </section>
+    {% endfor %}
+  </section>
+{% endblock %}

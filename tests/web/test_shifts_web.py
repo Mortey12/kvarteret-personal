@@ -15,7 +15,10 @@ from app.domain.shifts.models import (
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
+    WeekBanner,
     WeekPlan,
+    WeekStatusView,
+    GroupSettingsView,
 )
 from app.domain.shifts.planning import format_week, group_into_days, monday_of
 from app.main import create_app
@@ -32,6 +35,7 @@ class FakeShiftsService:
         self.calls: list[tuple] = []
         self.scope = ALL_GROUPS
         self.forbidden = False
+        self.banners: list[WeekBanner] = []
 
     async def manageable_scope(self, role, auth_user_id) -> GroupScope:
         self.calls.append(("scope", role))
@@ -105,6 +109,8 @@ class FakeShiftsService:
             days=group_into_days([record]),
             open_places=0,
             swap_requests=1,
+            statuses=[WeekStatusView(7, "Stjerne", "open", "Åpen for ønsker", False, False)],
+            banners=self.banners,
             pool=[
                 PoolPerson(
                     volunteer_id=3,
@@ -128,6 +134,26 @@ class FakeShiftsService:
         self._check(scope)
         self.calls.append(("move", assignment_id, slot_id))
         return PlacementResult("Flyttet.")
+
+    async def list_group_settings(self, scope: GroupScope) -> list[GroupSettingsView]:
+        self._check(scope)
+        return [GroupSettingsView(7, "Stjerne", True, True, False, "Ved baren")]
+
+    async def save_group_settings(
+        self, group_id: int, *, app_enabled, samf_enabled, meeting_point, scope: GroupScope
+    ) -> str:
+        self._check(scope)
+        self.calls.append(("settings", group_id, app_enabled, samf_enabled, meeting_point))
+        return "Innstillingene for Stjerne er lagret."
+
+    async def set_week_status(
+        self, *, group_id: int, week: date, status: str, whole_month: bool, scope: GroupScope
+    ) -> str:
+        self._check(scope)
+        self.calls.append(("week_status", group_id, week, status, whole_month))
+        if status == "nonsense":
+            raise ShiftPlacementError("Ugyldig status.")
+        return "Uke 45 for Stjerne: publisert."
 
     async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult:
         self._check(scope)
@@ -271,3 +297,129 @@ def test_gruppeadmin_without_groups_sees_an_empty_state() -> None:
 
     assert response.status_code == 200
     assert "Du er ikke gruppeadmin for noen grupper med skift" in response.text
+
+
+def test_settings_page_shows_current_state_and_the_app_note() -> None:
+    client, _ = _client(UserRole.GROUP_ADMIN)
+    response = client.get("/shifts/settings")
+
+    assert response.status_code == 200
+    assert "Stjerne" in response.text and "På i appen" in response.text
+    assert 'value="Ved baren"' in response.text
+    assert 'action="/shifts/settings/7"' in response.text
+    assert "blir skiftene synlige for medlemmene i den gruppa i appen" in response.text
+
+
+def test_settings_page_is_for_managers_only() -> None:
+    client, _ = _client(UserRole.VOLUNTEER)
+    assert client.get("/shifts/settings").status_code == 403
+
+
+def test_settings_page_without_groups_shows_the_empty_state() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    service.scope = NO_GROUPS
+
+    async def nothing(scope):
+        return []
+
+    service.list_group_settings = nothing
+    response = client.get("/shifts/settings")
+    assert response.status_code == 200
+    assert "Du er ikke gruppeadmin for noen grupper med skift" in response.text
+
+
+def test_settings_are_saved_with_switches_and_meeting_point() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    prime_csrf(client, path="/shifts")
+
+    saved = client.post(
+        "/shifts/settings/7",
+        data={"app_enabled": "true", "meeting_point": "Ved baren"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    off = client.post("/shifts/settings/7", data={"meeting_point": ""}, headers=csrf_headers(client), follow_redirects=False)
+
+    assert saved.status_code == 303
+    assert saved.headers["location"].startswith("/shifts/settings?notice=")
+    assert ("settings", 7, True, False, "Ved baren") in service.calls
+    assert ("settings", 7, False, False, "") in service.calls
+    assert off.status_code == 303
+
+
+def test_settings_for_another_group_are_refused() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    prime_csrf(client, path="/shifts")
+    service.forbidden = True
+
+    response = client.post("/shifts/settings/8", data={"app_enabled": "true"}, headers=csrf_headers(client))
+
+    assert response.status_code == 403
+    assert "Du har ikke tilgang" in response.json()["detail"]
+    assert not any(call[0] == "settings" for call in service.calls if isinstance(call[0], str))
+
+
+def test_week_status_buttons_post_explicit_status() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    page = client.get("/shifts?week=2026-11-04")
+    prime_csrf(client, path="/shifts")
+
+    for label in ("Åpne for ønsker", "Fordeles nå", "Publiser uka", "Publiser måneden"):
+        assert label in page.text
+    response = client.post(
+        "/shifts/weeks/status",
+        data={"group_id": "7", "week": "2026-11-02", "status": "allocating", "view_group": "7"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    month = client.post(
+        "/shifts/weeks/status",
+        data={"group_id": "7", "week": "2026-11-02", "status": "published", "whole_month": "true"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/shifts?week=2026-11-02&group=7&notice=")
+    assert ("week_status", 7, date(2026, 11, 2), "allocating", False) in service.calls
+    assert ("week_status", 7, date(2026, 11, 2), "published", True) in service.calls
+    assert month.status_code == 303
+
+
+def test_week_status_for_another_group_is_refused_and_bad_status_reports_an_error() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    prime_csrf(client, path="/shifts")
+
+    bad = client.post(
+        "/shifts/weeks/status",
+        data={"group_id": "7", "week": "2026-11-02", "status": "nonsense"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    assert bad.status_code == 303 and "error=" in bad.headers["location"]
+
+    service.forbidden = True
+    refused = client.post(
+        "/shifts/weeks/status",
+        data={"group_id": "8", "week": "2026-11-02", "status": "published"},
+        headers=csrf_headers(client),
+    )
+    assert refused.status_code == 403
+
+
+def test_banner_is_shown_for_an_unpublished_week_and_hidden_otherwise() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    assert "data-week-banner" not in client.get("/shifts").text
+
+    service.banners = [
+        WeekBanner(7, "Stjerne", date(2026, 11, 30), "Uke 49 er ikke publisert. Den blir åpen for alle mandag 30. november.", False)
+    ]
+    calm = client.get("/shifts").text
+    assert "data-week-banner" in calm
+    assert "Uke 49 er ikke publisert. Den blir åpen for alle mandag 30. november." in calm
+    assert "border-amber-500" not in calm
+
+    service.banners[0].urgent = True
+    urgent = client.get("/shifts").text
+    assert "border-amber-500" in urgent and 'role="alert"' in urgent
+    assert '<input type="hidden" name="week" value="2026-11-30">' in urgent

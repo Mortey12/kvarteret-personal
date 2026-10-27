@@ -126,6 +126,35 @@ class DayBlock:
 
 
 @dataclass(slots=True)
+class WeekStatusView:
+    group_id: int
+    group_name: str
+    status: str
+    label: str
+    explicit: bool
+    is_past: bool
+
+
+@dataclass(slots=True)
+class WeekBanner:
+    group_id: int
+    group_name: str
+    week_start: date
+    text: str
+    urgent: bool
+
+
+@dataclass(slots=True)
+class GroupSettingsView:
+    group_id: int
+    name: str
+    is_subgroup: bool
+    app_enabled: bool
+    samf_enabled: bool
+    meeting_point: str
+
+
+@dataclass(slots=True)
 class WeekPlan:
     week_start: date
     week_label: str
@@ -137,3 +166,5 @@ class WeekPlan:
     open_places: int
     swap_requests: int
     pool: list[PoolPerson] = field(default_factory=list)
+    statuses: list[WeekStatusView] = field(default_factory=list)
+    banners: list[WeekBanner] = field(default_factory=list)

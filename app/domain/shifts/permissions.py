@@ -22,12 +22,21 @@ class GroupScope:
     def allows(self, group_id: int) -> bool:
         return self.group_ids is None or group_id in self.group_ids
 
+    def narrowed_to(self, group_ids: frozenset[int]) -> GroupScope:
+        """Only the permitted groups that are also in ``group_ids`` (Admin keeps everything)."""
+        if self.group_ids is None:
+            return self
+        return GroupScope(self.group_ids & group_ids)
+
     def require(self, group_id: int, group_name: str) -> None:
         if not self.allows(group_id):
             raise ShiftForbiddenError(
                 f"Du har ikke tilgang til å endre skift for {group_name}."
             )
 
+
+# Skiftlista is for Skjenke and its subgroups; the root is found by slug.
+SKJENKE_SLUGS = frozenset({"skjenke-gruppen", "skjenkegruppen"})
 
 ALL_GROUPS = GroupScope(None)
 NO_GROUPS = GroupScope(frozenset())

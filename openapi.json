@@ -768,6 +768,67 @@
         "title": "Body_shift_assignment_move_shifts_assignments__assignment_id__move_post",
         "type": "object"
       },
+      "Body_shift_settings_save_shifts_settings__group_id__post": {
+        "properties": {
+          "app_enabled": {
+            "default": false,
+            "title": "App Enabled",
+            "type": "boolean"
+          },
+          "meeting_point": {
+            "default": "",
+            "title": "Meeting Point",
+            "type": "string"
+          },
+          "samf_enabled": {
+            "default": false,
+            "title": "Samf Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "Body_shift_settings_save_shifts_settings__group_id__post",
+        "type": "object"
+      },
+      "Body_shift_week_status_save_shifts_weeks_status_post": {
+        "properties": {
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "view_group": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Group"
+          },
+          "week": {
+            "format": "date",
+            "title": "Week",
+            "type": "string"
+          },
+          "whole_month": {
+            "default": false,
+            "title": "Whole Month",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "group_id",
+          "week",
+          "status"
+        ],
+        "title": "Body_shift_week_status_save_shifts_weeks_status_post",
+        "type": "object"
+      },
       "Body_volunteer_add_course_completion_volunteers__volunteer_id__course_completions_post": {
         "properties": {
           "course_id": {
@@ -8618,6 +8679,38 @@
               ],
               "title": "Group"
             }
+          },
+          {
+            "in": "query",
+            "name": "notice",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notice"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
           }
         ],
         "responses": {
@@ -8761,6 +8854,148 @@
           }
         },
         "summary": "Shift Assignment Move"
+      }
+    },
+    "/shifts/settings": {
+      "get": {
+        "operationId": "shift_settings_shifts_settings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "notice",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notice"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Settings"
+      }
+    },
+    "/shifts/settings/{group_id}": {
+      "post": {
+        "operationId": "shift_settings_save_shifts_settings__group_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "title": "Group Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_shift_settings_save_shifts_settings__group_id__post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Settings Save"
+      }
+    },
+    "/shifts/weeks/status": {
+      "post": {
+        "operationId": "shift_week_status_save_shifts_weeks_status_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_shift_week_status_save_shifts_weeks_status_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Week Status Save"
       }
     },
     "/spotify/callback": {

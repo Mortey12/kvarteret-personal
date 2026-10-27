@@ -179,28 +179,25 @@ where Stjerne is switched on (also for samfunnettjeneste) with course dates.
 
 Known gaps, deliberately left to later steps:
 
-- **Publishing a week** has no screen yet (step 5). Until then, SQL, where
-  `week_start` must be a Monday (one row per week; this publishes November
-  2026 for one group):
-  `INSERT INTO shift_week_status (group_id, week_start, status)
-  SELECT <group id>, d::date, 'published'
-  FROM generate_series('2026-11-02'::date, '2026-11-30'::date, interval '7 days') d
-  ON CONFLICT (group_id, week_start) DO UPDATE SET status = 'published', updated_at = now();`
-  Shifts leaders put people on in an unpublished (future) week are drafts and
-  do not show in the app's Mine until the week is published.
-- **Warn leaders about unpublished weeks:** an unpublished week becomes
-  published by default on its Monday, whether or not it is allocated. From
-  about 10 days before, the leader board should show "Uke 49 er ikke
-  publisert. Den blir åpen for alle mandag 30. november." with a "Publiser"
-  button and a "Publiser måneden" button (publishes all its weeks). Email
-  reminders come with step 8.
-- **Pilot step when switching a group on:** mark the weeks already planned in
-  the old sheet as published (SQL above), or their shifts stay hidden from
-  Ledige and Mine and open for wishes.
-- **Switching on** a group, setting a week to `allocating` and adding
-  course dates has no screen in Personal yet (steps 4–6). Until then, SQL:
-  `INSERT INTO shift_group_settings (group_id, app_enabled, samf_enabled)
-  VALUES (<stjerne id>, true, false);`
+- **Publishing a week**: on the board (`/shifts`), each group has a status
+  panel for the displayed week: "Åpne for ønsker", "Fordeles nå", "Publiser
+  uka" and "Publiser måneden" (explicit published rows for every Monday of
+  that calendar month). Shifts leaders put people on in an unpublished
+  (future) week are drafts and do not show in the app's Mine until the week
+  is published.
+- **Unpublished-week warning**: done. A banner on the board appears when a
+  week with shifts starts within 10 days and is not published ("Uke 49 er
+  ikke publisert. Den blir åpen for alle mandag 30. november."), in warning
+  colour from 3 days before, with a "Publiser" button. For a week with an
+  explicit non-published row the text says it is not visible in the app until
+  published, since explicit rows never auto-publish. Email reminders come
+  with step 8.
+- **Pilot step when switching a group on:** open `/shifts`, pick the group
+  and use "Publiser måneden" on the weeks already planned in the old sheet,
+  or their shifts stay hidden from Ledige and Mine and open for wishes.
+- **Switching on** a group: `/shifts/settings` (linked from the board) has
+  the app and samfunnettjeneste switches and the meeting point per Skjenke
+  group. Course dates have no screen in Personal yet (step 6).
 - **Course names**: the app looks for a course named `Brannkurs` or
   `Brannvernkurs`, and `Barkurs` (`COURSE_RULES` in `app_rules.py`). A course
   that does not exist is not checked. Ask etjenesten whether `Skjenkekurs` is
@@ -236,6 +233,14 @@ Known gaps, deliberately left to later steps:
    look at the person's verv in all shift groups. The app API is unchanged.
    Not seeded locally: the dev auth gateway only accepts one login
    (`DEV_ADMIN_EMAIL`), see `app/auth/dev_auth.py`.
+4a. ~~Pool, settings and week status~~ (done). The volunteer pool shows
+   every Skjenke member to leaders who may manage a Skjenke group (Skjenke or
+   a subgroup) and to Admin; a Gruppeadmin of any other group gets no
+   shifts and no pool. The shifts shown and changed stay limited to
+   permitted groups. `/shifts/settings` and the week status panel and banner
+   on the board replace the SQL; `week_status.py` holds the pure rules. The
+   Skjenke root group is found by slug (`SKJENKE_SLUGS` in
+   `permissions.py`).
 4. **Templates and series editing** in Personal: create/edit templates,
    generate a semester, edit one shift or the whole weekday series (time,
    staffing, note, closed, opplæring mode). Also the per-group app switches

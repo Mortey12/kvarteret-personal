@@ -56,7 +56,9 @@ class FakeRepository:
         # People outside Skjenke (samfunnettjeneste).
         self.outsiders: dict[int, str] = {}
         self.admin_group_ids: list[int] = []
-        self.parents: dict[int, int | None] = {7: 1, 8: 1, 1: None}
+        self.parents: dict[int, int | None] = {7: 1, 8: 1, 1: None, 20: None}
+        self.week_rows: dict[tuple[int, date], str] = {}
+        self.settings: dict[int, dict] = {}
 
     async def get_slot_shift_id(self, slot_id: int) -> int | None:
         return 1 if slot_id in (10, 11, 12) else None
@@ -106,6 +108,41 @@ class FakeRepository:
 
     async def list_group_parents(self) -> dict[int, int | None]:
         return self.parents
+
+    async def list_skjenke_root_ids(self, slugs) -> list[int]:
+        return [1]
+
+    async def get_group_name(self, group_id: int) -> str | None:
+        return {1: "Skjenkegruppen", 7: "Stjerne", 8: "Grøndahls", 20: "Kultur"}.get(group_id)
+
+    async def get_week_statuses(self, group_ids, weeks) -> dict:
+        return {k: v for k, v in self.week_rows.items() if k[0] in group_ids and k[1] in weeks}
+
+    async def set_week_statuses(self, group_id: int, weeks, status: str) -> None:
+        for week in weeks:
+            self.week_rows[(group_id, week)] = status
+
+    async def list_shift_group_weeks(self, starts_from, starts_before, group_ids) -> set:
+        return {(7, date(2026, 11, 2))} if 7 in group_ids else set()
+
+    async def list_groups_with_settings(self) -> list[dict]:
+        blank = {"app_enabled": None, "samf_enabled": None, "meeting_point": None}
+        return [
+            {"id": gid, "name": name, "parent_group_id": parent, **{**blank, **self.settings.get(gid, {})}}
+            for gid, name, parent in (
+                (1, "Skjenkegruppen", None),
+                (7, "Stjerne", 1),
+                (8, "Grøndahls", 1),
+                (20, "Kultur", None),
+            )
+        ]
+
+    async def save_group_settings(self, group_id, *, app_enabled, samf_enabled, meeting_point) -> None:
+        self.settings[group_id] = {
+            "app_enabled": app_enabled,
+            "samf_enabled": samf_enabled,
+            "meeting_point": meeting_point,
+        }
 
     async def add_assignment(self, slot_id: int, volunteer_id: int) -> int:
         self.added.append((slot_id, volunteer_id))
@@ -288,8 +325,10 @@ async def test_plan_only_includes_permitted_groups() -> None:
     allowed = await service.get_week_plan(date(2026, 11, 2), scope=STJERNE_ONLY)
     assert [g.group_id for g in allowed.groups] == [7]
     assert allowed.days and [p.name for p in allowed.pool]
+    # Shifts stay limited to permitted groups, but the pool has all Skjenke members.
     other = await service.get_week_plan(date(2026, 11, 2), scope=GroupScope(frozenset({8})))
-    assert other.groups == [] and other.days == [] and other.pool == []
+    assert other.groups == [] and other.days == [] and len(other.pool) == 3
+    assert all(person.allowed_tokens == [] for person in other.pool)
     nothing = await service.get_week_plan(date(2026, 11, 2), scope=NO_GROUPS)
     assert nothing.groups == [] and nothing.days == [] and nothing.pool == []
 
@@ -343,3 +382,138 @@ async def test_scope_for_each_role() -> None:
     repo.admin_group_ids = [1]
     scope = await service.manageable_scope(UserRole.GROUP_ADMIN, uuid4())
     assert scope.group_ids == frozenset({1, 7, 8})
+    repo.admin_group_ids = [8]
+    assert (await service.manageable_scope(UserRole.GROUP_ADMIN, uuid4())).group_ids == frozenset({8})
+
+
+@pytest.mark.asyncio
+async def test_gruppeadmin_of_an_unrelated_group_sees_nothing() -> None:
+    repo = FakeRepository()
+    repo.admin_group_ids = [20]
+    service = ShiftsService(repo)
+    scope = await service.manageable_scope(UserRole.GROUP_ADMIN, uuid4())
+    assert scope.is_empty
+    plan = await service.get_week_plan(date(2026, 11, 2), scope=scope)
+    assert plan.groups == [] and plan.days == [] and plan.pool == []
+    assert plan.statuses == [] and plan.banners == []
+    assert await service.list_group_settings(scope) == []
+
+
+@pytest.mark.asyncio
+async def test_stjerne_leader_sees_members_of_every_subgroup_in_the_pool() -> None:
+    repo = FakeRepository()
+    repo.members.append(MemberRole(110, "Gro Grøndahls", 8, "Grøndahls", "Skjenker"))
+    plan = await ShiftsService(repo).get_week_plan(date(2026, 11, 2), scope=STJERNE_ONLY)
+    by_name = {person.name: person for person in plan.pool}
+    assert "Gro Grøndahls" in by_name
+    # Tokens only cover the groups the leader may change.
+    assert all(token.startswith("7:") for token in by_name["Gro Grøndahls"].allowed_tokens)
+    assert by_name["Gro Grøndahls"].allowed_tokens
+
+
+def _clock(day: date):
+    return lambda: datetime(day.year, day.month, day.day, 9, 0, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_week_status_defaults_and_explicit_rows() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo, now=_clock(date(2026, 10, 28)))
+    plan = await service.get_week_plan(date(2026, 11, 2), scope=SCOPE)
+    assert [(s.group_name, s.status, s.explicit) for s in plan.statuses] == [("Stjerne", "open", False)]
+    message = await service.set_week_status(
+        group_id=7, week=date(2026, 11, 4), status="allocating", whole_month=False, scope=SCOPE
+    )
+    assert repo.week_rows == {(7, date(2026, 11, 2)): "allocating"}
+    assert "fordeles nå" in message and "allerede over" not in message
+    plan = await service.get_week_plan(date(2026, 11, 2), scope=SCOPE)
+    assert plan.statuses[0].status == "allocating" and plan.statuses[0].explicit
+
+
+@pytest.mark.asyncio
+async def test_publish_month_writes_every_monday_of_that_month() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo, now=_clock(date(2026, 10, 28)))
+    await service.set_week_status(
+        group_id=7, week=date(2026, 11, 2), status="published", whole_month=True, scope=SCOPE
+    )
+    assert repo.week_rows == {
+        (7, date(2026, 11, day)): "published" for day in (2, 9, 16, 23, 30)
+    }
+
+
+@pytest.mark.asyncio
+async def test_past_week_can_change_with_a_note_and_bad_input_is_refused() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo, now=_clock(date(2026, 11, 18)))
+    message = await service.set_week_status(
+        group_id=7, week=date(2026, 11, 2), status="open", whole_month=False, scope=SCOPE
+    )
+    assert "Merk: uka er allerede over." in message
+    with pytest.raises(ShiftPlacementError):
+        await service.set_week_status(
+            group_id=7, week=date(2026, 11, 2), status="nonsense", whole_month=False, scope=SCOPE
+        )
+    with pytest.raises(ShiftPlacementError):
+        await service.set_week_status(
+            group_id=7, week=date(2026, 11, 2), status="open", whole_month=True, scope=SCOPE
+        )
+
+
+@pytest.mark.asyncio
+async def test_week_status_for_another_group_is_refused() -> None:
+    repo = FakeRepository()
+    with pytest.raises(ShiftForbiddenError, match="Grøndahls"):
+        await ShiftsService(repo).set_week_status(
+            group_id=8, week=date(2026, 11, 2), status="published", whole_month=False, scope=STJERNE_ONLY
+        )
+    assert repo.week_rows == {}
+
+
+@pytest.mark.asyncio
+async def test_banner_for_an_unpublished_week_and_none_once_published() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo, now=_clock(date(2026, 10, 28)))
+    plan = await service.get_week_plan(date(2026, 10, 26), scope=SCOPE)
+    assert len(plan.banners) == 1
+    banner = plan.banners[0]
+    assert banner.week_start == date(2026, 11, 2) and not banner.urgent
+    assert banner.text == "Uke 45 er ikke publisert. Den blir åpen for alle mandag 2. november."
+    urgent = ShiftsService(repo, now=_clock(date(2026, 10, 30)))
+    assert (await urgent.get_week_plan(date(2026, 10, 26), scope=SCOPE)).banners[0].urgent
+    await service.set_week_status(
+        group_id=7, week=date(2026, 11, 2), status="published", whole_month=False, scope=SCOPE
+    )
+    assert (await service.get_week_plan(date(2026, 10, 26), scope=SCOPE)).banners == []
+    far = ShiftsService(repo, now=_clock(date(2026, 10, 19)))
+    repo.week_rows.clear()
+    assert (await far.get_week_plan(date(2026, 10, 19), scope=SCOPE)).banners == []
+
+
+@pytest.mark.asyncio
+async def test_group_settings_are_saved_and_scoped() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo)
+    listed = await service.list_group_settings(STJERNE_ONLY)
+    assert [(g.name, g.is_subgroup) for g in listed] == [("Stjerne", True)]
+    everything = await service.list_group_settings(ALL_GROUPS)
+    assert [(g.name, g.is_subgroup) for g in everything] == [
+        ("Skjenkegruppen", False),
+        ("Stjerne", True),
+        ("Grøndahls", True),
+    ]
+    message = await service.save_group_settings(
+        7, app_enabled=True, samf_enabled=False, meeting_point="  Ved baren ", scope=STJERNE_ONLY
+    )
+    assert repo.settings[7] == {"app_enabled": True, "samf_enabled": False, "meeting_point": "Ved baren"}
+    assert "Skiftlista er på" in message
+    with pytest.raises(ShiftForbiddenError):
+        await service.save_group_settings(
+            8, app_enabled=True, samf_enabled=True, meeting_point="", scope=STJERNE_ONLY
+        )
+    # Not a Skjenke group: refused even for Admin.
+    with pytest.raises(ShiftForbiddenError):
+        await service.save_group_settings(
+            20, app_enabled=True, samf_enabled=True, meeting_point="", scope=ALL_GROUPS
+        )
+    assert 8 not in repo.settings and 20 not in repo.settings

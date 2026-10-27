@@ -9,6 +9,7 @@ from app.db.repository import SqlAlchemyRepository
 from app.domain.admin_accounts.tables import group_admin_memberships
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
+from app.domain.shifts.planning import OSLO
 from app.domain.shifts.models import (
     AssignedPerson,
     AssignmentRef,
@@ -17,7 +18,14 @@ from app.domain.shifts.models import (
     ShiftRecord,
     SlotRecord,
 )
-from app.domain.shifts.tables import shift_assignments, shift_slots, shift_templates, shifts
+from app.domain.shifts.tables import (
+    shift_assignments,
+    shift_group_settings,
+    shift_slots,
+    shift_templates,
+    shift_week_status,
+    shifts,
+)
 from app.domain.volunteers.tables import volunteer_records
 from app.shared.coercion import require_datetime
 from app.shared.text import build_full_name
@@ -51,6 +59,93 @@ class ShiftsRepository(SqlAlchemyRepository):
             select(groups.c.id, groups.c.parent_group_id).where(groups.c.is_active.is_(True))
         )
         return {row["id"]: row["parent_group_id"] for row in rows}
+
+    async def list_skjenke_root_ids(self, slugs: frozenset[str]) -> list[int]:
+        return await self.fetch_scalars_all(
+            select(groups.c.id).where(groups.c.slug.in_(sorted(slugs)), groups.c.is_active.is_(True))
+        )
+
+    async def get_group_name(self, group_id: int) -> str | None:
+        return await self.fetch_scalar(select(groups.c.name).where(groups.c.id == group_id))
+
+    async def list_groups_with_settings(self) -> list[dict]:
+        """Every active group with its Skiftlista switches (defaults when no row)."""
+        return await self.fetch_all_mappings(
+            select(
+                groups.c.id,
+                groups.c.name,
+                groups.c.parent_group_id,
+                shift_group_settings.c.app_enabled,
+                shift_group_settings.c.samf_enabled,
+                shift_group_settings.c.meeting_point,
+            )
+            .select_from(
+                groups.outerjoin(shift_group_settings, shift_group_settings.c.group_id == groups.c.id)
+            )
+            .where(groups.c.is_active.is_(True))
+            .order_by(groups.c.name.asc())
+        )
+
+    async def save_group_settings(
+        self, group_id: int, *, app_enabled: bool, samf_enabled: bool, meeting_point: str | None
+    ) -> None:
+        values = {
+            "app_enabled": app_enabled,
+            "samf_enabled": samf_enabled,
+            "meeting_point": meeting_point,
+            "updated_at": datetime.now(UTC),
+        }
+        result = await self.session.execute(
+            update(shift_group_settings).where(shift_group_settings.c.group_id == group_id).values(**values)
+        )
+        if result.rowcount == 0:
+            await self.session.execute(insert(shift_group_settings).values(group_id=group_id, **values))
+
+    async def get_week_statuses(self, group_ids: list[int], weeks: list[date]) -> dict[tuple[int, date], str]:
+        if not group_ids or not weeks:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(
+                shift_week_status.c.group_id,
+                shift_week_status.c.week_start,
+                shift_week_status.c.status,
+            ).where(
+                shift_week_status.c.group_id.in_(group_ids),
+                shift_week_status.c.week_start.in_(weeks),
+            )
+        )
+        return {(row["group_id"], _as_date(row["week_start"])): row["status"] for row in rows}
+
+    async def set_week_statuses(self, group_id: int, weeks: list[date], status: str) -> None:
+        """Explicit rows, one per Monday in ``weeks``."""
+        now = datetime.now(UTC)
+        for week in weeks:
+            result = await self.session.execute(
+                update(shift_week_status)
+                .where(shift_week_status.c.group_id == group_id, shift_week_status.c.week_start == week)
+                .values(status=status, updated_at=now)
+            )
+            if result.rowcount == 0:
+                await self.session.execute(
+                    insert(shift_week_status).values(
+                        group_id=group_id, week_start=week, status=status, updated_at=now
+                    )
+                )
+
+    async def list_shift_group_weeks(
+        self, starts_from: datetime, starts_before: datetime, group_ids: list[int]
+    ) -> set[tuple[int, date]]:
+        """(group id, Oslo date of the start) for shifts in the range."""
+        if not group_ids:
+            return set()
+        rows = await self.fetch_all_mappings(
+            select(shifts.c.group_id, shifts.c.starts_at).where(
+                shifts.c.starts_at >= starts_from,
+                shifts.c.starts_at < starts_before,
+                shifts.c.group_id.in_(group_ids),
+            )
+        )
+        return {(row["group_id"], _aware(row["starts_at"]).astimezone(OSLO).date()) for row in rows}
 
     async def list_shifts_between(
         self,
@@ -308,3 +403,7 @@ def _shift_select():
 def _aware(value: datetime | str | None) -> datetime:
     moment = require_datetime(value)
     return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+
+def _as_date(value) -> date:
+    return value.date() if isinstance(value, datetime) else value
