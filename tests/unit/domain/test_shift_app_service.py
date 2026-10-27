@@ -448,6 +448,45 @@ async def test_wishes_in_december_reach_into_january(world: World) -> None:
     assert wishes.weeks[-1].week_start == date(2027, 1, 25)
 
 
+async def test_open_list_says_when_more_places_lie_beyond_the_window(world: World) -> None:
+    # Clock is Mon 2 Nov. Week of 23 Nov is published explicitly, so it counts.
+    await world.session.execute(
+        insert(shift_week_status).values(group_id=STJERNE, week_start=date(2026, 11, 23), status="published")
+    )
+    later, _ = await add_stjerne_shift(world, oslo(date(2026, 11, 25), 11), oslo(date(2026, 11, 25), 17))
+
+    short = await world.service.list_open(SIGRID, scope="own", days=14)
+    assert later not in {s.shift_id for s in short.shifts}
+    assert short.has_more is True
+
+    long = await world.service.list_open(SIGRID, scope="own", days=30)
+    assert later in {s.shift_id for s in long.shifts}
+    assert long.has_more is False
+
+
+async def test_open_list_has_no_more_when_nothing_is_beyond_the_window(world: World) -> None:
+    # December is open (unpublished), so it is not a place anyone can take.
+    short = await world.service.list_open(SIGRID, scope="own", days=14)
+    assert short.has_more is False
+    # A published shift past the 92-day maximum does not count either.
+    await world.session.execute(
+        insert(shift_week_status).values(group_id=STJERNE, week_start=date(2027, 3, 1), status="published")
+    )
+    await add_stjerne_shift(world, oslo(date(2027, 3, 3), 11), oslo(date(2027, 3, 3), 17))
+    assert (await world.service.list_open(SIGRID, scope="own", days=14)).has_more is False
+
+
+async def test_my_shifts_warn_about_a_second_shift_in_the_week(world: World) -> None:
+    await world.place("tue", "skjenker", SANDER)
+    mine = await world.service.list_mine(SANDER)
+    assert [s.warnings for s in mine.shifts] == [[]]
+
+    await world.place("thu", "skjenker", SANDER)
+    mine = await world.service.list_mine(SANDER)
+    expected = ["Du har 2 skift i uke 45. Kontrakten din er 1 skift i uka."]
+    assert [s.warnings for s in mine.shifts] == [expected, expected]
+
+
 async def test_trainee_gets_the_training_place_not_the_crew_place(world: World) -> None:
     listing = await world.service.list_open(TORA, scope="own", days=14)
     tue = world.shift_ids["tue"]

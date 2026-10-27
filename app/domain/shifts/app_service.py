@@ -76,6 +76,7 @@ from app.domain.shifts.app_rules import (
     semester_of,
     session_label,
     short_date,
+    week_contract_warning,
     utc_now,
     week_label,
     week_start,
@@ -296,13 +297,17 @@ class ShiftsAppService:
         days = max(1, min(days, MAX_OPEN_DAYS))
         today = now.astimezone(OSLO).date()
         until = oslo_midnight(today + timedelta(days=days + 1))
+        furthest = oslo_midnight(today + timedelta(days=MAX_OPEN_DAYS + 1))
         group_ids = self._scope_groups(person, scope)
-        records = await self.repository.list_shifts_between(now, until, group_ids=group_ids)
+        records = await self.repository.list_shifts_between(now, furthest, group_ids=group_ids)
         records = await self._published_only(records)
         courses = await self._courses(person)
         mine = await self._mine(person)
         result: list[OpenShift] = []
+        has_more = False
         for record in records:
+            if has_more and record.starts_at >= until:
+                break
             if any(p.volunteer_id == person.volunteer_id for s in record.slots for p in s.people):
                 continue
             places = []
@@ -310,13 +315,18 @@ class ShiftsAppService:
                 evaluation = self._evaluate(person, record, slot, courses, mine)
                 if not evaluation.hidden:
                     places.append(self._open_place(person, record, slot, evaluation))
-            if places:
+            if not places:
+                continue
+            if record.starts_at >= until:
+                has_more = True
+            else:
                 result.append(OpenShift(**self._summary(record).model_dump(), places=places))
         return OpenShiftsResponse(
             scope=scope,
             from_day=today,
             to_day=today + timedelta(days=days),
             shifts=result,
+            has_more=has_more,
         )
 
     async def get_place(self, volunteer_id: int, slot_id: int) -> PlaceDetailResponse:
@@ -397,8 +407,9 @@ class ShiftsAppService:
         mine = await self._mine(person)
         published = await self._published_only(mine.records)
         published_ids = {record.shift_id for record in published}
+        warnings = self._week_warnings(person, published)
         shifts = [
-            self._to_my_shift(person, record, slot, entry)
+            self._to_my_shift(person, record, slot, entry, warnings.get(record.shift_id, []))
             for record, slot, entry in mine.entries()
             if record.shift_id in published_ids and record.ends_at > now
         ]
@@ -1081,10 +1092,39 @@ class ShiftsAppService:
             for slot in record.slots:
                 for entry in slot.people:
                     if slot.slot_id == slot_id and entry.volunteer_id == person.volunteer_id:
-                        return self._to_my_shift(person, record, slot, entry)
+                        mine = await self._mine(person)
+                        warnings = self._week_warnings(person, await self._published_only(mine.records))
+                        return self._to_my_shift(
+                            person, record, slot, entry, warnings.get(record.shift_id, [])
+                        )
         raise ShiftNotFoundError("Finner ikke skiftet.")
 
-    def _to_my_shift(self, person: _Person, record: ShiftRecord, slot: SlotRecord, entry: AssignedPerson) -> MyShift:
+    def _week_warnings(self, person: _Person, published: list[ShiftRecord]) -> dict[int, list[str]]:
+        """Shift id -> hint, for each of the person's published shifts in a week with more than one."""
+        if not person.member_enabled_ids:
+            return {}  # samfunnettjeneste has no weekly contract
+        roles = set().union(*(person.roles_by_group[gid] for gid in person.member_enabled_ids))
+        rule = quota_for(roles)
+        by_week: dict[tuple[int, int], list[ShiftRecord]] = {}
+        for record in published:
+            if any(p.volunteer_id == person.volunteer_id for s in record.slots for p in s.people):
+                by_week.setdefault(iso_week_key(record.starts_at), []).append(record)
+        result: dict[int, list[str]] = {}
+        for (_, week_number), records in by_week.items():
+            text = week_contract_warning(len(records), week_number, rule)
+            if text:
+                for record in records:
+                    result[record.shift_id] = [text]
+        return result
+
+    def _to_my_shift(
+        self,
+        person: _Person,
+        record: ShiftRecord,
+        slot: SlotRecord,
+        entry: AssignedPerson,
+        warnings: list[str] | None = None,
+    ) -> MyShift:
         now = self._now()
         samf = counts_as_samf(person.is_skjenke_member, slot.kind)
         if entry.cannot_attend:
@@ -1113,6 +1153,7 @@ class ShiftsAppService:
             meeting_point=person.meeting_point(record.group_id),
             description=SLOT_DESCRIPTIONS.get(slot.kind),
             crew=_crew(record),
+            warnings=warnings or [],
         )
 
     async def _own_assignment(self, volunteer_id: int, assignment_id: int):

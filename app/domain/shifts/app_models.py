@@ -125,6 +125,8 @@ class OpenShiftsResponse(_Model):
     from_day: date
     to_day: date
     shifts: list[OpenShift]
+    # True when there are places after to_day, within the longest window.
+    has_more: bool = False
 
 
 class Requirement(_Model):
@@ -166,6 +168,8 @@ class MyShift(ShiftSummary):
     meeting_point: str | None
     description: str | None
     crew: list[CrewMember]
+    # Same rule as the leader board: more than one shift in the week.
+    warnings: list[str] = Field(default_factory=list)
 
 
 class QuotaSummary(_Model):

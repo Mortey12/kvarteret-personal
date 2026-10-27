@@ -13,6 +13,8 @@ class AssignedPerson:
     # "Kan ikke i dag": still listed, but the place counts as open.
     cannot_attend: bool = False
     first_name: str = ""
+    # Soft rule hints for the leader board, filled in when the board is built.
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

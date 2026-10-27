@@ -336,6 +336,14 @@ def age_on(birth_date: date, day: date) -> int:
     return years
 
 
+MISSING_BIRTH_DATE_WARNING = "fødselsdato mangler, sjekk alderen"
+
+
+def already_on_shifts_warning(already: int) -> str | None:
+    """The hint for someone who already has ``already`` other shifts that week."""
+    return f"har allerede {already} skift denne uka" if already >= 1 else None
+
+
 def age_problem(venue: str, birth_date: date | None, day: date) -> str | None:
     """Why the person is too young for this venue, or None.
 

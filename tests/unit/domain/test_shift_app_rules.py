@@ -13,6 +13,7 @@ from app.domain.shifts.app_rules import (
     semester_of,
     session_label,
     short_date,
+    week_contract_warning,
     week_start,
     wish_window_end,
 )
@@ -158,3 +159,14 @@ def test_wish_window_runs_to_the_end_of_the_semester_and_next_month() -> None:
     assert wish_window_end(date(2026, 8, 10)) == date(2026, 12, 31)
     assert wish_window_end(date(2026, 6, 30)) == date(2026, 7, 31)
     assert wish_window_end(date(2026, 12, 3)) == date(2027, 1, 31)
+
+
+def test_week_contract_warning_follows_the_leader_board_rule() -> None:
+    contract = quota_for(set())
+    assert week_contract_warning(1, 49, contract) is None
+    assert (
+        week_contract_warning(2, 49, contract)
+        == "Du har 2 skift i uke 49. Kontrakten din er 1 skift i uka."
+    )
+    pensioner = quota_for({"Pensjonist"})
+    assert "Pensjonistavtalen din er 1 skift i måneden." in week_contract_warning(2, 49, pensioner)

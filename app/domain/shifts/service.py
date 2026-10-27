@@ -14,7 +14,9 @@ from app.domain.shifts.models import (
 )
 from app.domain.shifts.planning import (
     OSLO,
+    MISSING_BIRTH_DATE_WARNING,
     VENUE_MIN_AGE,
+    already_on_shifts_warning,
     absent_to_replace,
     age_problem,
     allowed_tokens,
@@ -70,6 +72,8 @@ class ShiftsService:
         records = await self.repository.list_shifts_between(
             starts_from, starts_before, group_id=group_id
         )
+        week_counts = await self.repository.count_shifts_by_volunteer(starts_from, starts_before)
+        await self._attach_warnings(records, week_counts)
         days = group_into_days(records)
         open_count = sum(
             shift.open_places for day in days for venue in day.venues for shift in venue.shifts
@@ -81,9 +85,7 @@ class ShiftsService:
             for person in slot.people
             if person.swap_requested
         )
-        pool = await self._pool(
-            [option.group_id for option in group_options], group_id, starts_from, starts_before
-        )
+        pool = await self._pool([option.group_id for option in group_options], group_id, week_counts)
         return WeekPlan(
             week_start=week_start,
             week_label=format_week(week_start),
@@ -101,14 +103,12 @@ class ShiftsService:
         self,
         shift_group_ids: list[int],
         selected_group_id: int | None,
-        starts_from: datetime,
-        starts_before: datetime,
+        week_counts: dict[int, int],
     ) -> list[PoolPerson]:
         members = await self.repository.list_shift_members(
             get_current_semester_code(), shift_group_ids
         )
         roles = _roles_by_group(members)
-        week_counts = await self.repository.count_shifts_by_volunteer(starts_from, starts_before)
         pool: list[PoolPerson] = []
         seen: set[int] = set()
         for member in members:
@@ -128,6 +128,33 @@ class ShiftsService:
                 )
             )
         return pool
+
+    async def _attach_warnings(
+        self, records: list[ShiftRecord], week_counts: dict[int, int]
+    ) -> None:
+        """The same hints ``assign`` gives, on each placed person, so a reload keeps them."""
+        young_ids = sorted(
+            {
+                person.volunteer_id
+                for record in records
+                if record.venue in VENUE_MIN_AGE
+                for slot in record.slots
+                for person in slot.people
+            }
+        )
+        birth_dates = await self.repository.get_birth_dates(young_ids)
+        for record in records:
+            for slot in record.slots:
+                for person in slot.people:
+                    others = week_counts.get(person.volunteer_id, 0) - 1
+                    already = already_on_shifts_warning(others)
+                    if already:
+                        person.warnings.append(already)
+                    if (
+                        record.venue in VENUE_MIN_AGE
+                        and birth_dates.get(person.volunteer_id) is None
+                    ):
+                        person.warnings.append(MISSING_BIRTH_DATE_WARNING)
 
     async def _load_slot(self, slot_id: int) -> tuple[ShiftRecord, SlotRecord]:
         shift_id = await self.repository.get_slot_shift_id(slot_id)
@@ -175,7 +202,7 @@ class ShiftsService:
             if too_young:
                 raise ShiftPlacementError(too_young + ".")
             if birth_date is None:
-                warnings.append("fødselsdato mangler, sjekk alderen")
+                warnings.append(MISSING_BIRTH_DATE_WARNING)
         if open_places(shift, slot) <= 0:
             if slot.kind == "opplaering" and len(slot.people) < slot.count:
                 raise ShiftPlacementError(
@@ -190,8 +217,8 @@ class ShiftsService:
             old_shift = await self.repository.get_shift(moving.shift_id) if moving else None
             if old_shift and starts_from <= old_shift.starts_at < starts_before:
                 already -= 1
-        if already >= 1:
-            warnings.append(f"har allerede {already} skift denne uka")
+        if message := already_on_shifts_warning(already):
+            warnings.append(message)
         return warnings
 
     @staticmethod

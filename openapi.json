@@ -2463,6 +2463,13 @@
           "venue_label": {
             "title": "Venue Label",
             "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -2815,6 +2822,11 @@
             "format": "date",
             "title": "From Day",
             "type": "string"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
           },
           "scope": {
             "enum": [

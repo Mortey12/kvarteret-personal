@@ -9,7 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
-from app.domain.shifts.planning import BAR_KINDS, MONTHS_NO, OSLO, RESTRICTED_KINDS, monday_of
+from app.domain.shifts.planning import (
+    BAR_KINDS,
+    MONTHS_NO,
+    OSLO,
+    RESTRICTED_KINDS,
+    already_on_shifts_warning,
+    monday_of,
+)
 
 # ---------------------------------------------------------------- wishes
 
@@ -104,6 +111,18 @@ def quota_for(roles: set[str]) -> Quota:
     if PENSIONER_ROLE in roles:
         return Quota("month", 1, "Pensjonistavtale: 1 skift i måneden")
     return Quota("week", 1, "Kontrakt: 1 skift i uka")
+
+
+def week_contract_warning(shifts_in_week: int, week_number: int, quota: Quota) -> str | None:
+    """Warn on the leader board's rule: a second shift in the same week."""
+    if already_on_shifts_warning(shifts_in_week - 1) is None:
+        return None
+    contract = (
+        f"Kontrakten din er {quota.limit} skift i uka."
+        if quota.period == "week"
+        else f"Pensjonistavtalen din er {quota.limit} skift i måneden."
+    )
+    return f"Du har {shifts_in_week} skift i uke {week_number}. {contract}"
 
 
 def counts_as_samf(is_skjenke_member: bool, kind: str) -> bool:

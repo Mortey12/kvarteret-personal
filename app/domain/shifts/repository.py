@@ -234,6 +234,16 @@ class ShiftsRepository(SqlAlchemyRepository):
             select(volunteer_records.c.birth_date).where(volunteer_records.c.id == volunteer_id)
         )
 
+    async def get_birth_dates(self, volunteer_ids: list[int]) -> dict[int, date | None]:
+        if not volunteer_ids:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(volunteer_records.c.id, volunteer_records.c.birth_date).where(
+                volunteer_records.c.id.in_(volunteer_ids)
+            )
+        )
+        return {row["id"]: row["birth_date"] for row in rows}
+
     async def add_assignment(self, slot_id: int, volunteer_id: int) -> int:
         return await self.fetch_scalar(
             insert(shift_assignments)

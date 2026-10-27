@@ -82,6 +82,12 @@ class FakeRepository:
     async def get_volunteer_birth_date(self, volunteer_id: int) -> date | None:
         return self.birth_dates.get(volunteer_id)
 
+    async def get_birth_dates(self, volunteer_ids: list[int]) -> dict[int, date | None]:
+        return {vid: self.birth_dates.get(vid) for vid in volunteer_ids}
+
+    async def list_shifts_between(self, starts_from, starts_before, group_id=None) -> list[ShiftRecord]:
+        return [await self.get_shift(1)]
+
     async def add_assignment(self, slot_id: int, volunteer_id: int) -> int:
         self.added.append((slot_id, volunteer_id))
         return 1
@@ -209,3 +215,45 @@ async def test_halvtimen_needs_20() -> None:
         await ShiftsService(repo).assign(slot_id=11, volunteer_id=101)
     result = await ShiftsService(repo).assign(slot_id=11, volunteer_id=100)
     assert "fødselsdato mangler" in result.message
+
+
+@pytest.mark.asyncio
+async def test_board_keeps_warnings_on_placed_people_after_a_reload() -> None:
+    repo = FakeRepository()
+    repo.place(11, 101, 1)
+    repo.week_counts = {101: 2, 100: 1}
+    repo.shift.venue = "Halvtimen"
+    repo.place(10, 100, 2)
+
+    plan = await ShiftsService(repo).get_week_plan(date(2026, 11, 2))
+
+    people = {
+        person.volunteer_id: person
+        for day in plan.days
+        for venue in day.venues
+        for shift in venue.shifts
+        for slot in shift.slots
+        for person in slot.people
+    }
+    # The same texts assign gives; 101 has one other shift this week, no birth date on file.
+    assert people[101].warnings == ["har allerede 1 skift denne uka", "fødselsdato mangler, sjekk alderen"]
+    assert people[100].warnings == ["fødselsdato mangler, sjekk alderen"]
+
+
+@pytest.mark.asyncio
+async def test_board_has_no_warnings_for_a_single_shift_at_a_plain_venue() -> None:
+    repo = FakeRepository()
+    repo.place(11, 101, 1)
+    repo.week_counts = {101: 1}
+
+    plan = await ShiftsService(repo).get_week_plan(date(2026, 11, 2))
+
+    [person] = [
+        person
+        for day in plan.days
+        for venue in day.venues
+        for shift in venue.shifts
+        for slot in shift.slots
+        for person in slot.people
+    ]
+    assert person.warnings == []

@@ -51,7 +51,15 @@ class FakeShiftsService:
                     1,
                     False,
                     0,
-                    [AssignedPerson(1, 1, "Birk Lie", swap_requested=True)],
+                    [
+                        AssignedPerson(
+                            1,
+                            1,
+                            "Birk Lie",
+                            swap_requested=True,
+                            warnings=["har allerede 1 skift denne uka"],
+                        )
+                    ],
                 ),
                 SlotRecord(
                     2,
@@ -129,6 +137,7 @@ def test_shift_plan_renders_week_for_managers() -> None:
     assert "Stjernesalen og kjøkken" in response.text
     assert "Birk Lie" in response.text
     assert "ønsker bytte" in response.text
+    assert "Har allerede 1 skift denne uka" in response.text
     # "Kan ikke i dag": still listed, the place counts as open and opens to everyone.
     assert "Ulrik Unavailable" in response.text and "kan ikke i dag" in response.text
     assert "Åpen for alle (kan ikke i dag)" in response.text
