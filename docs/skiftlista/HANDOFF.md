@@ -36,6 +36,9 @@ the codebase again.
 | Drag and drop | `app/web/routes/shifts/actions.py` (POST `/shifts/assignments`, `/{id}/move`, `/{id}/delete`), `app/static/js/shift-board.js` |
 | Test data | `scripts/dev/seed_shifts.py` (run by `scripts/dev/bootstrap.py`; skipped when a real snapshot is used) |
 | Tests | `tests/unit/domain/test_shift_planning.py`, `tests/unit/domain/test_shift_service.py`, `tests/web/test_shifts_web.py`, `tests/unit/shared/test_semester.py` |
+| App API (step 1) | `app/api/v1/mobile_shifts.py` (mounted at `/api/v1/mobile-card/shifts`), `app/domain/shifts/app_service.py`, `app_repository.py`, `app_rules.py`, `app_models.py`, migration `20261028_1200_shift_app_api.py` |
+| App API tests | `tests/unit/domain/test_shift_app_service.py` (real SQLite DB), `tests/unit/domain/test_shift_app_rules.py`, `tests/api/mobile_card/test_mobile_shifts_api.py` |
+| App client | `kvarteret-internbevis` branch `skiftlista/api-client`: `npm run api:generate:personal` writes `src/core/api/kvarteret-personal` (only the `mobile-shifts` tag) |
 
 Also fixed: dev seed produced semester code `20253` (now
 `get_previous_semester_code` in `app/shared/semester.py`).
@@ -51,6 +54,13 @@ Also fixed: dev seed produced semester code `20253` (now
 - Slot kinds: `skiftleder`, `skjenker`, `bartender`, `kokk`, `opplaering`,
   `garderobe` (`SLOT_KINDS` in `planning.py`). Crew kinds = skjenker,
   bartender, kokk.
+- App (step 1): `shift_group_settings` (per group: `app_enabled`,
+  `samf_enabled`, `meeting_point`), `shift_month_status` (per group and
+  month: `open` / `allocating` / `published`; no row = published),
+  `shift_availability_rules` (weekday answers per semester),
+  `shift_wishes` (per-shift answers), `course_sessions` +
+  `course_session_signups` (owned by the courses module), and on
+  `shift_assignments`: `cannot_attend`, `status_message`, `status_changed_at`.
 - Who may take what comes from **existing** Personal data: membership and
   verv (`role_assignments` + `assignment_roles`) this semester. Verv names
   used: `Skiftleder`, `Opplæring`, `Kokk`. Subgroups use
@@ -67,6 +77,14 @@ Also fixed: dev seed produced semester code `20253` (now
   (`training_replaces_slot`); per shift it can be "i tillegg".
 - Closed shift, same person twice on a shift, full place: refused.
 - More than one shift in a week: allowed with a warning.
+- Halvtimen: under 20 is refused, also on the leader board (unknown birth
+  date: a warning for leaders, refused in the app).
+- "Kan ikke i dag": the person stays on, marked on the board; the place
+  counts as open and, unless it needs a verv, is open to everyone. Whoever
+  takes it (app or leader) takes the absent person off.
+- App only: brannkurs for everyone, barkurs for samfunnettjeneste in
+  skjenker/bartender places, valid 4 semesters from `completed_semester`, or
+  a sign-up for a session before the shift. Not checked on the leader board.
 
 ## Run it locally
 
@@ -136,32 +154,56 @@ Postgres and run `uv run pytest tests/e2e`.
 - Notifications: email for the pilot. Push to be built together with
   etjenesten's planned shared notifications.
 
+## Step 1 (API for the app): done
+
+Contract and rules are described in `docs/reference/api-boundaries.md`
+(section "Skiftlista API"). Smoke-tested on Postgres against the dev seed,
+where Stjerne is switched on (also for samfunnettjeneste) with course dates.
+
+Known gaps, deliberately left to later steps:
+
+- **Switching on** a group, setting a month to `open`/`allocating` and adding
+  course dates has no screen in Personal yet (steps 4–6). Until then, SQL:
+  `INSERT INTO shift_group_settings (group_id, app_enabled, samf_enabled)
+  VALUES (<stjerne id>, true, false);`
+- **Course names**: the app looks for a course named `Brannkurs` or
+  `Brannvernkurs`, and `Barkurs` (`COURSE_RULES` in `app_rules.py`). A course
+  that does not exist is not checked. Ask etjenesten whether `Skjenkekurs` is
+  the barkurs. Register real brannkurs completions before the pilot, or
+  members cannot claim in the app.
+- **Swap and "kan ikke"** are stored and shown on the board, but the message
+  is not shown to leaders yet, no email is sent, and messages are not
+  deleted after the shift (step 8).
+- **Review account** (App/Play Store): review sessions get `enabled: false`,
+  so reviewers do not see Skiftlista. Decide whether the review user needs
+  demo access before submitting.
+- "Tar ikke opplæring" is not considered yet (step 9).
+
 ## Next steps, in order
 
-1. **API for the app** (most urgent: the app must be complete before the one
-   store release). Follow `docs/reference/api-boundaries.md` and the
-   existing mobile-card auth (`app/api/v1/mobile_card.py`). Endpoints:
-   config (enabled groups, slot kinds, labels), open shifts, my shifts,
-   claim a place (same rules as `ShiftsService._check`), swap/sick request,
-   wishes (rules + per-shift), course dates + sign-up. Regenerate
-   `openapi.json` and the app clients
-   (`docs/how-to/update-openapi-clients.md`).
+1. ~~API for the app~~ (done, see above).
 2. **App screens in kvarteret-internbevis** (`src/features/shifts/`,
    feature-first MVVM-lite, zod schemas): tabs Ledige / Mine / Ønsker,
    detail with requirements, course sign-up + claim in one step, behind a
-   server-side per-group switch. Copy the flows from the prototype.
+   server-side per-group switch. Copy the flows from the prototype. Use the
+   generated client (branch `skiftlista/api-client`); `GET /config` decides
+   tabs and labels.
 3. **Group-scoped permissions**: today any Admin/Gruppeadmin can edit every
    group's shifts (same as the rest of Personal). Limit leaders to their
    own groups; add HS samfunnettjeneste and the maintenance role.
 4. **Templates and series editing** in Personal: create/edit templates,
    generate a semester, edit one shift or the whole weekday series (time,
-   staffing, note, closed, opplæring mode).
+   staffing, note, closed, opplæring mode). Also the per-group app switches
+   and meeting point (`shift_group_settings`).
 5. **Wishes and monthly allocation**: port `suggest()` and
-   `fordelingWarnings()` from the prototype's `logic.js`; publish per month.
-6. **Courses**: table of course sessions (date, time, places), sign-up,
-   expiry from semester.
+   `fordelingWarnings()` from the prototype's `logic.js`; set
+   `shift_month_status` (open → allocating → published). Wishes are already
+   stored by the app.
+6. **Courses**: leader screens for `course_sessions` (date, place, capacity,
+   cancel) and the sign-up lists. Sign-up and expiry are in the app API.
 7. **Samfunnettjeneste**: events, places open for samf, progress per group.
-8. **Swaps and sick days** with email.
+8. **Swaps and sick days** with email to the right leaders, show
+   `status_message` to them (not to skiftleder), delete it after the shift.
 9. Small: keyboard alternative to drag and drop ("Legg til" on each place),
    semester-end data cleanup, per-person "tar ikke opplæring".
 

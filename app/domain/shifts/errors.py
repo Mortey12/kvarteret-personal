@@ -7,3 +7,7 @@ class ShiftNotFoundError(LookupError):
 
 class ShiftPlacementError(ValueError):
     """A placement that breaks a rule. The message is shown to the leader."""
+
+
+class ShiftAccessError(PermissionError):
+    """The person cannot use Skiftlista in the app (no group switched on)."""

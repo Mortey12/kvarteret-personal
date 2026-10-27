@@ -34,6 +34,8 @@ from app.domain.admin_accounts.tables import (
 )
 from app.domain.courses.tables import (
     course_completions,
+    course_session_signups,
+    course_sessions,
     courses,
     group_course_requirements,
 )
@@ -49,9 +51,13 @@ from app.domain.mobile_card.tables import (
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.tables import (
     shift_assignments,
+    shift_availability_rules,
+    shift_group_settings,
+    shift_month_status,
     shift_slots,
     shift_template_slots,
     shift_templates,
+    shift_wishes,
     shifts,
 )
 from app.domain.spotify.tables import integration_tokens
@@ -82,6 +88,8 @@ __all__ = [
     "auth_sessions",
     "auth_users",
     "course_completions",
+    "course_session_signups",
+    "course_sessions",
     "courses",
     "domain_events",
     "event_interest",
@@ -100,9 +108,13 @@ __all__ = [
     "rate_limits",
     "role_assignments",
     "shift_assignments",
+    "shift_availability_rules",
+    "shift_group_settings",
+    "shift_month_status",
     "shift_slots",
     "shift_template_slots",
     "shift_templates",
+    "shift_wishes",
     "shifts",
     "storage_metadata",
     "storage_objects",

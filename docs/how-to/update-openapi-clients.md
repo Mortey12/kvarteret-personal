@@ -15,9 +15,9 @@ Commit `openapi.json` together with the backend change.
 
 From `/Users/kluvin/dev/kvarteret/kvarteret-internbevis`:
 
-    npm run api:generate
+    npm run api:generate:personal
 
-The generator prefers the sibling `../kvarteret-personal/openapi.json` when present. Run the app tests that cover the changed surface.
+The generator reads the sibling `../kvarteret-personal/openapi.json` (or `KVARTERET_PERSONAL_OPENAPI`) and keeps only operations tagged `mobile-shifts`; `npm run api:check:personal` verifies the checked-in client. Run the app tests that cover the changed surface.
 
 For mobile-card response changes, keep backend responses additive. Installed app versions can remain in use after the backend deploys. Do not remove fields or change parser-sensitive shapes until the supported app versions are confirmed.
 

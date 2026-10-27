@@ -28,6 +28,7 @@ from app.domain.mobile_card.models import (
     MobileCardRole,
     MobileCardRoleHistory,
     MobileCardSession,
+    MobileCardSessionIdentity,
 )
 from app.domain.mobile_card.repository import MobileCardRepository, MobileCardSnapshot
 from app.domain.mobile_card.sessions import MobileCardSessionManager
@@ -380,6 +381,21 @@ class MobileCardService:
             + timedelta(days=self.settings.mobile_card_refresh_token_ttl_days),
         )
         return refresh_token
+
+    def authenticate_session(self, session_token: str) -> MobileCardSessionIdentity:
+        """Who a mobile-card session belongs to, for APIs beside the card itself.
+
+        Raises ``MobileCardInvalidSessionError`` for a bad or expired token.
+        Trial and review sessions get no ``volunteer_id``.
+        """
+        decoded = self.sessions.decode_token(session_token)
+        is_volunteer = not decoded.is_review and decoded.trial_application_id is None
+        return MobileCardSessionIdentity(
+            volunteer_id=decoded.person_id if is_volunteer and decoded.person_id else None,
+            is_review=decoded.is_review,
+            is_trial=decoded.trial_application_id is not None,
+            renewed_session_token=self.sessions.maybe_renew(decoded),
+        )
 
     async def get_current_card(
         self, session_token: str, *, include_role_history: bool = False

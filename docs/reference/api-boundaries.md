@@ -20,7 +20,7 @@ Consumers that generate typed clients should regenerate from `openapi.json`, pre
 
 | Consumer | Personal routes | Auth |
 | --- | --- | --- |
-| `kvarteret-internbevis` | `/api/v1/mobile-card/*`, `GET /api/now-playing`, `POST /api/v1/feedback/` | mobile-card bearer session; none |
+| `kvarteret-internbevis` | `/api/v1/mobile-card/*` (including `/api/v1/mobile-card/shifts/*`), `GET /api/now-playing`, `POST /api/v1/feedback/` | mobile-card bearer session; none |
 | `samfunnetibergen` | `POST /api/v1/volunteer-prospects`, `/api/v1/booking-requests*`, `/api/v1/event-interest/*`, `GET /api/v1/me/statistikk-tilgang`, `POST /api/v1/feedback/`, `GET /api/now-playing` | HMAC; forwarded session cookie; none |
 
 ## `kvarteret-internbevis`
@@ -30,7 +30,7 @@ The React Native app defaults to:
     EXPO_PUBLIC_KVARTERET_PERSONAL_API_BASE_URL=https://personal.samfunnetibergen.no/api/v1
     EXPO_PUBLIC_INTERNKORT_BASE_URL=https://personal.samfunnetibergen.no/api/v1/mobile-card
 
-It generates a client from `openapi.json` into `src/core/api/kvarteret-personal`. The generator first prefers a sibling `../kvarteret-personal/openapi.json`, then falls back to the remote `develop` artifact.
+`npm run api:generate:personal` generates a client from `openapi.json` into `src/core/api/kvarteret-personal`, keeping only operations tagged `mobile-shifts`. The generator reads a sibling `../kvarteret-personal/openapi.json`, or the file in `KVARTERET_PERSONAL_OPENAPI`. The mobile-card login and profile calls are hand-written with zod schemas.
 
 ### Mobile-card API
 
@@ -49,6 +49,39 @@ Reads the current profile with `Authorization: Bearer <mobile-card-session-token
 `POST /api/v1/mobile-card/client-events/session-logout`
 
 Accepts diagnostics when the mobile app logs a user out due to missing or invalid local credentials. This endpoint is write-only telemetry and returns `202`.
+
+### Skiftlista API
+
+Mounted at `/api/v1/mobile-card/shifts` (OpenAPI tag `mobile-shifts`, code in
+`app/api/v1/mobile_shifts.py` and `app/domain/shifts/app_*.py`). Every call
+takes the same `Authorization: Bearer <mobile-card-session-token>` as
+`GET /me` and may return a renewed token in `X-Mobile-Card-Session-Token`.
+Trial and review sessions are not volunteers: `GET /config` answers
+`enabled: false` and every other call is `403`.
+
+| Call | Purpose |
+| --- | --- |
+| `GET /config` | Whether Skiftlista is on for the person, tabs, groups, slot kinds, labels |
+| `GET /open?scope=own\|other\|all&days=` | Open places from now, with tone, status text and course offers |
+| `GET /places/{slot_id}`, `POST /places/{slot_id}/claim` | Place detail and claim (`course_session_ids` signs up for courses in the same step) |
+| `GET /mine` | Coming shifts, weekly/monthly quota or samfunnettjeneste progress |
+| `POST`/`DELETE /assignments/{id}/swap-request` | Ask for / cancel a swap |
+| `POST`/`DELETE /assignments/{id}/cannot-attend` | "Kan ikke i dag" on the day / undo |
+| `GET /wishes`, `PUT /wishes/weekdays/{0-6}`, `PUT /wishes/shifts/{id}` | Weekday answers per semester and per-shift overrides |
+| `GET /courses`, `POST`/`DELETE /courses/sessions/{id}/signup` | Brann-/barkurs status, dates and sign-up |
+
+Errors are `{"detail": "<Norwegian text>"}` meant to be shown as is: `401`
+session, `403` not switched on, `404` gone, `409` a rule says no. Claiming
+runs the same checks as the leader board (`ShiftsService._check`) plus age,
+courses and visibility.
+
+What the app shows is data-driven so the store release does not need
+updates: per-group `shift_group_settings.app_enabled` (members see the
+group) and `samf_enabled` (everyone with a verv this semester sees its places
+open for samfunnettjeneste), and per-month `shift_month_status` (no row means
+published; `open`/`allocating` months are hidden from Ledige and Mine and
+take wishes). Keep these responses additive: installed app versions keep
+parsing old fields.
 
 ### Now-playing API
 

@@ -3,6 +3,8 @@
 Adds Skjenke's subgroups (Stjerne, Kjøkken, Grøndahls, Halvtimen) under
 Skjenkegruppen, their verv, made-up members for this semester, the H26
 shift templates and six weeks of shifts from this week, partly filled.
+Stjerne is switched on for the app (also for samfunnettjeneste), with
+brann- and barkurs dates and brannkurs completions for most members.
 
 Deterministic and entirely fake. Idempotent: does nothing when shift
 templates already exist. Run by ``scripts/dev/bootstrap.py``.
@@ -28,16 +30,20 @@ from app.config import Settings
 from app.db.session import build_database_runtime, session_scope
 from app.db.tables import (
     assignment_roles,
+    course_completions,
+    course_sessions,
+    courses,
     groups,
     role_assignments,
     shift_assignments,
+    shift_group_settings,
     shift_slots,
     shift_template_slots,
     shift_templates,
     shifts,
     volunteer_records,
 )
-from app.shared.semester import get_current_semester_code
+from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 from seed_synthetic import FIRST_NAMES, LAST_NAMES
 
@@ -354,6 +360,53 @@ async def seed_shifts(database_url: str) -> None:
                             )
                             if week == 0 and day.weekday() == 5:
                                 swap_marked = True
+
+            # The app: Stjerne is the pilot, also open for samfunnettjeneste.
+            await session.execute(
+                insert(shift_group_settings).values(
+                    group_id=group_ids["Stjerne"],
+                    app_enabled=True,
+                    samf_enabled=True,
+                    meeting_point="Møt skiftleder i Stjernesalen 30 minutter før.",
+                )
+            )
+
+            # Brann- and barkurs with a few coming dates, and completions for
+            # most Skjenke members (some missing, so the app shows sign-up).
+            course_ids: dict[str, int] = {}
+            for key, names in (("brann", ("Brannkurs", "Brannvernkurs")), ("bar", ("Barkurs",))):
+                existing = await session.scalar(select(courses.c.id).where(courses.c.name.in_(names)))
+                course_ids[key] = existing or (
+                    await session.execute(
+                        insert(courses).values(name=names[0], created_at=now).returning(courses.c.id)
+                    )
+                ).scalar_one()
+            for key, offsets, capacity in (("brann", (8, 22, 36), 16), ("bar", (15, 29), 12)):
+                for offset in offsets:
+                    starts_at, _ = _span(today + timedelta(days=offset), time(18, 0), time(20, 0))
+                    await session.execute(
+                        insert(course_sessions).values(
+                            course_id=course_ids[key],
+                            starts_at=starts_at,
+                            location="Kvarteret",
+                            capacity=capacity,
+                            is_cancelled=False,
+                        )
+                    )
+            previous = get_previous_semester_code(semester)
+            for name in members:
+                for role_name, people in members[name].items():
+                    for volunteer_id in people:
+                        if role_name != "Opplæring" and rng.random() < 0.15:
+                            continue
+                        await session.execute(
+                            insert(course_completions).values(
+                                volunteer_id=volunteer_id,
+                                course_id=course_ids["brann"],
+                                completed_semester=rng.choice([semester, previous]),
+                                created_at=now,
+                            )
+                        )
 
             print(
                 f"Seeded {len(SUBGROUPS)} Skjenke subgroups, {index} shift volunteers, "

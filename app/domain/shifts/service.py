@@ -14,11 +14,15 @@ from app.domain.shifts.models import (
 )
 from app.domain.shifts.planning import (
     OSLO,
+    VENUE_MIN_AGE,
+    absent_to_replace,
+    age_problem,
     allowed_tokens,
     format_day,
     format_week,
     group_into_days,
     monday_of,
+    open_for_everyone,
     open_places,
     placement_problem,
     slot_kind,
@@ -161,16 +165,23 @@ class ShiftsService:
             get_current_semester_code(), [group.group_id for group in groups]
         )
         roles = _roles_by_group(members).get(volunteer_id, {})
-        problem = placement_problem(slot.kind, shift.group_id, slot.open_for_samf, roles)
+        problem = placement_problem(slot.kind, shift.group_id, open_for_everyone(slot), roles)
         if problem:
             raise ShiftPlacementError(problem + ".")
+        warnings: list[str] = []
+        if shift.venue in VENUE_MIN_AGE:
+            birth_date = await self.repository.get_volunteer_birth_date(volunteer_id)
+            too_young = age_problem(shift.venue, birth_date, shift.starts_at.astimezone(OSLO).date())
+            if too_young:
+                raise ShiftPlacementError(too_young + ".")
+            if birth_date is None:
+                warnings.append("fødselsdato mangler, sjekk alderen")
         if open_places(shift, slot) <= 0:
             if slot.kind == "opplaering" and len(slot.people) < slot.count:
                 raise ShiftPlacementError(
                     "Ingen ledig plass til opplæring: de vanlige plassene er fylt."
                 )
             raise ShiftPlacementError("Plassen er full.")
-        warnings: list[str] = []
         starts_from, starts_before = _week_bounds(shift.starts_at.astimezone(OSLO).date())
         counts = await self.repository.count_shifts_by_volunteer(starts_from, starts_before)
         already = counts.get(volunteer_id, 0)
@@ -194,8 +205,15 @@ class ShiftsService:
         if name is None:
             raise ShiftNotFoundError("Personen finnes ikke.")
         warnings = await self._check(shift, slot, volunteer_id)
+        await self._take_place(shift, slot)
         await self.repository.add_assignment(slot_id, volunteer_id)
         return PlacementResult(_message(f"{name} er satt opp som {self._describe(shift, slot)}.", warnings))
+
+    async def _take_place(self, shift: ShiftRecord, slot: SlotRecord) -> None:
+        """Someone who said "kan ikke i dag" comes off when their place is taken."""
+        absent = absent_to_replace(shift, slot)
+        if absent is not None:
+            await self.repository.remove_assignment(absent.assignment_id)
 
     async def move(self, *, assignment_id: int, slot_id: int) -> PlacementResult:
         assignment = await self.repository.get_assignment(assignment_id)
@@ -207,6 +225,7 @@ class ShiftsService:
         warnings = await self._check(
             shift, slot, assignment.volunteer_id, moving_assignment_id=assignment_id
         )
+        await self._take_place(shift, slot)
         await self.repository.move_assignment(assignment_id, slot_id)
         name = await self.repository.get_volunteer_name(assignment.volunteer_id) or "Personen"
         return PlacementResult(_message(f"{name} er flyttet til {self._describe(shift, slot)}.", warnings))

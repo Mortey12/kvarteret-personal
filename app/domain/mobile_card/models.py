@@ -111,3 +111,13 @@ class DecodedMobileCardSession:
     person_id: int | None
     trial_application_id: int | None
     remaining_seconds: int
+
+
+@dataclass(frozen=True, slots=True)
+class MobileCardSessionIdentity:
+    """The person behind a mobile-card session token."""
+
+    volunteer_id: int | None
+    is_review: bool
+    is_trial: bool
+    renewed_session_token: str | None

@@ -53,7 +53,14 @@ class FakeShiftsService:
                     0,
                     [AssignedPerson(1, 1, "Birk Lie", swap_requested=True)],
                 ),
-                SlotRecord(2, "skjenker", 1, True, 1, []),
+                SlotRecord(
+                    2,
+                    "skjenker",
+                    1,
+                    False,
+                    1,
+                    [AssignedPerson(3, 4, "Ulrik Unavailable", swap_requested=False, cannot_attend=True)],
+                ),
                 SlotRecord(
                     3,
                     "opplaering",
@@ -122,6 +129,9 @@ def test_shift_plan_renders_week_for_managers() -> None:
     assert "Stjernesalen og kjøkken" in response.text
     assert "Birk Lie" in response.text
     assert "ønsker bytte" in response.text
+    # "Kan ikke i dag": still listed, the place counts as open and opens to everyone.
+    assert "Ulrik Unavailable" in response.text and "kan ikke i dag" in response.text
+    assert "Åpen for alle (kan ikke i dag)" in response.text
     assert "Brukt til opplæring" in response.text
     assert "Reservert bord 22 fra 18" in response.text
     assert 'href="/shifts?week=2026-11-09&amp;group=7"' in response.text

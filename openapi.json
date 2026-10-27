@@ -1251,6 +1251,21 @@
         "title": "BookingSchedule",
         "type": "object"
       },
+      "ClaimPlaceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "course_session_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 4,
+            "title": "Course Session Ids",
+            "type": "array"
+          }
+        },
+        "title": "ClaimPlaceRequest",
+        "type": "object"
+      },
       "ClientErrorReport": {
         "additionalProperties": false,
         "properties": {
@@ -1315,6 +1330,172 @@
           }
         },
         "title": "ClientErrorReport",
+        "type": "object"
+      },
+      "CourseOffer": {
+        "additionalProperties": false,
+        "properties": {
+          "course_key": {
+            "title": "Course Key",
+            "type": "string"
+          },
+          "course_name": {
+            "title": "Course Name",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "course_key",
+          "course_name",
+          "session_id",
+          "starts_at",
+          "label"
+        ],
+        "title": "CourseOffer",
+        "type": "object"
+      },
+      "CourseSessionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "signed_up": {
+            "title": "Signed Up",
+            "type": "boolean"
+          },
+          "spots_left": {
+            "title": "Spots Left",
+            "type": "integer"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "starts_at",
+          "label",
+          "location",
+          "spots_left",
+          "signed_up"
+        ],
+        "title": "CourseSessionOut",
+        "type": "object"
+      },
+      "CourseStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_soon": {
+            "title": "Expires Soon",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/CourseSessionOut"
+            },
+            "title": "Sessions",
+            "type": "array"
+          },
+          "signed_up": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CourseSessionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status_text": {
+            "title": "Status Text",
+            "type": "string"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "valid_through": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Through"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "valid",
+          "status_text",
+          "valid_through",
+          "expires_soon",
+          "signed_up",
+          "sessions"
+        ],
+        "title": "CourseStatus",
+        "type": "object"
+      },
+      "CrewMember": {
+        "additionalProperties": false,
+        "properties": {
+          "first_name": {
+            "title": "First Name",
+            "type": "string"
+          },
+          "slot_label": {
+            "title": "Slot Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "first_name",
+          "slot_label"
+        ],
+        "title": "CrewMember",
         "type": "object"
       },
       "EventStatisticsAccessResponse": {
@@ -1523,6 +1704,25 @@
           "batch_id"
         ],
         "title": "InterestWrite",
+        "type": "object"
+      },
+      "LabeledValue": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "LabeledValue",
         "type": "object"
       },
       "MobileCardResponse": {
@@ -2116,6 +2316,225 @@
         "title": "MobileDiagnosticRequest",
         "type": "object"
       },
+      "MyShift": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment_id": {
+            "title": "Assignment Id",
+            "type": "integer"
+          },
+          "can_report_cannot_attend": {
+            "title": "Can Report Cannot Attend",
+            "type": "boolean"
+          },
+          "can_request_swap": {
+            "title": "Can Request Swap",
+            "type": "boolean"
+          },
+          "cannot_attend": {
+            "title": "Cannot Attend",
+            "type": "boolean"
+          },
+          "counts_as_samfunnettjeneste": {
+            "title": "Counts As Samfunnettjeneste",
+            "type": "boolean"
+          },
+          "crew": {
+            "items": {
+              "$ref": "#/components/schemas/CrewMember"
+            },
+            "title": "Crew",
+            "type": "array"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "day_label": {
+            "title": "Day Label",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "meeting_point": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Point"
+          },
+          "min_age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Age"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "swap_requested": {
+            "title": "Swap Requested",
+            "type": "boolean"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag"
+          },
+          "time_label": {
+            "title": "Time Label",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "venue": {
+            "title": "Venue",
+            "type": "string"
+          },
+          "venue_label": {
+            "title": "Venue Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "group_id",
+          "group_name",
+          "venue",
+          "venue_label",
+          "title",
+          "starts_at",
+          "ends_at",
+          "day",
+          "day_label",
+          "time_label",
+          "note",
+          "min_age",
+          "assignment_id",
+          "slot_id",
+          "kind",
+          "label",
+          "tag",
+          "counts_as_samfunnettjeneste",
+          "swap_requested",
+          "cannot_attend",
+          "can_request_swap",
+          "can_report_cannot_attend",
+          "meeting_point",
+          "description",
+          "crew"
+        ],
+        "title": "MyShift",
+        "type": "object"
+      },
+      "MyShiftsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "quota": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuotaSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "samfunnettjeneste": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamfProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/MyShift"
+            },
+            "title": "Shifts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "shifts",
+          "quota",
+          "samfunnettjeneste"
+        ],
+        "title": "MyShiftsResponse",
+        "type": "object"
+      },
       "NowPlayingStateResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2222,6 +2641,281 @@
         "title": "NowPlayingStateResponse",
         "type": "object"
       },
+      "OpenPlace": {
+        "additionalProperties": false,
+        "properties": {
+          "can_claim": {
+            "title": "Can Claim",
+            "type": "boolean"
+          },
+          "counts_as_samfunnettjeneste": {
+            "title": "Counts As Samfunnettjeneste",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_course_signup": {
+            "items": {
+              "$ref": "#/components/schemas/CourseOffer"
+            },
+            "title": "Needs Course Signup",
+            "type": "array"
+          },
+          "open_places": {
+            "title": "Open Places",
+            "type": "integer"
+          },
+          "opened_by_absence": {
+            "title": "Opened By Absence",
+            "type": "boolean"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "status_text": {
+            "title": "Status Text",
+            "type": "string"
+          },
+          "tone": {
+            "enum": [
+              "ok",
+              "info",
+              "warn",
+              "off"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot_id",
+          "kind",
+          "label",
+          "open_places",
+          "opened_by_absence",
+          "counts_as_samfunnettjeneste",
+          "tone",
+          "status_text",
+          "can_claim",
+          "needs_course_signup"
+        ],
+        "title": "OpenPlace",
+        "type": "object"
+      },
+      "OpenShift": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "day_label": {
+            "title": "Day Label",
+            "type": "string"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "min_age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Age"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/OpenPlace"
+            },
+            "title": "Places",
+            "type": "array"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "time_label": {
+            "title": "Time Label",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "venue": {
+            "title": "Venue",
+            "type": "string"
+          },
+          "venue_label": {
+            "title": "Venue Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "group_id",
+          "group_name",
+          "venue",
+          "venue_label",
+          "title",
+          "starts_at",
+          "ends_at",
+          "day",
+          "day_label",
+          "time_label",
+          "note",
+          "min_age",
+          "places"
+        ],
+        "title": "OpenShift",
+        "type": "object"
+      },
+      "OpenShiftsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "from_day": {
+            "format": "date",
+            "title": "From Day",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "own",
+              "other",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/OpenShift"
+            },
+            "title": "Shifts",
+            "type": "array"
+          },
+          "to_day": {
+            "format": "date",
+            "title": "To Day",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "from_day",
+          "to_day",
+          "shifts"
+        ],
+        "title": "OpenShiftsResponse",
+        "type": "object"
+      },
+      "PlaceDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Label"
+          },
+          "crew": {
+            "items": {
+              "$ref": "#/components/schemas/CrewMember"
+            },
+            "title": "Crew",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "meeting_point": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Point"
+          },
+          "place": {
+            "$ref": "#/components/schemas/OpenPlace"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
+          "shift": {
+            "$ref": "#/components/schemas/ShiftSummary"
+          }
+        },
+        "required": [
+          "shift",
+          "place",
+          "description",
+          "meeting_point",
+          "requirements",
+          "crew",
+          "claim_label"
+        ],
+        "title": "PlaceDetailResponse",
+        "type": "object"
+      },
       "PublicVolunteerProspectResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2243,6 +2937,529 @@
         "title": "PublicVolunteerProspectResponse",
         "type": "object"
       },
+      "QuotaSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "taken": {
+            "title": "Taken",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "taken",
+          "limit",
+          "text"
+        ],
+        "title": "QuotaSummary",
+        "type": "object"
+      },
+      "Requirement": {
+        "additionalProperties": false,
+        "properties": {
+          "course_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Key"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "warn",
+              "block"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "state"
+        ],
+        "title": "Requirement",
+        "type": "object"
+      },
+      "SamfProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "planned": {
+            "title": "Planned",
+            "type": "integer"
+          },
+          "target": {
+            "title": "Target",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "done",
+          "planned",
+          "target",
+          "text"
+        ],
+        "title": "SamfProgress",
+        "type": "object"
+      },
+      "ShiftActionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "shift": {
+            "$ref": "#/components/schemas/MyShift"
+          }
+        },
+        "required": [
+          "message",
+          "shift"
+        ],
+        "title": "ShiftActionResponse",
+        "type": "object"
+      },
+      "ShiftAppConfigResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "audience": {
+            "enum": [
+              "skjenke",
+              "samfunnettjeneste",
+              "none"
+            ],
+            "title": "Audience",
+            "type": "string"
+          },
+          "courses": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledValue"
+            },
+            "title": "Courses",
+            "type": "array"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ShiftAppGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "samf_target": {
+            "title": "Samf Target",
+            "type": "integer"
+          },
+          "slot_kinds": {
+            "items": {
+              "$ref": "#/components/schemas/ShiftSlotKind"
+            },
+            "title": "Slot Kinds",
+            "type": "array"
+          },
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/ShiftAppTab"
+            },
+            "title": "Tabs",
+            "type": "array"
+          },
+          "weekdays": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Weekdays",
+            "type": "array"
+          },
+          "wish_answers": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledValue"
+            },
+            "title": "Wish Answers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "audience",
+          "tabs",
+          "groups",
+          "slot_kinds",
+          "wish_answers",
+          "weekdays",
+          "courses",
+          "samf_target"
+        ],
+        "title": "ShiftAppConfigResponse",
+        "type": "object"
+      },
+      "ShiftAppGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "in_training": {
+            "title": "In Training",
+            "type": "boolean"
+          },
+          "is_member": {
+            "title": "Is Member",
+            "type": "boolean"
+          },
+          "meeting_point": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Point"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quota_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Text"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "training_done": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Done"
+          },
+          "training_needed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Needed"
+          }
+        },
+        "required": [
+          "group_id",
+          "name",
+          "is_member",
+          "role",
+          "in_training",
+          "training_done",
+          "training_needed",
+          "meeting_point",
+          "quota_text"
+        ],
+        "title": "ShiftAppGroup",
+        "type": "object"
+      },
+      "ShiftAppTab": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "wishes",
+              "open",
+              "mine"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "own",
+                  "other",
+                  "all"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ShiftAppTab",
+        "type": "object"
+      },
+      "ShiftCoursesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "courses": {
+            "items": {
+              "$ref": "#/components/schemas/CourseStatus"
+            },
+            "title": "Courses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "courses"
+        ],
+        "title": "ShiftCoursesResponse",
+        "type": "object"
+      },
+      "ShiftErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ShiftErrorResponse",
+        "type": "object"
+      },
+      "ShiftSlotKind": {
+        "additionalProperties": false,
+        "properties": {
+          "crew": {
+            "title": "Crew",
+            "type": "boolean"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "restricted": {
+            "title": "Restricted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "crew",
+          "restricted",
+          "description"
+        ],
+        "title": "ShiftSlotKind",
+        "type": "object"
+      },
+      "ShiftSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "day_label": {
+            "title": "Day Label",
+            "type": "string"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "min_age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Age"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "time_label": {
+            "title": "Time Label",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "venue": {
+            "title": "Venue",
+            "type": "string"
+          },
+          "venue_label": {
+            "title": "Venue Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "group_id",
+          "group_name",
+          "venue",
+          "venue_label",
+          "title",
+          "starts_at",
+          "ends_at",
+          "day",
+          "day_label",
+          "time_label",
+          "note",
+          "min_age"
+        ],
+        "title": "ShiftSummary",
+        "type": "object"
+      },
+      "ShiftWishesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/WishMonth"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/WeekdayRule"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "semester": {
+            "title": "Semester",
+            "type": "integer"
+          },
+          "semester_label": {
+            "title": "Semester Label",
+            "type": "string"
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/WishShift"
+            },
+            "title": "Shifts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "semester",
+          "semester_label",
+          "rules",
+          "months",
+          "shifts"
+        ],
+        "title": "ShiftWishesResponse",
+        "type": "object"
+      },
       "StatisticsGroup": {
         "additionalProperties": false,
         "properties": {
@@ -2260,6 +3477,25 @@
           "name"
         ],
         "title": "StatisticsGroup",
+        "type": "object"
+      },
+      "StatusMessageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "title": "StatusMessageRequest",
         "type": "object"
       },
       "UserRole": {
@@ -2329,6 +3565,236 @@
           "currentSemesterVolunteers"
         ],
         "title": "VolunteerStatsResponse",
+        "type": "object"
+      },
+      "WeekdayRule": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vil",
+                  "kan",
+                  "nei"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "weekday": {
+            "title": "Weekday",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "weekday",
+          "label",
+          "answer"
+        ],
+        "title": "WeekdayRule",
+        "type": "object"
+      },
+      "WishAnswerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vil",
+                  "kan",
+                  "nei"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "title": "WishAnswerRequest",
+        "type": "object"
+      },
+      "WishMonth": {
+        "additionalProperties": false,
+        "properties": {
+          "accepts_wishes": {
+            "title": "Accepts Wishes",
+            "type": "boolean"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "month": {
+            "format": "date",
+            "title": "Month",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "allocating",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_label": {
+            "title": "Status Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "group_id",
+          "group_name",
+          "month",
+          "label",
+          "status",
+          "status_label",
+          "note",
+          "accepts_wishes"
+        ],
+        "title": "WishMonth",
+        "type": "object"
+      },
+      "WishShift": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vil",
+                  "kan",
+                  "nei"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "day_label": {
+            "title": "Day Label",
+            "type": "string"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "from_rule": {
+            "title": "From Rule",
+            "type": "boolean"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "min_age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Age"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "time_label": {
+            "title": "Time Label",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "venue": {
+            "title": "Venue",
+            "type": "string"
+          },
+          "venue_label": {
+            "title": "Venue Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "group_id",
+          "group_name",
+          "venue",
+          "venue_label",
+          "title",
+          "starts_at",
+          "ends_at",
+          "day",
+          "day_label",
+          "time_label",
+          "note",
+          "min_age",
+          "answer",
+          "from_rule"
+        ],
+        "title": "WishShift",
         "type": "object"
       }
     },
@@ -3529,6 +4995,1409 @@
         "summary": "Refresh Session",
         "tags": [
           "mobile-card"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/assignments/{assignment_id}/cannot-attend": {
+      "delete": {
+        "operationId": "undoShiftCannotAttend",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Cannot Attend",
+        "tags": [
+          "mobile-shifts"
+        ]
+      },
+      "post": {
+        "description": "\"Kan ikke i dag\", on the day of the shift. The place opens to everyone; the person comes off when it is taken.",
+        "operationId": "reportShiftCannotAttend",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusMessageRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Cannot Attend",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/assignments/{assignment_id}/swap-request": {
+      "delete": {
+        "operationId": "cancelShiftSwap",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Swap",
+        "tags": [
+          "mobile-shifts"
+        ]
+      },
+      "post": {
+        "description": "Ask for someone to take over. The person stays on the shift until a leader moves someone in.",
+        "operationId": "requestShiftSwap",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusMessageRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Swap",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/config": {
+      "get": {
+        "description": "What the app shows: whether Skiftlista is on for this person, tabs, groups and labels.\n\nNever 403: a person without access gets ``enabled: false`` so the app hides the feature.",
+        "operationId": "getShiftAppConfig",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftAppConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Config",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/courses": {
+      "get": {
+        "description": "Brannkurs (and barkurs for samfunnettjeneste): status, sign-up and coming dates.",
+        "operationId": "getShiftCourses",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftCoursesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Courses",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/courses/sessions/{session_id}/signup": {
+      "delete": {
+        "operationId": "leaveCourseSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftCoursesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leave Session",
+        "tags": [
+          "mobile-shifts"
+        ]
+      },
+      "post": {
+        "description": "Sign up for a session. An earlier sign-up for the same course is replaced.",
+        "operationId": "signUpForCourseSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftCoursesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign Up",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/mine": {
+      "get": {
+        "description": "The person's coming shifts, with this week's quota or samfunnettjeneste progress.",
+        "operationId": "listMyShifts",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyShiftsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Mine",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/open": {
+      "get": {
+        "description": "Places the person can see from now and ``days`` ahead, with why they can or cannot take each.",
+        "operationId": "listOpenShifts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "own",
+                "other",
+                "all"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 92,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenShiftsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Open",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/places/{slot_id}": {
+      "get": {
+        "description": "One place in detail: requirements, who else is on, and the claim button text.",
+        "operationId": "getShiftPlace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slot_id",
+            "required": true,
+            "schema": {
+              "title": "Slot Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Place",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/places/{slot_id}/claim": {
+      "post": {
+        "description": "Take a place. Pass ``course_session_ids`` from ``needs_course_signup`` to sign up and claim in one step.",
+        "operationId": "claimShiftPlace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slot_id",
+            "required": true,
+            "schema": {
+              "title": "Slot Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ClaimPlaceRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Claim Place",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/wishes": {
+      "get": {
+        "description": "Weekday answers for the semester, monthly status, and shifts that take wishes now.\n\nOnly the person and the group's leaders see wishes.",
+        "operationId": "getShiftWishes",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftWishesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Wishes",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/wishes/shifts/{shift_id}": {
+      "put": {
+        "description": "Override the weekday answer for one shift (``answer: null`` goes back to the weekday answer).",
+        "operationId": "setShiftWish",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift_id",
+            "required": true,
+            "schema": {
+              "title": "Shift Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WishAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftWishesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Shift Wish",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/wishes/weekdays/{weekday}": {
+      "put": {
+        "description": "Set or clear (``answer: null``) the answer for one weekday this semester.",
+        "operationId": "setShiftWeekdayRule",
+        "parameters": [
+          {
+            "description": "0 = Monday ... 6 = Sunday",
+            "in": "path",
+            "name": "weekday",
+            "required": true,
+            "schema": {
+              "description": "0 = Monday ... 6 = Sunday",
+              "maximum": 6,
+              "minimum": 0,
+              "title": "Weekday",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WishAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftWishesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Weekday Rule",
+        "tags": [
+          "mobile-shifts"
         ]
       }
     },

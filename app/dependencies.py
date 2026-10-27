@@ -19,6 +19,7 @@ from app.domain.event_interest.repository import EventInterestRepository
 from app.domain.event_interest.service import EventInterestService
 from app.domain.feedback.service import FeedbackService
 from app.domain.courses.service import CoursesService
+from app.domain.shifts.app_service import ShiftsAppService
 from app.domain.shifts.service import ShiftsService
 from app.domain.groups.service import GroupsService
 from app.domain.mobile_card.service import MobileCardService
@@ -147,6 +148,10 @@ def get_courses_service(request: Request) -> CoursesService:
 
 def get_shifts_service(request: Request) -> ShiftsService:
     return get_container(request).shifts_service
+
+
+def get_shifts_app_service(request: Request) -> ShiftsAppService:
+    return get_container(request).shifts_app_service
 
 
 def get_volunteer_search_service(request: Request) -> VolunteerSearchService:

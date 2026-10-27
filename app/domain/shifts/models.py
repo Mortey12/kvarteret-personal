@@ -10,6 +10,9 @@ class AssignedPerson:
     volunteer_id: int
     name: str
     swap_requested: bool
+    # "Kan ikke i dag": still listed, but the place counts as open.
+    cannot_attend: bool = False
+    first_name: str = ""
 
 
 @dataclass(slots=True)

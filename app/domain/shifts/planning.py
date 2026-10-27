@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.domain.shifts.models import (
+    AssignedPerson,
     DayBlock,
     ShiftRecord,
     ShiftView,
@@ -38,6 +39,14 @@ SLOT_KINDS: dict[str, SlotKind] = {
     "opplaering": SlotKind("Opplæring", crew=False, tag="Opplæring"),
     "garderobe": SlotKind("Garderobe", crew=False, tag="Garderobe"),
 }
+
+# Places that need a verv. They never open for samfunnettjeneste.
+RESTRICTED_KINDS = frozenset({"skiftleder", "kokk", "opplaering"})
+# Places where barkurs counts (for samfunnettjeneste).
+BAR_KINDS = frozenset({"skjenker", "bartender"})
+
+# Minimum age per venue. The app shows only "20+", never a birth date.
+VENUE_MIN_AGE = {"Halvtimen": 20}
 
 # Venue names shown on the plan. Kitchen shifts happen in Stjernesalen.
 VENUE_LABELS = {"Stjernesalen": "Stjernesalen og kjøkken"}
@@ -108,21 +117,71 @@ def training_takes_place(shift: ShiftRecord) -> bool:
     )
 
 
-def open_places(shift: ShiftRecord, slot: SlotRecord) -> int:
+def present(slot: SlotRecord) -> int:
+    """People on the place who are coming ("kan ikke i dag" does not count)."""
+    return sum(1 for person in slot.people if not person.cannot_attend)
+
+
+def open_places(shift: ShiftRecord, slot: SlotRecord, *, count_absent: bool = False) -> int:
     """How many more people this place can take.
 
     When opplæring takes a regular place, the crew place and the opplæring
     place share the crew count: a trainee fills one crew place, and a
     full crew leaves no room for a trainee.
+
+    Someone who has said "kan ikke i dag" leaves their place open, unless
+    ``count_absent`` asks for the room as if everyone came.
     """
-    free = slot.count - len(slot.people)
+
+    def taken(item: SlotRecord) -> int:
+        return len(item.people) if count_absent else present(item)
+
+    free = slot.count - taken(slot)
     crew = _crew_slot(shift.slots)
     training = _training_slot(shift.slots)
     if shift.training_replaces_slot and crew is not None and training is not None:
         if slot.slot_id in (crew.slot_id, training.slot_id):
-            shared = crew.count - len(crew.people) - len(training.people)
+            shared = crew.count - taken(crew) - taken(training)
             free = min(free, shared)
     return max(0, free)
+
+
+def absent_to_replace(shift: ShiftRecord, slot: SlotRecord) -> AssignedPerson | None:
+    """The "kan ikke" person who comes off when someone takes this place.
+
+    Only when the place has no room except the one the absent person left.
+    Their own place first; else the partner place they share the crew count with.
+    """
+    if open_places(shift, slot, count_absent=True) > 0:
+        return None
+    candidates = [slot]
+    crew = _crew_slot(shift.slots)
+    training = _training_slot(shift.slots)
+    if shift.training_replaces_slot and crew is not None and training is not None:
+        if slot.slot_id == crew.slot_id:
+            candidates.append(training)
+        elif slot.slot_id == training.slot_id:
+            candidates.append(crew)
+    for item in candidates:
+        absent = next((person for person in item.people if person.cannot_attend), None)
+        if absent is not None:
+            return absent
+    return None
+
+
+def opened_by_absence(slot: SlotRecord) -> bool:
+    """True when the only room on this place is one left by "kan ikke i dag"."""
+    return any(person.cannot_attend for person in slot.people) and slot.count - len(slot.people) <= 0
+
+
+def open_for_everyone(slot: SlotRecord) -> bool:
+    """Open for samfunnettjeneste: set by the leader, or opened by "kan ikke i dag".
+
+    A place that needs a verv (skiftleder, kokk, opplæring) never opens up.
+    """
+    if slot.kind in RESTRICTED_KINDS:
+        return False
+    return slot.open_for_samf or opened_by_absence(slot)
 
 
 def training_places_used(shift: ShiftRecord, slot: SlotRecord) -> int:
@@ -133,7 +192,7 @@ def training_places_used(shift: ShiftRecord, slot: SlotRecord) -> int:
         return 0
     if slot.slot_id != crew.slot_id:
         return 0
-    return min(crew.count, len(training.people))
+    return min(crew.count, present(training))
 
 
 def build_shift_view(shift: ShiftRecord) -> ShiftView:
@@ -145,15 +204,18 @@ def build_shift_view(shift: ShiftRecord) -> ShiftView:
         used = training_places_used(shift, slot)
         if slot.kind != "opplaering":
             total_open += free
+        open_flag = slot.open_for_samf or open_for_everyone(slot)
         if slot.kind == "opplaering":
             tag = "Tar en vanlig plass" if training_takes_place(shift) else "I tillegg"
-        elif not slot.open_for_samf and not kind.tag.startswith("Kun"):
+        elif opened_by_absence(slot) and open_for_everyone(slot):
+            tag = "Åpen for alle (kan ikke i dag)"
+        elif not open_flag and not kind.tag.startswith("Kun"):
             tag = "Kun Skjenke"
-        elif slot.open_for_samf:
+        elif open_flag:
             tag = "Åpen for samf."
         else:
             tag = kind.tag
-        filled = len(slot.people) + used
+        filled = present(slot) + used
         slots.append(
             SlotView(
                 slot_id=slot.slot_id,
@@ -169,10 +231,10 @@ def build_shift_view(shift: ShiftRecord) -> ShiftView:
                     slot.kind == "opplaering"
                     and not shift.is_closed
                     and free == 0
-                    and len(slot.people) < slot.count
+                    and present(slot) < slot.count
                 ),
                 group_id=shift.group_id,
-                open_for_samf=slot.open_for_samf,
+                open_for_samf=open_flag,
                 open_label=_open_label(shift, slot),
             )
         )
@@ -265,6 +327,26 @@ def placement_problem(
     if member_anywhere or open_for_samf:
         return None
     return "Kun for Skjenke"
+
+
+def age_on(birth_date: date, day: date) -> int:
+    years = day.year - birth_date.year
+    if (day.month, day.day) < (birth_date.month, birth_date.day):
+        years -= 1
+    return years
+
+
+def age_problem(venue: str, birth_date: date | None, day: date) -> str | None:
+    """Why the person is too young for this venue, or None.
+
+    An unknown birth date is not a problem here; the app path asks for it.
+    """
+    minimum = VENUE_MIN_AGE.get(venue)
+    if minimum is None or birth_date is None:
+        return None
+    if age_on(birth_date, day) < minimum:
+        return f"{venue} krever {minimum} år"
+    return None
 
 
 def allowed_tokens(roles_by_group: dict[int, set[str]], shift_group_ids: list[int]) -> list[str]:

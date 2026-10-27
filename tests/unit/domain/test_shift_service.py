@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -46,6 +46,9 @@ class FakeRepository:
         self.moved: list[tuple[int, int]] = []
         self.removed: list[int] = []
         self.assignments: dict[int, AssignmentRef] = {}
+        self.birth_dates: dict[int, date | None] = {}
+        # People outside Skjenke (samfunnettjeneste).
+        self.outsiders: dict[int, str] = {}
 
     async def get_slot_shift_id(self, slot_id: int) -> int | None:
         return 1 if slot_id in (10, 11, 12) else None
@@ -72,7 +75,12 @@ class FakeRepository:
         return self.week_counts
 
     async def get_volunteer_name(self, volunteer_id: int) -> str | None:
+        if volunteer_id in self.outsiders:
+            return self.outsiders[volunteer_id]
         return next((m.name for m in self.members if m.volunteer_id == volunteer_id), None)
+
+    async def get_volunteer_birth_date(self, volunteer_id: int) -> date | None:
+        return self.birth_dates.get(volunteer_id)
 
     async def add_assignment(self, slot_id: int, volunteer_id: int) -> int:
         self.added.append((slot_id, volunteer_id))
@@ -87,9 +95,9 @@ class FakeRepository:
     async def remove_assignment(self, assignment_id: int) -> None:
         self.removed.append(assignment_id)
 
-    def place(self, slot_id: int, volunteer_id: int, assignment_id: int) -> None:
+    def place(self, slot_id: int, volunteer_id: int, assignment_id: int, *, absent: bool = False) -> None:
         slot = next(s for s in self.shift.slots if s.slot_id == slot_id)
-        slot.people.append(AssignedPerson(assignment_id, volunteer_id, "x", False))
+        slot.people.append(AssignedPerson(assignment_id, volunteer_id, "x", False, cannot_attend=absent))
         self.assignments[assignment_id] = AssignmentRef(assignment_id, slot_id, 1, volunteer_id)
 
 
@@ -168,3 +176,36 @@ async def test_remove_and_missing_assignment() -> None:
     assert "Plassen er ledig igjen" in result.message
     with pytest.raises(ShiftNotFoundError):
         await ShiftsService(repo).remove(assignment_id=99)
+
+
+@pytest.mark.asyncio
+async def test_taking_a_place_left_by_kan_ikke_takes_the_absent_person_off() -> None:
+    repo = FakeRepository()
+    repo.place(11, 101, assignment_id=5, absent=True)
+    repo.members.append(MemberRole(103, "Siri Skjenker", 7, "Stjerne", "Skjenker"))
+    await ShiftsService(repo).assign(slot_id=11, volunteer_id=103)
+    assert repo.removed == [5]
+    assert repo.added == [(11, 103)]
+
+
+@pytest.mark.asyncio
+async def test_place_left_by_kan_ikke_opens_for_samfunnettjeneste() -> None:
+    repo = FakeRepository()
+    repo.shift.slots[1].open_for_samf = False
+    repo.outsiders[555] = "Ola Samf"
+    with pytest.raises(ShiftPlacementError, match="Kun for Skjenke"):
+        await ShiftsService(repo).assign(slot_id=11, volunteer_id=555)
+    repo.place(11, 101, assignment_id=5, absent=True)
+    await ShiftsService(repo).assign(slot_id=11, volunteer_id=555)
+    assert repo.added == [(11, 555)]
+
+
+@pytest.mark.asyncio
+async def test_halvtimen_needs_20() -> None:
+    repo = FakeRepository()
+    repo.shift.venue = "Halvtimen"
+    repo.birth_dates[101] = date(2007, 1, 1)
+    with pytest.raises(ShiftPlacementError, match="Halvtimen krever 20 år"):
+        await ShiftsService(repo).assign(slot_id=11, volunteer_id=101)
+    result = await ShiftsService(repo).assign(slot_id=11, volunteer_id=100)
+    assert "fødselsdato mangler" in result.message

@@ -29,6 +29,7 @@ IDs, OpenAPI output, generated clients, or docs that explain sibling API use.
 ## Consumer Notes
 
 - `kvarteret-internbevis` uses mobile-card, now-playing and feedback runtime
-  calls. It reads events from the website, not from Personal.
+  calls, and generates a client for the `mobile-shifts` tag (Skiftlista). It
+  reads events from the website, not from Personal.
 - `samfunnetibergen` calls volunteer-prospect, booking-request, event-interest,
   statistics-access, feedback and now-playing routes server-side.

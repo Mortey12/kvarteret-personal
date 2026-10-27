@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import delete, func, insert, select, update
 
@@ -40,6 +40,8 @@ class ShiftsRepository(SqlAlchemyRepository):
         starts_from: datetime,
         starts_before: datetime,
         group_id: int | None = None,
+        *,
+        group_ids: list[int] | None = None,
     ) -> list[ShiftRecord]:
         shift_stmt = (
             _shift_select()
@@ -48,6 +50,10 @@ class ShiftsRepository(SqlAlchemyRepository):
         )
         if group_id is not None:
             shift_stmt = shift_stmt.where(shifts.c.group_id == group_id)
+        if group_ids is not None:
+            if not group_ids:
+                return []
+            shift_stmt = shift_stmt.where(shifts.c.group_id.in_(group_ids))
         return await self._load_shifts(shift_stmt)
 
     async def get_shift(self, shift_id: int) -> ShiftRecord | None:
@@ -106,6 +112,7 @@ class ShiftsRepository(SqlAlchemyRepository):
                     shift_assignments.c.slot_id,
                     shift_assignments.c.volunteer_id,
                     shift_assignments.c.swap_requested,
+                    shift_assignments.c.cannot_attend,
                     volunteer_records.c.first_name,
                     volunteer_records.c.last_name,
                 )
@@ -125,6 +132,8 @@ class ShiftsRepository(SqlAlchemyRepository):
                         volunteer_id=row["volunteer_id"],
                         name=build_full_name(row["first_name"], row["last_name"]),
                         swap_requested=row["swap_requested"],
+                        cannot_attend=row["cannot_attend"],
+                        first_name=(row["first_name"] or "").strip(),
                     )
                 )
         return list(records.values())
@@ -220,10 +229,20 @@ class ShiftsRepository(SqlAlchemyRepository):
         )
         return build_full_name(row["first_name"], row["last_name"]) if row else None
 
+    async def get_volunteer_birth_date(self, volunteer_id: int) -> date | None:
+        return await self.fetch_scalar(
+            select(volunteer_records.c.birth_date).where(volunteer_records.c.id == volunteer_id)
+        )
+
     async def add_assignment(self, slot_id: int, volunteer_id: int) -> int:
         return await self.fetch_scalar(
             insert(shift_assignments)
-            .values(slot_id=slot_id, volunteer_id=volunteer_id, swap_requested=False)
+            .values(
+                slot_id=slot_id,
+                volunteer_id=volunteer_id,
+                swap_requested=False,
+                cannot_attend=False,
+            )
             .returning(shift_assignments.c.id)
         )
 
@@ -231,7 +250,13 @@ class ShiftsRepository(SqlAlchemyRepository):
         await self.execute(
             update(shift_assignments)
             .where(shift_assignments.c.id == assignment_id)
-            .values(slot_id=slot_id, swap_requested=False)
+            .values(
+                slot_id=slot_id,
+                swap_requested=False,
+                cannot_attend=False,
+                status_message=None,
+                status_changed_at=None,
+            )
         )
 
     async def remove_assignment(self, assignment_id: int) -> None:

@@ -11,6 +11,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -19,6 +20,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    false,
     func,
 )
 
@@ -111,6 +113,79 @@ shift_assignments = Table(
         nullable=False,
     ),
     Column("swap_requested", Boolean, nullable=False),
+    # "Kan ikke i dag": the person stays on the shift, marked, and the place
+    # is open to others; they come off when someone takes it.
+    Column("cannot_attend", Boolean, nullable=False, server_default=false()),
+    # Optional note with a swap request or "kan ikke". Only for the leaders,
+    # and to be deleted after the shift.
+    Column("status_message", Text),
+    Column("status_changed_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     UniqueConstraint("slot_id", "volunteer_id", name="shift_assignments_slot_volunteer_key"),
+)
+
+# Per-group switches for the app. A group's shifts are only in the app when
+# app_enabled is set, so the app can ship with every screen and groups are
+# turned on from Personal.
+shift_group_settings = Table(
+    "shift_group_settings",
+    public_metadata,
+    Column("group_id", BigInteger, ForeignKey("public.groups.id"), primary_key=True),
+    Column("app_enabled", Boolean, nullable=False),
+    # Also show this group's places that are open for samfunnettjeneste to
+    # every volunteer (not only to the group's members).
+    Column("samf_enabled", Boolean, nullable=False),
+    # Shown on the shift in the app ("Møt skiftleder 30 minutter før").
+    Column("meeting_point", Text),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+# Monthly allocation status per group. No row means "published": leaders
+# who plan live in Personal need nothing more. "open" = taking wishes,
+# "allocating" = leaders are allocating; volunteers do not see the draft.
+shift_month_status = Table(
+    "shift_month_status",
+    public_metadata,
+    Column("group_id", BigInteger, ForeignKey("public.groups.id"), primary_key=True),
+    # First day of the month.
+    Column("month", Date, primary_key=True),
+    Column("status", Text, nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+# Weekday answers per semester: vil (gjerne) / kan (hvis nødvendig) / nei.
+# No row = not answered. "nei" never carries a reason.
+shift_availability_rules = Table(
+    "shift_availability_rules",
+    public_metadata,
+    Column(
+        "volunteer_id",
+        BigInteger,
+        ForeignKey("public.volunteer_records.id"),
+        primary_key=True,
+    ),
+    Column("semester", Integer, primary_key=True),
+    Column("weekday", SmallInteger, primary_key=True),
+    Column("answer", Text, nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+# Per-shift answer that overrides the weekday rule.
+shift_wishes = Table(
+    "shift_wishes",
+    public_metadata,
+    Column(
+        "shift_id",
+        BigInteger,
+        ForeignKey("public.shifts.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "volunteer_id",
+        BigInteger,
+        ForeignKey("public.volunteer_records.id"),
+        primary_key=True,
+    ),
+    Column("answer", Text, nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
