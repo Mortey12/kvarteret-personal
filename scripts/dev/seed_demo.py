@@ -4,7 +4,8 @@ Adds to a database that ``seed_synthetic`` and ``seed_shifts`` have already fill
 about 100 volunteers in total, Halvtimen members under 20, barkurs completions and a few
 expired brannkurs, weekday answers and shift wishes, a "kan ikke" and a swap request in
 the coming two weeks, Grøndahls and Halvtimen switched on in the app (with their weeks
-published), and a few people with verv outside the Skjenke groups.
+published), a few people with verv outside the Skjenke groups, and the demo leader
+account (``demo.leder@example.dev``, Admin) for the demo login at ``/login/demo``.
 
 Safe to run twice: everything that exists is skipped. Deterministic.
 
@@ -34,6 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.engine import make_url
 
+from app.auth.demo_login import DEMO_LEADER_EMAIL
+from app.auth.dev_auth import dev_auth_user_id
+from app.auth.roles import UserRole
 from app.config import Settings
 from app.db.session import build_database_runtime, session_scope
 from app.db.tables import (
@@ -49,6 +53,7 @@ from app.db.tables import (
     shift_week_status,
     shift_wishes,
     shifts,
+    user_accounts,
     volunteer_records,
 )
 from app.domain.shifts.app_rules import (
@@ -562,6 +567,31 @@ async def switch_groups_on(session, *, today: date) -> None:
             monday += timedelta(days=7)
 
 
+async def add_demo_leader(session, *, now: datetime) -> bool:
+    """The Admin account behind the demo leader login. Not a volunteer."""
+    existing = await session.scalar(
+        select(user_accounts.c.id).where(func.lower(user_accounts.c.email) == DEMO_LEADER_EMAIL)
+    )
+    if existing is not None:
+        return False
+    await session.execute(
+        insert(user_accounts).values(
+            auth_user_id=dev_auth_user_id(DEMO_LEADER_EMAIL),
+            username="demo.leder",
+            email=DEMO_LEADER_EMAIL,
+            display_name="Demo Leder",
+            role=UserRole.ADMIN.value,
+            is_legacy_account=False,
+            onboarding_status="active",
+            migrated_at=now,
+            activated_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return True
+
+
 def _as_date(value) -> date:
     return value.date() if isinstance(value, datetime) else value
 
@@ -589,6 +619,7 @@ async def seed_into(session, *, now: datetime) -> dict[str, int]:
     await switch_groups_on(session, today=today)
     summary["wishes"] = await add_wishes(session, today=today, members=members)
     summary["status_marks"] = len(await add_status_marks(session, now=now))
+    summary["demo_leader"] = int(await add_demo_leader(session, now=now))
     return summary
 
 

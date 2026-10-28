@@ -152,7 +152,9 @@ under 20, barkurs and a few expired brannkurs, weekday answers and shift
 wishes, two "kan ikke" and one more swap request in the coming two weeks,
 Grøndahls and Halvtimen switched on in the app with this and next month
 published, course checks on for Stjerne and Grøndahls, and two people with
-verv outside the Skjenke groups (samfunnettjeneste). It is safe to run twice.
+verv outside the Skjenke groups (samfunnettjeneste). It also adds the demo
+leader account `demo.leder@example.dev` (Admin, not a volunteer) for the demo
+login below. It is safe to run twice.
 
 Locally:
 
@@ -166,7 +168,7 @@ On a hosted demo database (an empty database that holds no real people):
 ```bash
 export DATABASE_URL=postgresql+asyncpg://...   # the demo database; direct endpoint, ssl=require
 uv run alembic upgrade head
-uv run python -c "import asyncio, os, sys; sys.path.insert(0, 'scripts/dev'); \
+DEV_ADMIN_EMAIL=dev@example.dev uv run python -c "import asyncio, os, sys; sys.path.insert(0, 'scripts/dev'); \
 from seed_synthetic import seed; from seed_shifts import seed_shifts; \
 u = os.environ['DATABASE_URL']; asyncio.run(seed(u)); asyncio.run(seed_shifts(u))"
 DEMO_SEED_CONFIRM=<the host name in DATABASE_URL> uv run python scripts/dev/seed_demo.py
@@ -176,10 +178,47 @@ DEMO_SEED_CONFIRM=<the host name in DATABASE_URL> uv run python scripts/dev/seed
 `DEMO_SEED_CONFIRM` is exactly the host name, and unless every volunteer has an
 email ending in `@example.dev` (a volunteer with no email also stops it). The
 other two seeds have no such checks, so never point them at a real database.
+`DEV_ADMIN_EMAIL=dev@example.dev` keeps the synthetic seed's admin account on the
+fake domain; with the default `dev@kvarteret.dev` the demo login refuses to start.
 
-Log in to the app with an email and a code. In development the code is saved
-under `.devdata/outbox/`; on a hosted demo there is no way to read it without
-email delivery (Resend) or a demo-login flag, which does not exist yet.
+### Demo login (hosted demo only)
+
+The hosted demo runs with `APP_ENV=production`, where there is no web login
+(no Supabase) and app codes cannot be emailed. A demo login replaces both
+(`app/auth/demo_login.py`, `app/auth/demo_guard.py`). **Never enable it on
+Kvarteret's real deployment.** It is off unless both are set:
+
+| Variable | Value |
+| --- | --- |
+| `DEMO_LOGIN_ENABLED` | `true` |
+| `DEMO_ACCESS_CODE` | at least 12 characters; the app refuses to start with a shorter or missing code |
+
+When it is on:
+
+- **Startup check.** At startup (`app_lifespan`) the app counts volunteers
+  (`volunteer_records`) and user accounts (`user_accounts`) whose email is
+  missing or does not end in `@example.dev`, and refuses to start if there is
+  even one. The same check runs again before the first demo login in each
+  process, so a runtime that skips the startup hook still never accepts the
+  code against a database with real people.
+- **App login.** For an email ending in `@example.dev`, "send code" sends
+  nothing and the code is `DEMO_ACCESS_CODE`. The session is the volunteer's
+  own (real `person_id`, refresh token), so Skiftlista loads. A wrong code
+  falls through to the normal check and is refused; the normal attempt limits
+  apply. Any other email works exactly as before.
+- **Leader login.** The login page shows "Demo-leder": `DEMO_ACCESS_CODE` logs
+  in `demo.leder@example.dev` as Admin (`POST /login/demo`, CSRF and the normal
+  login rate limits, constant-time code check), then opens `/shifts`. The
+  account must exist and be Admin; `seed_demo.py` creates it. With demo login
+  off, `/login/demo` answers 404.
+- Every page shows a "Demo, falske data" banner.
+- Each demo login is logged as `auth.demo_login.succeeded` with the account
+  name before `@example.dev` (the log pipeline redacts whole emails) and the
+  kind (`app` or `leader`), never the code. A failed startup check logs
+  `auth.demo_login.refused`.
+
+Log in to the app with an email and a code: locally the code is saved under
+`.devdata/outbox/`; on the hosted demo use `DEMO_ACCESS_CODE`.
 Good volunteers to log in as:
 
 | Email | Why |
@@ -192,7 +231,8 @@ Good volunteers to log in as:
 | `demo.skiftleder@example.dev` | Stjerne skiftleder: skiftleder places |
 | `demo.samf@example.dev`, `demo.samf-b@example.dev` | Verv in Lydgruppen / Eksponeringsetaten only: samfunnettjeneste, sees places open for samf in Stjerne and Grøndahls |
 
-Leader side: log in to Personal as the dev admin and open `/shifts`. Halvtimen
+Leader side: locally, log in to Personal as the dev admin and open `/shifts`; on
+the hosted demo use "Demo-leder" on the login page. Halvtimen
 is switched on for the demo (it is not in the request list, but the "20+" block
 only shows when Halvtimen is visible in the app).
 

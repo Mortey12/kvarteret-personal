@@ -254,6 +254,24 @@
         "title": "Body_create_individual_access_admin_accounts_from_volunteer_post",
         "type": "object"
       },
+      "Body_demo_leader_login_login_demo_post": {
+        "properties": {
+          "access_code": {
+            "title": "Access Code",
+            "type": "string"
+          },
+          "next": {
+            "default": "/shifts",
+            "title": "Next",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_code"
+        ],
+        "title": "Body_demo_leader_login_login_demo_post",
+        "type": "object"
+      },
       "Body_feedback_submit_feedback_post": {
         "properties": {
           "category": {
@@ -8449,6 +8467,43 @@
           }
         },
         "summary": "Request App Login Code"
+      }
+    },
+    "/login/demo": {
+      "post": {
+        "description": "Hosted demo only (app/auth/demo_login.py): the demo leader, as Admin, with the demo code.",
+        "operationId": "demo_leader_login_login_demo_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_demo_leader_login_login_demo_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Leader Login"
       }
     },
     "/logout": {

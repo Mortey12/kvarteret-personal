@@ -17,6 +17,10 @@ PRODUCTION_DEFAULTS = {
 }
 
 
+# Demo login (app/auth/demo_login.py) refuses to start with a shorter code.
+DEMO_ACCESS_CODE_MIN_LENGTH = 12
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         # The infra profile resolver sets this guard for every managed
@@ -86,6 +90,9 @@ class Settings(BaseSettings):
     review_bypass_enabled: bool = Field(default=False)
     review_bypass_email: str | None = Field(default=None)
     review_bypass_token: str | None = Field(default=None)
+    # Hosted demo with fake data only (app/auth/demo_login.py). Never on for real data.
+    demo_login_enabled: bool = Field(default=False)
+    demo_access_code: str | None = Field(default=None, repr=False)
     # Admin agent chat (Azure OpenAI "skonk" deployment).
     azure_openai_endpoint: str | None = Field(default=None)
     azure_openai_api_key: str | None = Field(default=None, repr=False)
@@ -145,6 +152,7 @@ class Settings(BaseSettings):
         "spotify_refresh_token",
         "review_bypass_email",
         "review_bypass_token",
+        "demo_access_code",
         "azure_openai_endpoint",
         "azure_openai_api_key",
         "azure_openai_agent_deployment",
@@ -165,7 +173,7 @@ class Settings(BaseSettings):
             return stripped or None if value is not None else value
         return value
 
-    @field_validator("review_bypass_enabled", mode="before")
+    @field_validator("review_bypass_enabled", "demo_login_enabled", mode="before")
     @classmethod
     def strip_boolean_settings(cls, value):
         if isinstance(value, str):
@@ -211,6 +219,15 @@ def validate_production_secrets(settings: Settings) -> Settings:
         settings.dev_admin_email or settings.dev_admin_password
     ):
         msg = "DEV_ADMIN_EMAIL/DEV_ADMIN_PASSWORD are development-only settings."
+        raise ValueError(msg)
+    if settings.demo_login_enabled and (
+        not settings.demo_access_code
+        or len(settings.demo_access_code) < DEMO_ACCESS_CODE_MIN_LENGTH
+    ):
+        msg = (
+            "DEMO_LOGIN_ENABLED needs DEMO_ACCESS_CODE of at least "
+            f"{DEMO_ACCESS_CODE_MIN_LENGTH} characters."
+        )
         raise ValueError(msg)
     if settings.app_env == "production":
         if settings.app_secret_key == "change-me" or len(settings.app_secret_key) < 32:

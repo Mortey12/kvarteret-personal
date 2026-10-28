@@ -7,8 +7,10 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException, Request, status
 
 from app.auth.cookies import SessionCookieSigner
+from app.auth.demo_guard import DemoDatabaseGuard
 from app.auth.login_service import LoginService
 from app.auth.password_reset_service import PasswordResetService
+from app.auth.repository import DatabaseAuthRepository
 from app.db.rate_limit import RateLimiter
 from app.auth.models import AuthenticatedUser, WebSession
 from app.auth.roles import UserRole
@@ -114,6 +116,14 @@ def get_login_service(request: Request) -> LoginService:
 
 def get_password_reset_service(request: Request) -> PasswordResetService:
     return get_container(request).password_reset_service
+
+
+def get_auth_repository(request: Request) -> DatabaseAuthRepository:
+    return get_container(request).auth_repository
+
+
+def get_demo_guard(request: Request) -> DemoDatabaseGuard:
+    return get_container(request).demo_guard
 
 
 def get_rate_limiter(request: Request) -> RateLimiter:

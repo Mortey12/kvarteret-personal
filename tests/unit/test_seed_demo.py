@@ -9,6 +9,7 @@ from sqlalchemy import BigInteger, Integer, func, insert, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.metadata import public_metadata
+from app.domain.admin_accounts.tables import user_accounts
 from app.domain.courses.tables import course_completions, courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
@@ -35,6 +36,7 @@ from scripts.dev.seed_demo import (
 
 TABLES = [
     volunteer_records,
+    user_accounts,
     groups,
     assignment_roles,
     role_assignments,
@@ -254,6 +256,7 @@ async def _counts(db) -> dict[str, int]:
         "assignments": shift_assignments,
         "week_status": shift_week_status,
         "settings": shift_group_settings,
+        "user_accounts": user_accounts,
     }
     return {name: await db.scalar(select(func.count()).select_from(table)) for name, table in tables.items()}
 
@@ -335,7 +338,14 @@ async def test_it_adds_the_demo_data_and_is_safe_to_run_twice(session) -> None:
     assert settings["Halvtimen"][0] is True
     assert after_first["week_status"] >= 6  # this and next month for three groups
 
+    # The demo leader for /login/demo: one Admin account, not a volunteer.
+    assert first["demo_leader"] == 1
+    leader = (
+        await session.execute(select(user_accounts.c.email, user_accounts.c.role, user_accounts.c.volunteer_id))
+    ).one()
+    assert tuple(leader) == ("demo.leder@example.dev", "Admin", None)
+
     # Running it again changes nothing.
     again = await seed_into(session, now=now)
-    assert again == {"people": 0, "availability_rows": 0, "wishes": 0, "status_marks": 0}
+    assert again == {"people": 0, "availability_rows": 0, "wishes": 0, "status_marks": 0, "demo_leader": 0}
     assert await _counts(session) == after_first

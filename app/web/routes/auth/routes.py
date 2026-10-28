@@ -4,7 +4,7 @@ from app.observability import get_logger
 
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
-from fastapi import APIRouter, Depends, Form, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature
 from pydantic import ValidationError
@@ -12,6 +12,13 @@ from pydantic import ValidationError
 from app.auth.roles import UserRole
 from app.auth.models import AuthenticatedUser
 from app.auth.cookies import SessionCookieSigner
+from app.auth.demo_login import (
+    DEMO_LEADER_EMAIL,
+    DemoLoginRefused,
+    demo_code_matches,
+    demo_login_enabled,
+    log_demo_login,
+)
 from app.auth.login_service import LoginError, LoginService
 from app.auth.supabase_auth import RecoveryTokenError
 from app.auth.password_reset_service import (
@@ -22,7 +29,9 @@ from app.auth.password_reset_service import (
 )
 from app.db.rate_limit import RateLimiter, RateLimitExceeded
 from app.dependencies import (
+    get_auth_repository,
     get_current_user,
+    get_demo_guard,
     get_login_service,
     get_mobile_card_april_state_service,
     get_mobile_card_service,
@@ -114,6 +123,47 @@ async def app_login(
         username=account.username, email=account.email, display_name=account.display_name, role=account.role),
         action='auth.app_login', subject_type='admin_account', subject_id=account.user_account_id)
     return response
+@router.post('/login/demo')
+async def demo_leader_login(
+    request: Request, access_code: str = Form(...), next: str = Form(default='/shifts'),
+    settings=Depends(get_settings), rate_limiter: RateLimiter = Depends(get_rate_limiter),
+    demo_guard=Depends(get_demo_guard), auth_repository=Depends(get_auth_repository),
+    session_store=Depends(get_session_store),
+    session_cookie_signer: SessionCookieSigner = Depends(get_session_cookie_signer),
+):
+    """Hosted demo only (app/auth/demo_login.py): the demo leader, as Admin, with the demo code."""
+    if not demo_login_enabled(settings):
+        raise HTTPException(status_code=404)
+    client_ip = client_ip_from_request(request)
+    throttle_keys = [f"login:account:{DEMO_LEADER_EMAIL}"] + ([f"login:ip:{client_ip}"] if client_ip else [])
+    try:
+        for key in throttle_keys:
+            await rate_limiter.hit(key, limit=settings.login_attempt_limit,
+                                   window_seconds=settings.login_attempt_window_seconds)
+    except RateLimitExceeded:
+        return _app_login_response(request, error='For mange forsøk. Prøv igjen senere.', status_code=429, next_path=next)
+    if not demo_code_matches(settings, access_code):
+        return _app_login_response(request, error='Feil demokode.', status_code=401, next_path=next)
+    try:
+        await demo_guard.ensure_only_fake_people()
+    except DemoLoginRefused:
+        return _app_login_response(request, error='Demo-innlogging er stengt.', status_code=503, next_path=next)
+    account = await auth_repository.get_user_account_by_identifier(DEMO_LEADER_EMAIL)
+    if account is None or account.email.strip().lower() != DEMO_LEADER_EMAIL or account.role != UserRole.ADMIN:
+        return _app_login_response(request, error='Demo-lederen finnes ikke. Kjør scripts/dev/seed_demo.py.',
+                                   status_code=503, next_path=next)
+    session = await session_store.create_session(auth_user_id=account.auth_user_id, user_account_id=account.id,
+        ip_address=client_ip, user_agent=request.headers.get('user-agent'))
+    response = RedirectResponse(_safe_login_redirect(next), status_code=303)
+    _set_session_cookie(response, request=request, settings=settings, session_cookie_signer=session_cookie_signer, session_id=session.session_id)
+    log_demo_login(account.email, kind='leader')
+    log_admin_activity(request=request, user=AuthenticatedUser(
+        auth_user_id=account.auth_user_id, user_account_id=account.id, username=account.username,
+        email=account.email, display_name=account.display_name, role=account.role),
+        action='auth.demo_login', subject_type='admin_account', subject_id=account.id)
+    return response
+
+
 _APRIL_TOGGLE_EMAIL = "it.leder@kvarteret.no"
 logger = get_logger(__name__)
 _ORAKEL_ORIGIN = "https://orakel.samfunnetibergen.no"

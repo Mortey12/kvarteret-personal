@@ -83,6 +83,11 @@
     </script>
   </head>
   <body class="min-h-screen bg-kvarteret-background text-kvarteret-ink" hx-boost:inherited="true" hx-swap:inherited="innerMorph">
+    {% if demo_login_on() %}
+      <div class="border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-900" data-demo-banner role="status">
+        Demo, falske data. Ingen ekte personer.
+      </div>
+    {% endif %}
     {% set header_logo = asset_url('images/internbevis-header.png') %}
     {% set rendered_content %}
       {% block page_content %}{% endblock %}

@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 
+from app.auth.demo_login import demo_login_enabled
 from app.web.i18n import get_template_gettext, get_template_ngettext
 
 
@@ -41,6 +42,13 @@ def asset_url(context, path: str) -> str:
     return f"{url}?v={version}" if version else url
 
 
+@pass_context
+def demo_login_on(context) -> bool:
+    """True on a hosted demo with demo login (fake data only): shows the banner."""
+    container = getattr(context["request"].app.state, "container", None)
+    return container is not None and demo_login_enabled(container.settings)
+
+
 templates = Jinja2Templates(directory="app/templates")
 templates.env.add_extension("jinja2.ext.i18n")
 templates.env.install_gettext_callables(
@@ -50,3 +58,4 @@ templates.env.install_gettext_callables(
 )
 templates.env.globals["format_datetime_oslo"] = format_datetime_oslo
 templates.env.globals["asset_url"] = asset_url
+templates.env.globals["demo_login_on"] = demo_login_on

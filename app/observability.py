@@ -84,6 +84,9 @@ _COMMON_FIELDS = frozenset(
 _EVENT_FIELDS: dict[str, frozenset[str]] = {
     "auth.login.failed": frozenset({"reason"}),
     "auth.login.succeeded": frozenset({"role"}),
+    # demo_account is the part before @example.dev; demo emails are fake.
+    "auth.demo_login.succeeded": frozenset({"demo_account", "login_kind"}),
+    "auth.demo_login.refused": frozenset({"reason"}),
     "volunteer.prospect.auth.rejected": frozenset({"reason"}),
     "http.validation.failed": frozenset(
         {"validation_fields", "validation_codes", "validation_issue_count"}
@@ -221,6 +224,7 @@ for _diagnostic_event in MOBILE_DIAGNOSTIC_EVENTS.values():
 DOMAIN_OUTCOME_EVENTS = frozenset(
     {
         "auth.login.succeeded",
+        "auth.demo_login.succeeded",
         "volunteer.lifecycle",
         "admin.activity",
         "email.delivery",

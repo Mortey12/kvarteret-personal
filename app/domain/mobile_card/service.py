@@ -8,6 +8,13 @@ from hashlib import sha256
 from secrets import choice, token_urlsafe
 from typing import Any, Protocol
 
+from app.auth.demo_login import (
+    DemoLoginRefused,
+    demo_code_matches,
+    demo_login_enabled,
+    is_demo_email,
+    log_demo_login,
+)
 from app.config import Settings
 from app.db.rate_limit import RateLimiter, RateLimitExceeded
 from app.db.session import commit_request_session
@@ -71,6 +78,10 @@ class TrialApplicantProviderProtocol(Protocol):
     ) -> Any | None: ...
 
     async def get_approved_volunteer_id(self, application_id: int) -> int | None: ...
+
+
+class DemoDatabaseGuardProtocol(Protocol):
+    async def ensure_only_fake_people(self) -> None: ...
 
 
 _LEGACY_PENGUIN_WORD_PREFIXES = [
@@ -146,6 +157,7 @@ class MobileCardService:
         april_state_service: MobileCardAprilStateService | None = None,
         email_template_renderer: MobileCardEmailTemplateRendererProtocol | None = None,
         trial_applicant_provider: TrialApplicantProviderProtocol | None = None,
+        demo_guard: DemoDatabaseGuardProtocol | None = None,
     ) -> None:
         self.settings = settings
         self.repository = repository
@@ -154,6 +166,7 @@ class MobileCardService:
         self.media_token_service = media_token_service
         self.april_state_service = april_state_service
         self.trial_applicant_provider = trial_applicant_provider
+        self.demo_guard = demo_guard
         self.email_template_renderer = (
             email_template_renderer or MobileCardEmailTemplateRenderer()
         )
@@ -164,6 +177,9 @@ class MobileCardService:
     ) -> None:
         normalized_email = email.strip().lower()
         if self._is_review_request(normalized_email, None):
+            return None
+        if self._is_demo_email(normalized_email):
+            # The demo code is the code: nothing is stored or sent.
             return None
         request_keys = _build_rate_limit_keys(normalized_email, source_key)
         await self._hit_rate_limits(
@@ -267,6 +283,14 @@ class MobileCardService:
             window_seconds=self.settings.mobile_card_session_attempt_window_seconds,
             message="Too many access-code attempts. Try again later.",
         )
+        if self._is_demo_email(normalized_email) and demo_code_matches(
+            self.settings, normalized_access_code
+        ):
+            return await self._create_demo_session(
+                normalized_email,
+                attempt_keys,
+                include_role_history=include_role_history,
+            )
 
         trial_applicant = None
         if self.trial_applicant_provider is not None:
@@ -334,6 +358,38 @@ class MobileCardService:
             },
             after_commit=True,
         )
+        return MobileCardSession(
+            session_token=token, card=card, refresh_token=refresh_token
+        )
+
+    async def _create_demo_session(
+        self,
+        email: str,
+        attempt_keys: tuple[str, ...],
+        *,
+        include_role_history: bool,
+    ) -> MobileCardSession:
+        """The demo volunteer's own session, as after an emailed code."""
+        assert self.demo_guard is not None
+        try:
+            await self.demo_guard.ensure_only_fake_people()
+        except DemoLoginRefused:
+            raise MobileCardInvalidAccessCodeError("Invalid access code.") from None
+        volunteers = await self.repository.find_volunteers_by_email(email)
+        if len(volunteers) != 1:
+            raise MobileCardInvalidAccessCodeError("Invalid access code.")
+        volunteer_id = volunteers[0]["id"]
+        await self.rate_limiter.clear(
+            *(f"mobile-card:attempt:{key}" for key in attempt_keys)
+        )
+        token = self.sessions.build_token({"person_id": volunteer_id})
+        card = await self._build_card(
+            volunteer_id, include_role_history=include_role_history
+        )
+        refresh_token = await self._issue_refresh_token(
+            volunteer_id=volunteer_id, application_id=None
+        )
+        log_demo_login(email, kind="app")
         return MobileCardSession(
             session_token=token, card=card, refresh_token=refresh_token
         )
@@ -560,6 +616,14 @@ class MobileCardService:
             return False
         return email == self.settings.review_bypass_email.lower() and (
             access_code is None or access_code == self.settings.review_bypass_token
+        )
+
+    def _is_demo_email(self, email: str) -> bool:
+        # No guard means no startup check was wired, so demo login stays off.
+        return (
+            self.demo_guard is not None
+            and demo_login_enabled(self.settings)
+            and is_demo_email(email)
         )
 
     def _build_review_card(

@@ -23,6 +23,18 @@
         </div>
       {% endif %}
 
+      {% if demo_login_on() %}
+      <section class="mt-8 border-b border-stone-300 pb-8">
+        <h2 class="text-2xl">Demo-leder</h2>
+        <p class="mt-2 text-sm">Logg inn som demo.leder@example.dev (Admin) med demokoden.</p>
+        <form action="/login/demo" class="mt-4 grid gap-4" hx-boost="false" method="post">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <input type="hidden" name="next" value="{{ next_path if next_path and next_path != '/' else '/shifts' }}">
+          <label class="grid gap-1"><span>Demokode</span><input class="app-input" name="access_code" type="password" autocomplete="off" required></label>
+          <button class="app-button" type="submit">Logg inn som demo-leder</button>
+        </form>
+      </section>
+      {% endif %}
       <section class="mt-8 border-b border-stone-300 pb-8">
         <h2 class="text-2xl">Logg inn med app-bruker</h2>
         <p class="mt-2 text-sm">Bruk din app-innlogging. Vi faser snart ut egne admin kontoer fra personaldatabasen.</p>
