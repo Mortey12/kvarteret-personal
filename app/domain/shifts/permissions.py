@@ -58,17 +58,44 @@ def with_subgroups(
     return frozenset(result)
 
 
+def ancestor_chain(group_id: int, parent_by_group: Mapping[int, int | None]) -> list[int]:
+    """The group itself, then its parent and so on up to the root."""
+    chain: list[int] = []
+    current: int | None = group_id
+    while current is not None and current not in chain and current in parent_by_group:
+        chain.append(current)
+        current = parent_by_group[current]
+    return chain
+
+
 def participating_groups(
     direct_group_ids: Iterable[int], parent_by_group: Mapping[int, int | None]
 ) -> frozenset[int]:
     """Groups in Skiftlista: those with settings or templates, and their ancestors."""
     result: set[int] = set()
     for group_id in direct_group_ids:
-        current: int | None = group_id
-        while current is not None and current not in result and current in parent_by_group:
-            result.add(current)
-            current = parent_by_group[current]
+        result.update(ancestor_chain(group_id, parent_by_group))
     return frozenset(result)
+
+
+def tree_order(
+    parent_by_group: Mapping[int, int | None], names: Mapping[int, str]
+) -> list[int]:
+    """Every group, each followed by its subgroups; siblings by name."""
+    children: dict[int | None, list[int]] = {}
+    for group_id, parent in parent_by_group.items():
+        key = parent if parent in parent_by_group else None
+        children.setdefault(key, []).append(group_id)
+    ordered: list[int] = []
+
+    def visit(group_id: int) -> None:
+        ordered.append(group_id)
+        for child in sorted(children.get(group_id, []), key=lambda g: names.get(g, "").casefold()):
+            visit(child)
+
+    for root in sorted(children.get(None, []), key=lambda g: names.get(g, "").casefold()):
+        visit(root)
+    return ordered
 
 
 def pool_group_ids(

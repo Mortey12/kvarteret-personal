@@ -39,37 +39,52 @@
         </label>
         <div><button class="app-button" type="submit">Lagre</button></div>
       </form>
-      <section class="app-panel grid gap-3" data-closed-periods data-group-id="{{ item.group_id }}" aria-label="Stengte perioder for {{ item.name }}">
-        <h3 class="text-lg font-medium text-stone-900">Stengte perioder: {{ item.name }}</h3>
-        <p class="text-xs text-stone-600">Ingen skift lages i disse periodene når du lager skift for semesteret. Begge datoene er med.</p>
-        <ul class="grid gap-2">
-          {% for period in closed_periods.get(item.group_id, []) %}
-            <li class="flex flex-wrap items-center justify-between gap-2 border-2 border-stone-300 bg-white px-3 py-2 text-sm">
-              <span><strong>{{ period.label }}</strong> · {{ period.starts_on.strftime('%d.%m.%Y') }}–{{ period.ends_on.strftime('%d.%m.%Y') }}</span>
-              <form action="/shifts/closed-periods/{{ period.period_id }}/delete" method="post">
-                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
-                <button class="app-button-secondary" type="submit">Fjern</button>
-              </form>
-            </li>
-          {% else %}
-            <li class="text-sm text-stone-600">Ingen stengte perioder.</li>
-          {% endfor %}
-        </ul>
-        <form action="/shifts/settings/{{ item.group_id }}/closed-periods" class="flex flex-wrap items-end gap-3" method="post">
-          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
-          <label class="grid gap-1"><span class="text-sm text-stone-500">Navn</span><input class="app-input" maxlength="100" name="label" placeholder="Juleferie" type="text"></label>
-          <label class="grid gap-1"><span class="text-sm text-stone-500">Fra og med</span><input class="app-input" name="starts_on" required type="date"></label>
-          <label class="grid gap-1"><span class="text-sm text-stone-500">Til og med</span><input class="app-input" name="ends_on" required type="date"></label>
-          <button class="app-button" type="submit">Legg til</button>
-        </form>
-      </section>
-    {% else %}
+    {% endfor %}
+
+    {% if not group_settings and not closed_periods %}
       <section class="app-panel">
         <div class="py-10 text-center text-sm text-stone-600">
           {% if no_groups %}Du er ikke gruppeadmin for noen grupper med skift. Be en administrator om tilgang.{% else %}Ingen grupper å vise.{% endif %}
         </div>
       </section>
-    {% endfor %}
+    {% endif %}
+
+    {% if closed_periods %}
+      <h2 class="text-2xl font-medium tracking-tight text-stone-900">Stengte perioder</h2>
+      <p class="text-sm text-stone-700">Ingen skift lages i disse periodene når du lager skift for semesteret. Begge datoene er med. En stengt periode for en overordnet gruppe gjelder alle undergruppene.</p>
+      {% for section in closed_periods %}
+        <section class="app-panel grid gap-3" data-closed-periods data-group-id="{{ section.group_id }}" aria-label="Stengte perioder for {{ section.label }}">
+          <h3 class="text-lg font-medium text-stone-900">{{ section.label }}</h3>
+          <ul class="grid gap-2">
+            {% for period in section.inherited %}
+              <li class="flex flex-wrap items-center gap-2 border-2 border-stone-300 bg-stone-50 px-3 py-2 text-sm" data-inherited-period>
+                <span><strong>{{ period.label }}</strong> · {{ period.starts_on.strftime('%d.%m.%Y') }}–{{ period.ends_on.strftime('%d.%m.%Y') }}</span>
+                <span class="text-xs text-stone-500">Fra {{ period.group_name }}</span>
+              </li>
+            {% endfor %}
+            {% for period in section.own %}
+              <li class="flex flex-wrap items-center justify-between gap-2 border-2 border-stone-300 bg-white px-3 py-2 text-sm" data-own-period>
+                <span><strong>{{ period.label }}</strong> · {{ period.starts_on.strftime('%d.%m.%Y') }}–{{ period.ends_on.strftime('%d.%m.%Y') }}</span>
+                <form action="/shifts/closed-periods/{{ period.period_id }}/delete" method="post">
+                  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                  <button class="app-button-secondary" type="submit">Fjern</button>
+                </form>
+              </li>
+            {% endfor %}
+            {% if not section.own and not section.inherited %}
+              <li class="text-sm text-stone-600">Ingen stengte perioder.</li>
+            {% endif %}
+          </ul>
+          <form action="/shifts/settings/{{ section.group_id }}/closed-periods" class="flex flex-wrap items-end gap-3" method="post">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <label class="grid gap-1"><span class="text-sm text-stone-500">Navn</span><input class="app-input" maxlength="100" name="label" placeholder="Juleferie" type="text"></label>
+            <label class="grid gap-1"><span class="text-sm text-stone-500">Fra og med</span><input class="app-input" name="starts_on" required type="date"></label>
+            <label class="grid gap-1"><span class="text-sm text-stone-500">Til og med</span><input class="app-input" name="ends_on" required type="date"></label>
+            <button class="app-button" type="submit">Legg til</button>
+          </form>
+        </section>
+      {% endfor %}
+    {% endif %}
 
     {% if other_groups %}
       <section class="app-panel grid gap-3" data-other-groups>

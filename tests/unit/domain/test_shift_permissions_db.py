@@ -175,7 +175,7 @@ async def test_week_status_and_settings_are_upserted_in_the_database(session) ->
     service = ShiftsService(ShiftsRepository(), now=lambda: datetime(2026, 10, 28, 9, tzinfo=UTC))
     scope = await _scope(session, UserRole.GROUP_ADMIN, STJERNE)
     await service.set_week_status(
-        group_id=STJERNE, week=date(2026, 11, 4), status="allocating", whole_month=False, scope=scope
+        group_id=STJERNE, week=date(2026, 11, 4), status="open", whole_month=False, scope=scope
     )
     await service.set_week_status(
         group_id=STJERNE, week=date(2026, 11, 2), status="published", whole_month=True, scope=scope

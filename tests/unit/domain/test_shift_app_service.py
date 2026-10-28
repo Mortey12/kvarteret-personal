@@ -24,6 +24,7 @@ from app.domain.courses.tables import (
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.app_models import ClaimPlaceRequest
+from app.domain.shifts.app_rules import PERIOD_STATUSES
 from app.domain.shifts.app_repository import ShiftsAppRepository
 from app.domain.shifts.app_service import ShiftsAppService
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
@@ -436,6 +437,18 @@ async def test_wishes_list_weeks_with_shifts_up_to_the_end_of_the_semester(world
     assert [w.week_start for w in wishes.weeks] == [date(2026, 11, 2), date(2026, 11, 30), date(2026, 12, 28)]
     assert {w.status for w in wishes.weeks} == {"open"}
     assert all(w.group_id == STJERNE and w.group_name == "Stjerne" for w in wishes.weeks)
+
+
+async def test_allocating_week_reads_as_open_for_volunteers(world: World) -> None:
+    await world.session.execute(
+        insert(shift_week_status).values(group_id=STJERNE, week_start=date(2026, 11, 30), status="allocating")
+    )
+    wishes = await world.service.get_wishes(SANDER)
+    december = next(w for w in wishes.weeks if w.week_start == date(2026, 11, 30))
+    assert december.accepts_wishes
+    assert december.status_label == "Åpen for ønsker"
+    assert "Fordeles" not in december.status_label + december.note
+    assert december.note == PERIOD_STATUSES["open"][1]
 
 
 async def test_wishes_in_december_reach_into_january(world: World) -> None:

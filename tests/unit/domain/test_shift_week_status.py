@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.domain.shifts.week_status import mondays_in_month, unpublished_week_banner
+from app.domain.shifts.week_status import (
+    can_open_week,
+    leader_status,
+    mondays_in_month,
+    unpublished_week_banner,
+)
 
 
 def test_mondays_in_month() -> None:
@@ -27,5 +32,19 @@ def test_no_banner_when_published_too_far_ahead_or_current() -> None:
 
 
 def test_explicit_unpublished_row_gets_a_different_text() -> None:
+    banner = unpublished_week_banner(7, "S", date(2026, 11, 30), "open", date(2026, 11, 27))
+    assert banner is not None and "åpen for ønsker" in banner.text
+
+
+def test_legacy_allocating_row_reads_as_open_for_leaders() -> None:
     banner = unpublished_week_banner(7, "S", date(2026, 11, 30), "allocating", date(2026, 11, 27))
-    assert banner is not None and "fordeles nå" in banner.text
+    assert banner is not None and "åpen for ønsker" in banner.text and "fordeles" not in banner.text
+    assert leader_status("allocating") == "open"
+    assert leader_status("published") == "published"
+
+
+def test_only_later_weeks_can_be_opened() -> None:
+    today = date(2026, 11, 4)  # Wednesday of the week of 2 Nov
+    assert not can_open_week(date(2026, 10, 26), today)
+    assert not can_open_week(date(2026, 11, 2), today)
+    assert can_open_week(date(2026, 11, 9), today)

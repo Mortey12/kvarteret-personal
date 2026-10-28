@@ -28,7 +28,16 @@ from app.domain.shifts.tables import (
     shift_week_status,
     shifts,
 )
-from tests.support.shift_groups import GRONDAHLS, HALVTIMEN, KULTUR, STJERNE, VAKT
+from tests.support.shift_groups import (
+    GRONDAHLS,
+    HALVTIMEN,
+    KJOKKEN,
+    KULTUR,
+    PUBKJELLER,
+    SKJENKE,
+    STJERNE,
+    VAKT,
+)
 
 STJERNE_ONLY = GroupScope(frozenset({STJERNE}))
 FORM = {
@@ -48,6 +57,10 @@ FORM = {
 
 def _service() -> ShiftsSetupService:
     return ShiftsSetupService(ShiftsRepository())
+
+
+async def _sections(service: ShiftsSetupService, scope: GroupScope) -> dict:
+    return {s.group_id: s for s in await service.list_closed_periods(scope)}
 
 
 async def _count(db, table) -> int:
@@ -94,13 +107,13 @@ async def test_closed_periods_are_added_listed_and_removed(session) -> None:
     await service.add_closed_period(
         STJERNE, starts_on=date(2027, 4, 1), ends_on=date(2027, 4, 1), label="", scope=STJERNE_ONLY
     )
-    periods = (await service.list_closed_periods(STJERNE_ONLY))[STJERNE]
+    periods = (await _sections(service, STJERNE_ONLY))[STJERNE].own
     assert [(p.label, p.starts_on, p.ends_on) for p in periods] == [
         ("Juleferie", date(2026, 12, 19), date(2027, 1, 5)),
         ("Stengt", date(2027, 4, 1), date(2027, 4, 1)),
     ]
     await service.remove_closed_period(periods[0].period_id, scope=STJERNE_ONLY)
-    assert [p.label for p in (await service.list_closed_periods(STJERNE_ONLY))[STJERNE]] == ["Stengt"]
+    assert [p.label for p in (await _sections(service, STJERNE_ONLY))[STJERNE].own] == ["Stengt"]
 
 
 @pytest.mark.asyncio
@@ -122,13 +135,127 @@ async def test_closed_period_validation_and_scope(session) -> None:
     await service.add_closed_period(
         HALVTIMEN, starts_on=date(2026, 12, 19), ends_on=date(2026, 12, 20), label="Pause", scope=ALL_GROUPS
     )
-    other = (await service.list_closed_periods(ALL_GROUPS))[HALVTIMEN][0]
+    other = (await _sections(service, ALL_GROUPS))[HALVTIMEN].own[0]
     with pytest.raises(ShiftForbiddenError):
         await service.remove_closed_period(other.period_id, scope=STJERNE_ONLY)
     with pytest.raises(ShiftNotFoundError):
         await service.remove_closed_period(999, scope=ALL_GROUPS)
     # The leader only sees their own group's periods.
-    assert set(await service.list_closed_periods(STJERNE_ONLY)) == {STJERNE}
+    assert set(await _sections(service, STJERNE_ONLY)) == {STJERNE}
+
+
+# ----------------------------------------- listing, tree order, inherited periods
+
+# Skjenkegruppen -> Grøndahls -> Pubkjeller is the three-level chain; Stjerne, Kjøkken and
+# Halvtimen are Grøndahls' siblings. Skjenkegruppen has no settings row or templates itself.
+DECEMBER = (date(2026, 12, 1), date(2026, 12, 31))
+GRONDAHLS_ONLY = GroupScope(frozenset({GRONDAHLS}))
+PUBKJELLER_ONLY = GroupScope(frozenset({PUBKJELLER}))
+
+
+async def _close(service, group_id: int, start: date, end: date, label: str, scope=ALL_GROUPS):
+    await service.add_closed_period(
+        group_id, starts_on=start, ends_on=end, label=label, scope=scope
+    )
+
+
+@pytest.mark.asyncio
+async def test_templates_and_generate_list_only_groups_with_their_own_row_or_templates(session) -> None:
+    service = _service()
+    await service.add_group(PUBKJELLER, scope=ALL_GROUPS)
+    own = [g.name for g in await service.own_groups(ALL_GROUPS)]
+    # Tree order: Skjenkegruppen's subgroups by name, Pubkjeller right under Grøndahls; Vakt last.
+    assert own == ["Grøndahls", "Pubkjeller", "Halvtimen", "Kjøkken", "Stjerne", "Vakt", "Vakt nord"]
+    assert "Skjenkegruppen" not in own
+    # The ancestor still takes part for permissions and is listed with the wider list.
+    wide = [g.name for g in await service.permitted_groups(ALL_GROUPS)]
+    assert wide[0] == "Skjenkegruppen" and wide.index("Grøndahls") < wide.index("Pubkjeller")
+    # A leader who only has Skjenkegruppen's scope gets its subgroups, not the parent.
+    skjenke = GroupScope(frozenset({SKJENKE, STJERNE}))
+    assert [g.name for g in await service.own_groups(skjenke)] == ["Stjerne"]
+    with pytest.raises(ShiftPlacementError, match="allerede"):
+        await service.add_group(PUBKJELLER, scope=ALL_GROUPS)
+
+
+@pytest.mark.asyncio
+async def test_ancestor_is_only_in_closed_periods_labelled_hele(session) -> None:
+    service = _service()
+    await service.add_group(PUBKJELLER, scope=ALL_GROUPS)
+    sections = await service.list_closed_periods(ALL_GROUPS)
+    labels = {s.group_id: s.label for s in sections}
+    assert labels[SKJENKE] == "Hele Skjenkegruppen"
+    assert labels[GRONDAHLS] == "Hele Grøndahls"
+    assert labels[PUBKJELLER] == "Pubkjeller" and labels[STJERNE] == "Stjerne"
+    order = [s.group_id for s in sections]
+    assert order.index(SKJENKE) < order.index(GRONDAHLS) < order.index(PUBKJELLER)
+
+
+@pytest.mark.asyncio
+async def test_closed_periods_are_inherited_down_three_levels_read_only(session) -> None:
+    service = _service()
+    await service.add_group(PUBKJELLER, scope=ALL_GROUPS)
+    await _close(service, SKJENKE, date(2026, 12, 20), date(2027, 1, 3), "Jul")
+    await _close(service, GRONDAHLS, date(2026, 12, 10), date(2026, 12, 12), "Renhold")
+    await _close(service, PUBKJELLER, date(2026, 12, 15), date(2026, 12, 15), "Quiz")
+    sections = await _sections(service, ALL_GROUPS)
+    pub = sections[PUBKJELLER]
+    assert [(p.label, p.group_name) for p in pub.inherited] == [
+        ("Jul", "Skjenkegruppen"),
+        ("Renhold", "Grøndahls"),
+    ]
+    assert [p.label for p in pub.own] == ["Quiz"]
+    assert [p.label for p in sections[GRONDAHLS].inherited] == ["Jul"]
+    assert sections[SKJENKE].inherited == []
+    assert [p.label for p in sections[STJERNE].inherited] == ["Jul"]
+    assert [p.label for p in sections[HALVTIMEN].inherited] == ["Jul"]
+
+
+@pytest.mark.asyncio
+async def test_leader_of_one_bar_sees_but_cannot_edit_the_parents_periods(session) -> None:
+    service = _service()
+    await _close(service, SKJENKE, date(2026, 12, 20), date(2027, 1, 3), "Jul")
+    parent_period = (await _sections(service, ALL_GROUPS))[SKJENKE].own[0]
+    sections = await _sections(service, STJERNE_ONLY)
+    assert set(sections) == {STJERNE}  # the parent is not listed for this leader
+    assert [(p.label, p.group_name) for p in sections[STJERNE].inherited] == [("Jul", "Skjenkegruppen")]
+    with pytest.raises(ShiftForbiddenError, match="Skjenkegruppen"):
+        await _close(service, SKJENKE, date(2026, 12, 1), date(2026, 12, 2), "x", scope=STJERNE_ONLY)
+    with pytest.raises(ShiftForbiddenError):
+        await service.remove_closed_period(parent_period.period_id, scope=STJERNE_ONLY)
+    # Another bar's periods are not inherited either.
+    await _close(service, KJOKKEN, date(2026, 12, 1), date(2026, 12, 2), "Kjøkkenstopp")
+    assert [p.label for p in (await _sections(service, STJERNE_ONLY))[STJERNE].inherited] == ["Jul"]
+
+
+@pytest.mark.asyncio
+async def test_leader_of_the_parent_manages_its_periods(session) -> None:
+    service = _service()
+    scope = GroupScope(frozenset({SKJENKE, STJERNE, KJOKKEN, GRONDAHLS, HALVTIMEN}))
+    await _close(service, SKJENKE, date(2026, 12, 20), date(2027, 1, 3), "Jul", scope=scope)
+    section = (await _sections(service, scope))[SKJENKE]
+    assert [p.label for p in section.own] == ["Jul"]
+    await service.remove_closed_period(section.own[0].period_id, scope=scope)
+    assert (await _sections(service, scope))[SKJENKE].own == []
+
+
+@pytest.mark.asyncio
+async def test_inherited_closure_skips_generated_shifts_and_names_its_source(session) -> None:
+    service = _service()
+    await service.add_group(PUBKJELLER, scope=ALL_GROUPS)
+    await service.create_template(PUBKJELLER, {**FORM, "weekday": "0"}, scope=PUBKJELLER_ONLY)
+    await _close(service, SKJENKE, date(2026, 11, 9), date(2026, 11, 9), "Stengt for jul")
+    await _close(service, GRONDAHLS, date(2026, 11, 16), date(2026, 11, 16), "Renhold")
+    await _close(service, PUBKJELLER, date(2026, 11, 23), date(2026, 11, 23), "Quiz")
+    await _close(service, KJOKKEN, date(2026, 11, 2), date(2026, 11, 2), "Ikke relevant")
+    preview, message = await service.generate(PUBKJELLER, *NOVEMBER, scope=PUBKJELLER_ONLY)
+    assert [p.day for p in preview.to_create] == [date(2026, 11, 2), date(2026, 11, 30)]
+    assert [(c.shift.day, c.period.label, c.period.group_name, c.inherited) for c in preview.closed] == [
+        (date(2026, 11, 9), "Stengt for jul", "Skjenkegruppen", True),
+        (date(2026, 11, 16), "Renhold", "Grøndahls", True),
+        (date(2026, 11, 23), "Quiz", "Pubkjeller", False),
+    ]
+    assert await _count(session, shifts) == 2
+    assert "3 hoppet over" in message
 
 
 # ---------------------------------------------------------------- adding a group
@@ -287,9 +414,9 @@ async def test_generate_skips_closed_periods_inclusive_of_both_ends(session) -> 
     )
     preview, _ = await service.generate(STJERNE, *NOVEMBER, scope=STJERNE_ONLY)
     assert [p.day for p in preview.to_create] == [date(2026, 11, d) for d in (2, 23, 30)]
-    assert [(p.day, label) for p, label in preview.closed] == [
-        (date(2026, 11, 9), "Høstferie"),
-        (date(2026, 11, 16), "Høstferie"),
+    assert [(c.shift.day, c.period.label, c.inherited) for c in preview.closed] == [
+        (date(2026, 11, 9), "Høstferie", False),
+        (date(2026, 11, 16), "Høstferie", False),
     ]
     assert await _count(session, shifts) == 3
 

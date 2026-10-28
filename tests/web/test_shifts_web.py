@@ -16,6 +16,8 @@ from app.domain.shifts.models import (
     ShiftRecord,
     SlotRecord,
     ClosedPeriod,
+    ClosedPeriodSection,
+    ClosedShift,
     GenerationPreview,
     OtherGroup,
     PlannedShift,
@@ -42,6 +44,7 @@ class FakeShiftsService:
         self.scope = ALL_GROUPS
         self.forbidden = False
         self.banners: list[WeekBanner] = []
+        self.can_open = True
 
     async def manageable_scope(self, role, auth_user_id) -> GroupScope:
         self.calls.append(("scope", role))
@@ -115,7 +118,7 @@ class FakeShiftsService:
             days=group_into_days([record]),
             open_places=0,
             swap_requests=1,
-            statuses=[WeekStatusView(7, "Stjerne", "open", "Åpen for ønsker", False, False)],
+            statuses=[WeekStatusView(7, "Stjerne", "open", "Åpen for ønsker", False, False, self.can_open)],
             banners=self.banners,
             pool=[
                 PoolPerson(
@@ -177,11 +180,18 @@ class FakeSetupService:
         if self.shifts.forbidden:
             raise ShiftForbiddenError("Du har ikke tilgang til å endre skift for Grøndahls.")
 
-    async def permitted_groups(self, scope):
+    async def own_groups(self, scope):
         return [ShiftGroupOption(7, "Stjerne")]
 
     async def list_closed_periods(self, scope):
-        return {7: [ClosedPeriod(4, 7, date(2026, 12, 19), date(2027, 1, 5), "Juleferie")]}
+        return [
+            ClosedPeriodSection(
+                7,
+                "Stjerne",
+                own=[ClosedPeriod(4, 7, date(2026, 12, 19), date(2027, 1, 5), "Juleferie", "Stjerne")],
+                inherited=[ClosedPeriod(5, 1, date(2027, 4, 1), date(2027, 4, 5), "Påske", "Skjenkegruppen")],
+            )
+        ]
 
     async def list_other_groups(self, scope):
         return [OtherGroup(20, "Vakt")] if scope.is_all else []
@@ -231,7 +241,7 @@ class FakeSetupService:
     def _preview(self, group_id, date_from, date_to) -> GenerationPreview:
         start = datetime(2026, 11, 2, 10, 30, tzinfo=UTC)
         planned = PlannedShift(3, group_id, "Stjernesalen", "Dagskift", date(2026, 11, 2), start, start, True, [])
-        return GenerationPreview(group_id, "Stjerne", date_from, date_to, [planned], [planned], [(planned, "Juleferie")])
+        return GenerationPreview(group_id, "Stjerne", date_from, date_to, [planned], [planned], [ClosedShift(planned, ClosedPeriod(5, 1, date(2026, 12, 19), date(2027, 1, 5), "Juleferie", "Skjenkegruppen"), True)])
 
     async def preview_generation(self, group_id, date_from, date_to, *, scope):
         self._check(scope)
@@ -449,11 +459,12 @@ def test_week_status_buttons_post_explicit_status() -> None:
     page = client.get("/shifts?week=2026-11-04")
     prime_csrf(client, path="/shifts")
 
-    for label in ("Åpne for ønsker", "Fordeles nå", "Publiser uka", "Publiser måneden"):
+    for label in ("Åpne for ønsker", "Publiser uka", "Publiser måneden"):
         assert label in page.text
+    assert "Fordeles nå" not in page.text
     response = client.post(
         "/shifts/weeks/status",
-        data={"group_id": "7", "week": "2026-11-02", "status": "allocating", "view_group": "7"},
+        data={"group_id": "7", "week": "2026-11-02", "status": "open", "view_group": "7"},
         headers=csrf_headers(client),
         follow_redirects=False,
     )
@@ -466,9 +477,23 @@ def test_week_status_buttons_post_explicit_status() -> None:
 
     assert response.status_code == 303
     assert response.headers["location"].startswith("/shifts?week=2026-11-02&group=7&notice=")
-    assert ("week_status", 7, date(2026, 11, 2), "allocating", False) in service.calls
+    assert ("week_status", 7, date(2026, 11, 2), "open", False) in service.calls
     assert ("week_status", 7, date(2026, 11, 2), "published", True) in service.calls
     assert month.status_code == 303
+
+
+def test_open_for_wishes_button_is_disabled_for_the_current_week() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    enabled = client.get("/shifts?week=2026-11-04").text
+    service.can_open = False
+    disabled = client.get("/shifts?week=2026-11-04").text
+
+    def open_button(page: str) -> str:
+        form = page.split('name="status" value="open"')[1]
+        return form.split("</form>")[0]
+
+    assert "disabled" not in open_button(enabled)
+    assert "disabled" in open_button(disabled)
 
 
 def test_week_status_for_another_group_is_refused_and_bad_status_reports_an_error() -> None:
@@ -514,6 +539,8 @@ def test_settings_page_lists_closed_periods_and_other_groups_for_admin_only() ->
     admin, admin_service = _client(UserRole.ADMIN)
     page = admin.get("/shifts/settings").text
     assert "Juleferie" in page and "19.12.2026–05.01.2027" in page
+    assert "Påske" in page and "Fra Skjenkegruppen" in page
+    assert page.count("data-inherited-period") == 1
     assert "Andre grupper" in page and "Slå på Skiftlista for gruppen" in page
     assert 'action="/shifts/settings/20/enable"' in page
 
@@ -610,7 +637,7 @@ def test_generate_page_shows_the_preview_counts_and_confirm_creates() -> None:
     assert 'data-count="create"><strong>1</strong> skift blir laget' in page
     assert 'data-count="existing"><strong>1</strong> finnes fra før' in page
     assert 'data-count="closed"><strong>1</strong> hoppes over fordi gruppen er stengt' in page
-    assert "Juleferie" in page and "Lag 1 skift" in page
+    assert "Juleferie" in page and "fra Skjenkegruppen" in page and "Lag 1 skift" in page
 
     prime_csrf(client, path="/shifts")
     confirmed = client.post(

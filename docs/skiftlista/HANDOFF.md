@@ -39,7 +39,7 @@ the codebase again.
 | Tests | `tests/unit/domain/test_shift_planning.py`, `tests/unit/domain/test_shift_service.py`, `tests/web/test_shifts_web.py`, `tests/unit/shared/test_semester.py` |
 | App API (step 1) | `app/api/v1/mobile_shifts.py` (mounted at `/api/v1/mobile-card/shifts`), `app/domain/shifts/app_service.py`, `app_repository.py`, `app_rules.py`, `app_models.py`, migration `20261028_1200_shift_app_api.py` |
 | App API tests | `tests/unit/domain/test_shift_app_service.py` (real SQLite DB), `tests/unit/domain/test_shift_app_rules.py`, `tests/api/mobile_card/test_mobile_shifts_api.py` |
-| App client | `kvarteret-internbevis` branch `skiftlista/api-client`: `npm run api:generate:personal` writes `src/core/api/kvarteret-personal` (only the `mobile-shifts` tag) |
+| App client | `kvarteret-internbevis` branch `feat/skiftlista-mobile`: the app screens (step 2) live there; `npm run api:generate:personal` writes `src/core/api/kvarteret-personal` (only the `mobile-shifts` tag) |
 
 Also fixed: dev seed produced semester code `20253` (now
 `get_previous_semester_code` in `app/shared/semester.py`).
@@ -158,7 +158,12 @@ Apply the closed-periods table locally with `uv run alembic upgrade head`.
   `shift_week_status` row get their status from the date: the current week
   and earlier are `published`, every later week is `open` (takes wishes; its
   shifts cannot be claimed, so no first come, first served before
-  allocation). Explicit rows (`open`, `allocating`, `published`) always win.
+  allocation). Explicit rows always win. Leaders only set `open` or
+  `published`: "Fordeles nå" is gone from the board, and an old
+  `allocating` row is shown to leaders as "Åpen for ønsker" (no data
+  migration; the app API still accepts and reports `allocating`, which takes
+  wishes like `open`). "Åpne for ønsker" is refused, in the UI and on the
+  server, for the current week and earlier (`can_open_week`).
   Wishes are unchanged: per shift plus weekday rules. `GET /wishes` lists
   weeks that have shifts, from today through the end of the semester (spring
   Jan–Jun, autumn Jul–Dec) and at least through next month, so January takes
@@ -179,7 +184,8 @@ Apply the closed-periods table locally with `uv run alembic upgrade head`.
   free-text verv. A bar's leader or personalansvarlig is Gruppeadmin of that
   bar's group, and the Skjenke leader is Gruppeadmin of the Skjenke group.
   All logins are individual people, with no shared role accounts.
-- Privacy of who is on a shift (built in step 4c): what other volunteers
+- Privacy of who is on a shift (decided, **not built yet**, planned for step
+  4c): what other volunteers
   see is a per-group setting (`none`, `roles`, `first_names`, `full_names`),
   default `first_names`. A member can hide their own name from other
   volunteers (shown as role only); the group setting is the ceiling. Leaders
@@ -196,7 +202,12 @@ Apply the closed-periods table locally with `uv run alembic upgrade head`.
 - Skiftlista will expand to other groups (for example Vakt), so nothing may
   depend on the Skjenke group's slug. A group takes part when it has a
   `shift_group_settings` row or shift templates, or has a descendant that
-  does; only an Admin adds a group (`/shifts/settings`, "Andre grupper").
+  does (the ancestor rule is for permissions, scope and the pool only:
+  `/shifts/templates`, `/shifts/generate` and the settings cards list just
+  groups with their own row or templates, in tree order); only an Admin adds
+  a group (`/shifts/settings`, "Andre grupper"). Verv decides which places a
+  person is eligible for; leader rights are explicit Admin assignments and
+  never derived from verv.
 - Build order: 4b, then 4c (privacy settings), then 4d (edit one shift or a
   whole series on the board), then 5 onward.
 - Samfunnettjeneste is not a role; it is done by people in many groups.
@@ -215,7 +226,8 @@ where Stjerne is switched on (also for samfunnettjeneste) with course dates.
 Known gaps, deliberately left to later steps:
 
 - **Publishing a week**: on the board (`/shifts`), each group has a status
-  panel for the displayed week: "Åpne for ønsker", "Fordeles nå", "Publiser
+  panel for the displayed week: "Åpne for ønsker" (disabled for the
+  current and past weeks), "Publiser
   uka" and "Publiser måneden" (explicit published rows for every Monday of
   that calendar month). Shifts leaders put people on in an unpublished
   (future) week are drafts and do not show in the app's Mine until the week
@@ -240,6 +252,14 @@ Known gaps, deliberately left to later steps:
   shifts that exist, and there is no unique constraint on (template, start),
   so two runs at the same moment could both create a shift (step 4d may add
   one). Closed periods only affect the generator, not shifts that exist.
+  They inherit down the group tree: the generator skips a day when the group
+  or any ancestor has a period on it, and the preview names the period and the
+  group it came from. On `/shifts/settings` an ancestor such as Skjenkegruppen
+  appears only in the closed-periods section ("Hele Skjenkegruppen"), where a
+  leader whose scope covers it can add and remove periods; each child lists
+  inherited periods read-only ("Fra …"). A leader scoped to one bar cannot
+  edit the parent's periods. No schema change: `shift_closed_periods.group_id`
+  was enough.
 - **Course names**: the app looks for a course named `Brannkurs` or
   `Brannvernkurs`, and `Barkurs` (`COURSE_RULES` in `app_rules.py`). A course
   that does not exist is not checked. Ask etjenesten whether `Skjenkekurs` is
@@ -256,12 +276,12 @@ Known gaps, deliberately left to later steps:
 ## Next steps, in order
 
 1. ~~API for the app~~ (done, see above).
-2. **App screens in kvarteret-internbevis** (`src/features/shifts/`,
-   feature-first MVVM-lite, zod schemas): tabs Ledige / Mine / Ønsker,
-   detail with requirements, course sign-up + claim in one step, behind a
-   server-side per-group switch. Copy the flows from the prototype. Use the
-   generated client (branch `skiftlista/api-client`); `GET /config` decides
-   tabs and labels.
+2. ~~App screens in kvarteret-internbevis~~ (done). They live in
+   `src/features/shifts/` on the `kvarteret-internbevis` branch
+   `feat/skiftlista-mobile` (feature-first MVVM-lite; zod is not used): tabs
+   Ledige / Mine / Ønsker, detail with requirements, course sign-up + claim
+   in one step, behind a server-side per-group switch. They use the
+   generated client; `GET /config` decides tabs and labels.
 3. **Group-scoped permissions**: done, except the HS samfunnettjeneste role
    and the maintenance role. Admin manages every group. Gruppeadmin manages
    the groups in their group-admin assignment (`group_admin_memberships`)
@@ -295,14 +315,25 @@ Known gaps, deliberately left to later steps:
    templates and their places. `/shifts/generate` previews and creates a
    semester of shifts (`generator.py` pure rules, `setup_service.py`).
    Code: `template_input.py` validates the template form.
+   Follow-up (done, same step): removed "Fordeles nå" from the leader UI,
+   current-week guard on "Åpne for ønsker", closed periods inherited down the
+   tree, templates and generate list only groups with their own settings row
+   or templates, in tree order. Step 4b status: done. Next is 4c.
 4c. **Privacy settings** (see decisions): per-group visibility of who is on
    a shift, and a member's own hide setting.
 4d. **Edit one shift or a whole series on the board** (time, staffing, note,
    closed, opplæring mode). The per-group app switches and meeting point are
-   done (step 4a).
+   done (step 4a). Also in 4d:
+   - A unique index on (template, start time), so two generator runs cannot
+     both create the same shift.
+   - A daily top-up job that generates the next 12 weeks with the same rules
+     as the "Lag skift" button (templates, closed periods, existing shifts).
+   - What happens to shifts that already exist when a closed period is added
+     later: offer to remove the empty ones, warn about the ones with people,
+     and never remove a shift that has people on it.
 5. **Wishes and weekly allocation**: port `suggest()` and
    `fordelingWarnings()` from the prototype's `logic.js`; set
-   `shift_week_status` (open → allocating → published) per week, with a
+   `shift_week_status` (open → published for leaders; `allocating` is legacy) per week, with a
    "Publiser måneden" shortcut that publishes all weeks of a month, and the
    unpublished-week warning described under known gaps. Wishes are already
    stored by the app.
@@ -320,3 +351,10 @@ Known gaps, deliberately left to later steps:
 - Real data in Personal: is Stjerne etc. already a subgroup of
   Skjenkegruppen? Verv Skiftleder/Opplæring/Kokk set per person? Templates.
 - Test with a few Stjerne people, then App Store / Play review.
+- Ask etjenesten how Personal is hosted and billed. It affects polling from
+  the app, the daily top-up job (4d) and the `/open` endpoint, which
+  evaluates 92 days per call.
+- Kvarteret's privacy person must review the data model before "may not work
+  together" pairs are built.
+- Stjerne has no weekend shifts, so check that templates and the generator
+  match that when the first templates are entered.

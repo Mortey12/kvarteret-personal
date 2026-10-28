@@ -31,15 +31,14 @@ WISH_ANSWERS: dict[str, str] = {
 # effective_week_status).
 STATUS_OPEN = "open"
 STATUS_PUBLISHED = "published"
+_OPEN_TEXT = (
+    "Åpen for ønsker",
+    "Lederen fordeler skiftene og publiserer dem uke for uke. Trykk på et skift for å si vil, kan eller nei.",
+)
 PERIOD_STATUSES: dict[str, tuple[str, str]] = {
-    "open": (
-        "Åpen for ønsker",
-        "Lederen fordeler skiftene og publiserer dem uke for uke. Trykk på et skift for å si vil, kan eller nei.",
-    ),
-    "allocating": (
-        "Fordeles nå",
-        "Lederen holder på med fordelingen. Du kan justere ønskene til uka er publisert.",
-    ),
+    "open": _OPEN_TEXT,
+    # Old rows only: leaders can no longer set it, and nobody sees "Fordeles nå".
+    "allocating": _OPEN_TEXT,
     STATUS_PUBLISHED: ("Fordelt", "Uka er publisert. Skiftene dine ligger under Mine."),
 }
 WISHES_ACCEPTED = frozenset({"open", "allocating"})

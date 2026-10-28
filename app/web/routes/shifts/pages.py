@@ -82,7 +82,7 @@ async def shift_settings(
     setup_service: ShiftsSetupService = Depends(get_shifts_setup_service),
 ):
     settings = [] if scope.is_empty else await shifts_service.list_group_settings(scope)
-    closed_periods = await setup_service.list_closed_periods(scope)
+    closed_periods = [] if scope.is_empty else await setup_service.list_closed_periods(scope)
     other_groups = await setup_service.list_other_groups(scope)
     return templates.TemplateResponse(
         request,
@@ -110,7 +110,7 @@ async def shift_templates_page(
     scope: GroupScope = Depends(get_shift_scope),
     setup_service: ShiftsSetupService = Depends(get_shifts_setup_service),
 ):
-    groups = [] if scope.is_empty else await setup_service.permitted_groups(scope)
+    groups = [] if scope.is_empty else await setup_service.own_groups(scope)
     by_group = {group.group_id: [] for group in groups}
     for template in await setup_service.list_templates(scope):
         by_group[template.group_id].append(template)
@@ -152,7 +152,7 @@ async def shift_generate_page(
     scope: GroupScope = Depends(get_shift_scope),
     setup_service: ShiftsSetupService = Depends(get_shifts_setup_service),
 ):
-    groups = [] if scope.is_empty else await setup_service.permitted_groups(scope)
+    groups = [] if scope.is_empty else await setup_service.own_groups(scope)
     today = datetime.now(OSLO).date()
     start = _parse_date(date_from, today)
     end = _parse_date(date_to, get_semester_end_date(get_current_semester_code()))

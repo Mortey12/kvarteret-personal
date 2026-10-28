@@ -65,14 +65,14 @@
             </div>
             {% if item.is_past %}<p class="text-xs text-amber-800">Uka er allerede over. Du kan fortsatt endre status.</p>{% endif %}
             <div class="flex flex-wrap gap-2">
-              {% for form_status, form_label, primary in [('open', 'Åpne for ønsker', false), ('allocating', 'Fordeles nå', false), ('published', 'Publiser uka', true)] %}
+              {% for form_status, form_label, primary in [('open', 'Åpne for ønsker', false), ('published', 'Publiser uka', true)] %}
                 <form action="/shifts/weeks/status" method="post">
                   <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                   <input type="hidden" name="group_id" value="{{ item.group_id }}">
                   <input type="hidden" name="week" value="{{ plan.week_start.isoformat() }}">
                   <input type="hidden" name="status" value="{{ form_status }}">
                   {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
-                  <button class="{{ 'app-button' if primary else 'app-button-secondary' }}" type="submit" {% if item.status == form_status and item.explicit %}disabled{% endif %}>{{ form_label }}</button>
+                  <button class="{{ 'app-button' if primary else 'app-button-secondary' }}" type="submit" {% if (item.status == form_status and item.explicit) or (form_status == 'open' and not item.can_open) %}disabled{% endif %}{% if form_status == 'open' and not item.can_open %} title="Bare kommende uker kan åpnes for ønsker."{% endif %}>{{ form_label }}</button>
                 </form>
               {% endfor %}
               <form action="/shifts/weeks/status" method="post">

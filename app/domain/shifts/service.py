@@ -51,7 +51,9 @@ from app.domain.shifts.repository import ShiftsRepository
 from app.domain.shifts.week_status import (
     BANNER_DAYS,
     SETTABLE_STATUSES,
+    can_open_week,
     is_past_week,
+    leader_status,
     mondays_in_month,
     unpublished_week_banner,
 )
@@ -196,7 +198,7 @@ class ShiftsService:
         statuses = []
         for option in shown:
             row = stored.get((option.group_id, week_start))
-            status = effective_week_status(row, week_start, today)
+            status = leader_status(effective_week_status(row, week_start, today))
             statuses.append(
                 WeekStatusView(
                     group_id=option.group_id,
@@ -205,6 +207,7 @@ class ShiftsService:
                     label=PERIOD_STATUSES[status][0],
                     explicit=row is not None,
                     is_past=is_past_week(week_start, today),
+                    can_open=can_open_week(week_start, today),
                 )
             )
         banners: list[WeekBanner] = []
@@ -412,6 +415,11 @@ class ShiftsService:
     ) -> str:
         if status not in SETTABLE_STATUSES or (whole_month and status != "published"):
             raise ShiftPlacementError("Ugyldig status.")
+        today = self._now().astimezone(OSLO).date()
+        if status == "open" and not can_open_week(monday_of(week), today):
+            raise ShiftPlacementError(
+                "Uka er i gang eller over, og kan ikke åpnes for ønsker. Bare kommende uker kan åpnes."
+            )
         name = await self.repository.get_group_name(group_id)
         if name is None:
             raise ShiftNotFoundError("Gruppen finnes ikke.")
@@ -424,7 +432,6 @@ class ShiftsService:
             text = f"{MONTHS_NO[monday.month - 1].capitalize()} er publisert for {name} ({len(weeks)} uker)."
         else:
             text = f"Uke {monday.isocalendar().week} for {name}: {label}."
-        today = self._now().astimezone(OSLO).date()
         if any(is_past_week(w, today) for w in weeks):
             text += " Merk: uka er allerede over."
         return text
@@ -433,6 +440,7 @@ class ShiftsService:
         parents = await self.repository.list_group_parents()
         tree = await self._participating_group_ids(parents)
         roots = {gid for gid in tree if parents.get(gid) not in tree}
+        own = set(await self.repository.list_direct_participating_group_ids())
         rows = await self.repository.list_groups_with_settings()
         return [
             GroupSettingsView(
@@ -444,7 +452,7 @@ class ShiftsService:
                 meeting_point=row["meeting_point"] or "",
             )
             for row in rows
-            if row["id"] in tree and scope.allows(row["id"])
+            if row["id"] in own and scope.allows(row["id"])
         ]
 
     async def save_group_settings(

@@ -6,13 +6,14 @@ from datetime import date, timedelta
 
 from app.domain.shifts.app_rules import (
     PERIOD_STATUSES,
+    STATUS_OPEN,
     STATUS_PUBLISHED,
     effective_week_status,
 )
 from app.domain.shifts.models import WeekBanner
 from app.domain.shifts.planning import format_day, monday_of
 
-SETTABLE_STATUSES = frozenset(PERIOD_STATUSES)
+SETTABLE_STATUSES = frozenset({STATUS_OPEN, STATUS_PUBLISHED})
 BANNER_DAYS = 10
 URGENT_DAYS = 3
 
@@ -28,6 +29,16 @@ def mondays_in_month(day: date) -> list[date]:
     return result
 
 
+def leader_status(status: str) -> str:
+    """Leaders only know open and published; an old "allocating" row counts as open."""
+    return status if status in SETTABLE_STATUSES else STATUS_OPEN
+
+
+def can_open_week(week: date, today: date) -> bool:
+    """Only a week after the current one can be opened for wishes."""
+    return week > monday_of(today)
+
+
 def is_past_week(week: date, today: date) -> bool:
     return week < monday_of(today)
 
@@ -39,7 +50,7 @@ def unpublished_week_banner(
     days_ahead = (week - today).days
     if week <= monday_of(today) or days_ahead > BANNER_DAYS:
         return None
-    status = effective_week_status(stored, week, today)
+    status = leader_status(effective_week_status(stored, week, today))
     if status == STATUS_PUBLISHED:
         return None
     number = week.isocalendar().week

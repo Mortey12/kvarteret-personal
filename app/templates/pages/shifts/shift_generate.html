@@ -41,7 +41,7 @@
         {% if preview.closed %}
           <details><summary class="cursor-pointer text-sm">Vis skiftene som hoppes over</summary>
             <ul class="grid gap-1 pt-2 text-sm text-stone-800">
-              {% for planned, label in preview.closed %}<li>{{ planned.day.strftime('%d.%m.%Y') }} · {{ planned.title }} ({{ label }})</li>{% endfor %}
+              {% for item in preview.closed %}<li>{{ item.shift.day.strftime('%d.%m.%Y') }} · {{ item.shift.title }} ({{ item.period.label }}{% if item.inherited %}, fra {{ item.period.group_name }}{% endif %})</li>{% endfor %}
             </ul>
           </details>
         {% endif %}

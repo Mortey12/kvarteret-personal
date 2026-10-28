@@ -422,12 +422,44 @@ async def test_week_status_defaults_and_explicit_rows() -> None:
     plan = await service.get_week_plan(date(2026, 11, 2), scope=SCOPE)
     assert [(s.group_name, s.status, s.explicit) for s in plan.statuses] == [("Stjerne", "open", False)]
     message = await service.set_week_status(
-        group_id=7, week=date(2026, 11, 4), status="allocating", whole_month=False, scope=SCOPE
+        group_id=7, week=date(2026, 11, 4), status="published", whole_month=False, scope=SCOPE
     )
-    assert repo.week_rows == {(7, date(2026, 11, 2)): "allocating"}
-    assert "fordeles nå" in message and "allerede over" not in message
+    assert repo.week_rows == {(7, date(2026, 11, 2)): "published"}
+    assert "fordelt" in message and "allerede over" not in message
     plan = await service.get_week_plan(date(2026, 11, 2), scope=SCOPE)
-    assert plan.statuses[0].status == "allocating" and plan.statuses[0].explicit
+    assert plan.statuses[0].status == "published" and plan.statuses[0].explicit
+    assert plan.statuses[0].can_open
+
+
+@pytest.mark.asyncio
+async def test_old_allocating_rows_show_as_open_and_cannot_be_set() -> None:
+    repo = FakeRepository()
+    repo.week_rows[(7, date(2026, 11, 2))] = "allocating"
+    service = ShiftsService(repo, now=_clock(date(2026, 10, 28)))
+    status = (await service.get_week_plan(date(2026, 11, 2), scope=SCOPE)).statuses[0]
+    assert (status.status, status.label) == ("open", "Åpen for ønsker")
+    with pytest.raises(ShiftPlacementError, match="Ugyldig status"):
+        await service.set_week_status(
+            group_id=7, week=date(2026, 11, 2), status="allocating", whole_month=False, scope=SCOPE
+        )
+
+
+@pytest.mark.asyncio
+async def test_current_and_past_weeks_cannot_be_opened_for_wishes() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo, now=_clock(date(2026, 11, 4)))
+    for week in (date(2026, 11, 2), date(2026, 11, 6), date(2026, 10, 26)):
+        with pytest.raises(ShiftPlacementError, match="kan ikke åpnes"):
+            await service.set_week_status(
+                group_id=7, week=week, status="open", whole_month=False, scope=SCOPE
+            )
+    assert repo.week_rows == {}
+    plan = await service.get_week_plan(date(2026, 11, 2), scope=SCOPE)
+    assert not plan.statuses[0].can_open
+    await service.set_week_status(
+        group_id=7, week=date(2026, 11, 9), status="open", whole_month=False, scope=SCOPE
+    )
+    assert repo.week_rows == {(7, date(2026, 11, 9)): "open"}
 
 
 @pytest.mark.asyncio
@@ -447,7 +479,7 @@ async def test_past_week_can_change_with_a_note_and_bad_input_is_refused() -> No
     repo = FakeRepository()
     service = ShiftsService(repo, now=_clock(date(2026, 11, 18)))
     message = await service.set_week_status(
-        group_id=7, week=date(2026, 11, 2), status="open", whole_month=False, scope=SCOPE
+        group_id=7, week=date(2026, 11, 2), status="published", whole_month=False, scope=SCOPE
     )
     assert "Merk: uka er allerede over." in message
     with pytest.raises(ShiftPlacementError):
@@ -497,8 +529,8 @@ async def test_group_settings_are_saved_and_scoped() -> None:
     listed = await service.list_group_settings(STJERNE_ONLY)
     assert [(g.name, g.is_subgroup) for g in listed] == [("Stjerne", True)]
     everything = await service.list_group_settings(ALL_GROUPS)
+    # Skjenkegruppen takes part only through its subgroups, so it has no settings card.
     assert [(g.name, g.is_subgroup) for g in everything] == [
-        ("Skjenkegruppen", False),
         ("Stjerne", True),
         ("Grøndahls", True),
     ]

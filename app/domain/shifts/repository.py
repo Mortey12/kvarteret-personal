@@ -399,7 +399,7 @@ class ShiftsRepository(SqlAlchemyRepository):
     # ------------------------------------------------------------ closed periods
 
     async def list_closed_periods(self, group_ids: list[int] | None = None) -> list[ClosedPeriod]:
-        stmt = select(shift_closed_periods).order_by(
+        stmt = _closed_periods_select().order_by(
             shift_closed_periods.c.starts_on.asc(), shift_closed_periods.c.id.asc()
         )
         if group_ids is not None:
@@ -410,7 +410,7 @@ class ShiftsRepository(SqlAlchemyRepository):
 
     async def get_closed_period(self, period_id: int) -> ClosedPeriod | None:
         row = await self.fetch_first_mapping(
-            select(shift_closed_periods).where(shift_closed_periods.c.id == period_id)
+            _closed_periods_select().where(shift_closed_periods.c.id == period_id)
         )
         return _closed_period(row) if row else None
 
@@ -610,6 +610,12 @@ def _as_date(value) -> date:
     return value.date() if isinstance(value, datetime) else value
 
 
+def _closed_periods_select():
+    return select(shift_closed_periods, groups.c.name.label("group_name")).select_from(
+        shift_closed_periods.join(groups, groups.c.id == shift_closed_periods.c.group_id)
+    )
+
+
 def _closed_period(row) -> ClosedPeriod:
     return ClosedPeriod(
         period_id=row["id"],
@@ -617,6 +623,7 @@ def _closed_period(row) -> ClosedPeriod:
         starts_on=_as_date(row["starts_on"]),
         ends_on=_as_date(row["ends_on"]),
         label=row["label"],
+        group_name=row["group_name"],
     )
 
 

@@ -14,12 +14,18 @@ from app.domain.shifts.errors import (
 from app.domain.shifts.generator import MAX_RANGE_DAYS, plan_generation
 from app.domain.shifts.models import (
     ClosedPeriod,
+    ClosedPeriodSection,
     GenerationPreview,
     OtherGroup,
     ShiftGroupOption,
     ShiftTemplate,
 )
-from app.domain.shifts.permissions import GroupScope, participating_groups
+from app.domain.shifts.permissions import (
+    GroupScope,
+    ancestor_chain,
+    participating_groups,
+    tree_order,
+)
 from app.domain.shifts.planning import OSLO, format_day
 from app.domain.shifts.repository import ShiftsRepository
 from app.domain.shifts.template_input import parse_template_form
@@ -43,16 +49,23 @@ class ShiftsSetupService:
         return participating_groups(direct, parents), names
 
     async def permitted_groups(self, scope: GroupScope) -> list[ShiftGroupOption]:
-        """Participating groups the leader may manage, by name."""
+        """Participating groups (also ancestors of one) the leader may manage, in tree order."""
+        return await self._options(scope, own_only=False)
+
+    async def own_groups(self, scope: GroupScope) -> list[ShiftGroupOption]:
+        """Groups with their own settings row or templates, in tree order (templates, generator)."""
+        return await self._options(scope, own_only=True)
+
+    async def _options(self, scope: GroupScope, *, own_only: bool) -> list[ShiftGroupOption]:
         participating, names = await self._participating()
-        return sorted(
-            (
-                ShiftGroupOption(group_id, names[group_id])
-                for group_id in participating
-                if group_id in names and scope.allows(group_id)
-            ),
-            key=lambda option: option.name.casefold(),
-        )
+        parents = await self.repository.list_group_parents()
+        if own_only:
+            participating = frozenset(await self.repository.list_direct_participating_group_ids())
+        return [
+            ShiftGroupOption(group_id, names[group_id])
+            for group_id in tree_order(parents, names)
+            if group_id in participating and group_id in names and scope.allows(group_id)
+        ]
 
     async def _require_group(self, group_id: int, scope: GroupScope) -> str:
         participating, names = await self._participating()
@@ -93,12 +106,33 @@ class ShiftsSetupService:
 
     # --------------------------------------------------------- closed periods
 
-    async def list_closed_periods(self, scope: GroupScope) -> dict[int, list[ClosedPeriod]]:
-        ids = [option.group_id for option in await self.permitted_groups(scope)]
-        result: dict[int, list[ClosedPeriod]] = {group_id: [] for group_id in ids}
-        for period in await self.repository.list_closed_periods(ids):
-            result[period.group_id].append(period)
-        return result
+    async def list_closed_periods(self, scope: GroupScope) -> list[ClosedPeriodSection]:
+        """Per group in tree order: its own periods and those inherited from ancestors.
+
+        A group that is an ancestor of a participating group closes all of them, so it
+        is labelled "Hele <name>".
+        """
+        participating, names = await self._participating()
+        parents = await self.repository.list_group_parents()
+        ordered = [g for g in tree_order(parents, names) if g in participating]
+        shown = [g for g in ordered if scope.allows(g)]
+        needed = {a for g in shown for a in ancestor_chain(g, parents)}
+        by_group: dict[int, list[ClosedPeriod]] = {}
+        for period in await self.repository.list_closed_periods(sorted(needed)):
+            by_group.setdefault(period.group_id, []).append(period)
+        has_children = {parents[g] for g in participating if parents.get(g) in participating}
+        sections = []
+        for group_id in shown:
+            ancestors = list(reversed(ancestor_chain(group_id, parents)[1:]))
+            sections.append(
+                ClosedPeriodSection(
+                    group_id=group_id,
+                    label=f"Hele {names[group_id]}" if group_id in has_children else names[group_id],
+                    own=by_group.get(group_id, []),
+                    inherited=[p for a in ancestors for p in by_group.get(a, [])],
+                )
+            )
+        return sections
 
     async def add_closed_period(
         self, group_id: int, *, starts_on: date, ends_on: date, label: str, scope: GroupScope
@@ -123,7 +157,7 @@ class ShiftsSetupService:
     # -------------------------------------------------------------- templates
 
     async def list_templates(self, scope: GroupScope) -> list[ShiftTemplate]:
-        ids = [option.group_id for option in await self.permitted_groups(scope)]
+        ids = [option.group_id for option in await self.own_groups(scope)]
         return await self.repository.list_templates(ids)
 
     async def _require_template(self, template_id: int, scope: GroupScope) -> ShiftTemplate:
@@ -169,7 +203,8 @@ class ShiftsSetupService:
         if (date_to - date_from).days > MAX_RANGE_DAYS:
             raise ShiftPlacementError(f"Velg en periode på høyst {MAX_RANGE_DAYS} dager.")
         templates = await self.repository.list_templates([group_id])
-        periods = await self.repository.list_closed_periods([group_id])
+        parents = await self.repository.list_group_parents()
+        periods = await self.repository.list_closed_periods(ancestor_chain(group_id, parents))
         existing = await self.repository.list_existing_shift_starts(
             [t.template_id for t in templates],
             datetime.combine(date_from - timedelta(days=1), time.min, tzinfo=OSLO),

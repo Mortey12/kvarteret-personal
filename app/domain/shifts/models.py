@@ -133,6 +133,7 @@ class WeekStatusView:
     label: str
     explicit: bool
     is_past: bool
+    can_open: bool = True
 
 
 @dataclass(slots=True)
@@ -177,6 +178,26 @@ class ClosedPeriod:
     starts_on: date
     ends_on: date
     label: str
+    group_name: str = ""
+
+
+@dataclass(slots=True)
+class ClosedPeriodSection:
+    """One group's closed periods: its own (editable) and those inherited from ancestors."""
+
+    group_id: int
+    label: str
+    own: list[ClosedPeriod] = field(default_factory=list)
+    inherited: list[ClosedPeriod] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ClosedShift:
+    """A shift the generator skipped, and the closed period (maybe an ancestor's) behind it."""
+
+    shift: PlannedShift
+    period: ClosedPeriod
+    inherited: bool
 
 
 @dataclass(slots=True)
@@ -229,4 +250,4 @@ class GenerationPreview:
     date_to: date
     to_create: list[PlannedShift] = field(default_factory=list)
     existing: list[PlannedShift] = field(default_factory=list)
-    closed: list[tuple[PlannedShift, str]] = field(default_factory=list)
+    closed: list[ClosedShift] = field(default_factory=list)

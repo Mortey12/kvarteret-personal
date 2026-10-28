@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from app.domain.shifts.models import (
     ClosedPeriod,
+    ClosedShift,
     GenerationPreview,
     PlannedShift,
     ShiftTemplate,
@@ -41,6 +42,7 @@ def plan_generation(
 ) -> GenerationPreview:
     """What a run would do: create, skip because it exists, or skip because closed.
 
+    ``periods`` are the group's own closed periods and those of its ancestors.
     ``existing`` holds (template id, start in UTC) of shifts already made.
     Inactive templates give nothing.
     """
@@ -67,11 +69,13 @@ def plan_generation(
             if (template.template_id, starts_at) in existing:
                 preview.existing.append(planned)
             elif period := closed_period_on(day, periods):
-                preview.closed.append((planned, period.label))
+                preview.closed.append(
+                    ClosedShift(planned, period, inherited=period.group_id != group_id)
+                )
             else:
                 preview.to_create.append(planned)
         day += timedelta(days=1)
     for bucket in (preview.to_create, preview.existing):
         bucket.sort(key=lambda p: (p.starts_at, p.template_id))
-    preview.closed.sort(key=lambda item: (item[0].starts_at, item[0].template_id))
+    preview.closed.sort(key=lambda item: (item.shift.starts_at, item.shift.template_id))
     return preview
