@@ -119,6 +119,69 @@ def _back(path: str, **params: str | int | None) -> str:
     return f"{path}?{query}" if query else path
 
 
+async def _shift_form_action(call, request, *, shift_id, action, week, view_group, current_user):
+    board = "/shifts"
+    try:
+        message = await call
+    except ShiftForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ShiftNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ShiftPlacementError as exc:
+        return redirect_to(_back(board, week=week, group=view_group, error=str(exc)))
+    log_admin_activity(
+        request=request,
+        user=current_user,
+        action=action,
+        subject_type="shift",
+        subject_id=shift_id,
+    )
+    return redirect_to(_back(board, week=week, group=view_group, notice=message))
+
+
+@router.post("/shifts/shifts/{shift_id}/delete")
+async def shift_delete(
+    request: Request,
+    shift_id: int,
+    week: str = Form(""),
+    view_group: int | None = Form(None),
+    current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+):
+    return await _shift_form_action(
+        shifts_service.remove_shift(shift_id=shift_id, scope=scope),
+        request,
+        shift_id=shift_id,
+        action="shift.deleted",
+        week=week,
+        view_group=view_group,
+        current_user=current_user,
+    )
+
+
+@router.post("/shifts/shifts/{shift_id}/closed")
+async def shift_set_closed(
+    request: Request,
+    shift_id: int,
+    closed: bool = Form(...),
+    week: str = Form(""),
+    view_group: int | None = Form(None),
+    current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+):
+    return await _shift_form_action(
+        shifts_service.set_shift_closed(shift_id=shift_id, closed=closed, scope=scope),
+        request,
+        shift_id=shift_id,
+        action="shift.closed" if closed else "shift.reopened",
+        week=week,
+        view_group=view_group,
+        current_user=current_user,
+    )
+
+
 @router.post("/shifts/settings/{group_id}")
 async def shift_settings_save(
     request: Request,
@@ -126,6 +189,7 @@ async def shift_settings_save(
     app_enabled: bool = Form(False),
     samf_enabled: bool = Form(False),
     meeting_point: str = Form(""),
+    courses_enabled: bool = Form(False),
     current_user=Depends(require_management_user),
     scope: GroupScope = Depends(get_shift_scope),
     shifts_service: ShiftsService = Depends(get_shifts_service),
@@ -136,6 +200,7 @@ async def shift_settings_save(
             app_enabled=app_enabled,
             samf_enabled=samf_enabled,
             meeting_point=meeting_point,
+            courses_enabled=courses_enabled,
             scope=scope,
         )
     except ShiftForbiddenError as exc:
@@ -150,7 +215,11 @@ async def shift_settings_save(
         action="shift.settings",
         subject_type="group",
         subject_id=group_id,
-        details={"app_enabled": app_enabled, "samf_enabled": samf_enabled},
+        details={
+            "app_enabled": app_enabled,
+            "samf_enabled": samf_enabled,
+            "courses_enabled": courses_enabled,
+        },
     )
     return redirect_to(_back("/shifts/settings", notice=message))
 

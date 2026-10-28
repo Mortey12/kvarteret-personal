@@ -79,8 +79,10 @@ courses and visibility.
 
 What the app shows is data-driven so the store release does not need
 updates: per-group `shift_group_settings.app_enabled` (members see the
-group) and `samf_enabled` (everyone with a verv this semester sees its places
-open for samfunnettjeneste), and per-week `shift_week_status` (per group, keyed by the
+group), `samf_enabled` (everyone with a verv this semester sees its places
+open for samfunnettjeneste) and `courses_enabled` (the app checks brannkurs and
+barkurs for the group's places; off by default, and when off the checks are skipped),
+and per-week `shift_week_status` (per group, keyed by the
 Monday in Oslo time; a shift belongs to the week of its Oslo start date). A
 week with no row gets its status from the date: the current week and earlier
 are `published`, every later week is `open`. Explicit rows always win, and a

@@ -76,6 +76,7 @@ class ShiftView:
     training_replaces_slot: bool
     open_places: int
     slots: list[SlotView]
+    people_count: int = 0
 
 
 @dataclass(slots=True)
@@ -153,6 +154,7 @@ class GroupSettingsView:
     app_enabled: bool
     samf_enabled: bool
     meeting_point: str
+    courses_enabled: bool = False
 
 
 @dataclass(slots=True)

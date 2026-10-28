@@ -36,14 +36,15 @@ def plan_generation(
     group_name: str,
     templates: Iterable[ShiftTemplate],
     periods: Iterable[ClosedPeriod],
-    existing: set[tuple[int, datetime]],
+    existing: set[tuple[int, date]],
     date_from: date,
     date_to: date,
 ) -> GenerationPreview:
     """What a run would do: create, skip because it exists, or skip because closed.
 
     ``periods`` are the group's own closed periods and those of its ancestors.
-    ``existing`` holds (template id, start in UTC) of shifts already made.
+    ``existing`` holds (template id, Oslo date) of shifts already made, so a template whose
+    time was edited does not get a second shift on a day that already has one.
     Inactive templates give nothing.
     """
     periods = list(periods)
@@ -66,7 +67,7 @@ def plan_generation(
                 training_replaces_slot=template.training_replaces_slot,
                 slots=list(template.slots),
             )
-            if (template.template_id, starts_at) in existing:
+            if (template.template_id, day) in existing:
                 preview.existing.append(planned)
             elif period := closed_period_on(day, periods):
                 preview.closed.append(

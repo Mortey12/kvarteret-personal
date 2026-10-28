@@ -377,6 +377,7 @@ async def seed_shifts(database_url: str) -> None:
                     group_id=group_ids["Stjerne"],
                     app_enabled=True,
                     samf_enabled=True,
+                    courses_enabled=True,
                     meeting_point="Møt skiftleder i Stjernesalen 30 minutter før.",
                 )
             )

@@ -58,6 +58,7 @@ class FakeRepository:
         self.admin_group_ids: list[int] = []
         self.parents: dict[int, int | None] = {7: 1, 8: 1, 1: None, 20: None}
         self.week_rows: dict[tuple[int, date], str] = {}
+        self.events: list[tuple] = []
         self.settings: dict[int, dict] = {}
 
     async def get_slot_shift_id(self, slot_id: int) -> int | None:
@@ -126,7 +127,7 @@ class FakeRepository:
         return {(7, date(2026, 11, 2))} if 7 in group_ids else set()
 
     async def list_groups_with_settings(self) -> list[dict]:
-        blank = {"app_enabled": None, "samf_enabled": None, "meeting_point": None}
+        blank = {"app_enabled": None, "samf_enabled": None, "meeting_point": None, "courses_enabled": None}
         return [
             {"id": gid, "name": name, "parent_group_id": parent, **{**blank, **self.settings.get(gid, {})}}
             for gid, name, parent in (
@@ -137,11 +138,14 @@ class FakeRepository:
             )
         ]
 
-    async def save_group_settings(self, group_id, *, app_enabled, samf_enabled, meeting_point) -> None:
+    async def save_group_settings(
+        self, group_id, *, app_enabled, samf_enabled, meeting_point, courses_enabled
+    ) -> None:
         self.settings[group_id] = {
             "app_enabled": app_enabled,
             "samf_enabled": samf_enabled,
             "meeting_point": meeting_point,
+            "courses_enabled": courses_enabled,
         }
 
     async def add_assignment(self, slot_id: int, volunteer_id: int) -> int:
@@ -156,6 +160,16 @@ class FakeRepository:
 
     async def remove_assignment(self, assignment_id: int) -> None:
         self.removed.append(assignment_id)
+
+    async def lock_shift(self, shift_id: int) -> None:
+        self.events.append(("lock", shift_id))
+
+    async def set_shift_closed(self, shift_id: int, closed: bool) -> None:
+        self.events.append(("closed", shift_id, closed))
+        self.shift.is_closed = closed
+
+    async def delete_shift(self, shift_id: int) -> None:
+        self.events.append(("delete", shift_id))
 
     def place(self, slot_id: int, volunteer_id: int, assignment_id: int, *, absent: bool = False) -> None:
         slot = next(s for s in self.shift.slots if s.slot_id == slot_id)
@@ -535,17 +549,95 @@ async def test_group_settings_are_saved_and_scoped() -> None:
         ("Grøndahls", True),
     ]
     message = await service.save_group_settings(
-        7, app_enabled=True, samf_enabled=False, meeting_point="  Ved baren ", scope=STJERNE_ONLY
+        7,
+        app_enabled=True,
+        samf_enabled=False,
+        meeting_point="  Ved baren ",
+        courses_enabled=True,
+        scope=STJERNE_ONLY,
     )
-    assert repo.settings[7] == {"app_enabled": True, "samf_enabled": False, "meeting_point": "Ved baren"}
+    assert repo.settings[7] == {
+        "app_enabled": True,
+        "samf_enabled": False,
+        "meeting_point": "Ved baren",
+        "courses_enabled": True,
+    }
     assert "Skiftlista er på" in message
     with pytest.raises(ShiftForbiddenError):
         await service.save_group_settings(
-            8, app_enabled=True, samf_enabled=True, meeting_point="", scope=STJERNE_ONLY
+            8, app_enabled=True, samf_enabled=True, meeting_point="", courses_enabled=False, scope=STJERNE_ONLY
         )
     # Not a Skjenke group: refused even for Admin.
     with pytest.raises(ShiftForbiddenError):
         await service.save_group_settings(
-            20, app_enabled=True, samf_enabled=True, meeting_point="", scope=ALL_GROUPS
+            20, app_enabled=True, samf_enabled=True, meeting_point="", courses_enabled=False, scope=ALL_GROUPS
         )
     assert 8 not in repo.settings and 20 not in repo.settings
+
+
+# ------------------------------------------------- locks, closing and removing shifts
+
+
+@pytest.mark.asyncio
+async def test_assign_locks_the_shift_before_it_checks_the_place() -> None:
+    repo = FakeRepository()
+    await ShiftsService(repo).assign(slot_id=11, volunteer_id=101, scope=SCOPE)
+    assert repo.events == [("lock", 1)]
+    assert repo.added == [(11, 101)]
+
+
+@pytest.mark.asyncio
+async def test_move_takes_the_shift_lock_before_it_checks_the_new_place() -> None:
+    repo = FakeRepository()
+    repo.place(11, 100, 500)
+    await ShiftsService(repo).move(assignment_id=500, slot_id=10, scope=SCOPE)
+    # Both places are on shift 1, so it is locked once (ids are locked in order, without repeats).
+    assert repo.events == [("lock", 1)]
+    assert repo.moved == [(500, 10)]
+
+
+@pytest.mark.asyncio
+async def test_empty_shift_can_be_removed_but_one_with_people_cannot() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo)
+    message = await service.remove_shift(shift_id=1, scope=SCOPE)
+    assert "er fjernet" in message and ("delete", 1) in repo.events
+
+    busy = FakeRepository()
+    busy.place(11, 101, 500)
+    with pytest.raises(ShiftPlacementError, match="Det står folk på skiftet"):
+        await ShiftsService(busy).remove_shift(shift_id=1, scope=SCOPE)
+    assert not any(event[0] == "delete" for event in busy.events)
+
+
+@pytest.mark.asyncio
+async def test_a_shift_with_people_can_be_closed_and_reopened() -> None:
+    repo = FakeRepository()
+    repo.place(11, 101, 500)
+    service = ShiftsService(repo)
+    assert "stengt" in await service.set_shift_closed(shift_id=1, closed=True, scope=SCOPE)
+    assert repo.shift.is_closed
+    with pytest.raises(ShiftPlacementError, match="stengt"):
+        await service.assign(slot_id=10, volunteer_id=100, scope=SCOPE)
+    assert "åpnet igjen" in await service.set_shift_closed(shift_id=1, closed=False, scope=SCOPE)
+    assert not repo.shift.is_closed
+
+
+@pytest.mark.asyncio
+async def test_shift_removal_and_closing_respect_the_leaders_groups() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo)
+    other = GroupScope(frozenset({8}))
+    with pytest.raises(ShiftForbiddenError, match="Stjerne"):
+        await service.remove_shift(shift_id=1, scope=other)
+    with pytest.raises(ShiftForbiddenError):
+        await service.set_shift_closed(shift_id=1, closed=True, scope=other)
+    with pytest.raises(ShiftNotFoundError):
+        repo_missing = FakeRepository()
+
+        async def none(shift_id):
+            return None
+
+        repo_missing.get_shift = none
+        await ShiftsService(repo_missing).remove_shift(shift_id=5, scope=SCOPE)
+    assert repo.events == []

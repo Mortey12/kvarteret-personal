@@ -186,7 +186,12 @@ async def test_week_status_and_settings_are_upserted_in_the_database(session) ->
     }
     for enabled in (True, False):
         await service.save_group_settings(
-            STJERNE, app_enabled=enabled, samf_enabled=True, meeting_point=" Baren ", scope=scope
+            STJERNE,
+            app_enabled=enabled,
+            samf_enabled=True,
+            meeting_point=" Baren ",
+            courses_enabled=True,
+            scope=scope,
         )
     settings = (
         (await session.execute(select(shift_group_settings).where(shift_group_settings.c.group_id == STJERNE)))
@@ -196,6 +201,6 @@ async def test_week_status_and_settings_are_upserted_in_the_database(session) ->
     assert len(settings) == 1
     assert settings[0]["app_enabled"] is False and settings[0]["meeting_point"] == "Baren"
     listed = await service.list_group_settings(scope)
-    assert [(g.name, g.app_enabled, g.samf_enabled, g.meeting_point) for g in listed] == [
-        ("Stjerne", False, True, "Baren")
+    assert [(g.name, g.app_enabled, g.samf_enabled, g.meeting_point, g.courses_enabled) for g in listed] == [
+        ("Stjerne", False, True, "Baren", True)
     ]

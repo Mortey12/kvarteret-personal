@@ -152,6 +152,9 @@ shift_group_settings = Table(
     Column("samf_enabled", Boolean, nullable=False),
     # Shown on the shift in the app ("Møt skiftleder 30 minutter før").
     Column("meeting_point", Text),
+    # Check brannkurs and barkurs before the app lets someone take this group's
+    # places. Off for new groups until the group has set its courses up.
+    Column("courses_enabled", Boolean, nullable=False, server_default=false()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 

@@ -26,6 +26,7 @@ from app.domain.shifts.tables import (
     shift_template_slots,
     shift_templates,
     shift_week_status,
+    shift_wishes,
     shifts,
 )
 from app.domain.volunteers.tables import volunteer_records
@@ -45,6 +46,7 @@ TABLES = [
     shifts,
     shift_slots,
     shift_assignments,
+    shift_wishes,
 ]
 NAMES = {
     SKJENKE: ("Skjenkegruppen", "skjenke-gruppen", None),

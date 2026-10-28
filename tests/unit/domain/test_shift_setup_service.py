@@ -20,12 +20,14 @@ from app.domain.shifts.generator import closed_period_on
 from app.domain.shifts.models import ClosedPeriod
 from app.domain.shifts.permissions import ALL_GROUPS, GroupScope
 from app.domain.shifts.repository import ShiftsRepository
+from app.domain.shifts.service import ShiftsService
 from app.domain.shifts.setup_service import ShiftsSetupService
 from app.domain.shifts.tables import (
     shift_assignments,
     shift_slots,
     shift_templates,
     shift_week_status,
+    shift_wishes,
     shifts,
 )
 from tests.support.shift_groups import (
@@ -443,6 +445,27 @@ async def test_generate_never_changes_existing_shifts_and_fills_gaps(session) ->
 
 
 @pytest.mark.asyncio
+async def test_editing_a_template_time_does_not_duplicate_shifts_on_the_same_days(session) -> None:
+    service = _service()
+    template_id = await _template(service)
+    await service.generate(STJERNE, *NOVEMBER, scope=STJERNE_ONLY)
+    assert await _count(session, shifts) == 5
+    # A new start time (and one that ends after midnight) must not create a second shift
+    # on days that already have this template's shift.
+    await service.update_template(
+        template_id, {**FORM, "start_time": "23:00", "end_time": "02:00"}, scope=STJERNE_ONLY
+    )
+    preview, message = await service.generate(STJERNE, *NOVEMBER, scope=STJERNE_ONLY)
+    assert preview.to_create == [] and len(preview.existing) == 5
+    assert "Opprettet 0 skift" in message
+    assert await _count(session, shifts) == 5
+    # A later day the template covers but that has no shift yet is still created.
+    later, _ = await service.generate(STJERNE, date(2026, 12, 1), date(2026, 12, 7), scope=STJERNE_ONLY)
+    assert [p.day for p in later.to_create] == [date(2026, 12, 7)]
+    assert await _count(session, shifts) == 6
+
+
+@pytest.mark.asyncio
 async def test_generate_handles_a_shift_past_midnight_and_skips_inactive_templates(session) -> None:
     service = _service()
     await _template(service, weekday="5", start_time="22:00", end_time="02:00", title="Nattskift")
@@ -481,3 +504,91 @@ async def test_generate_scope_range_and_participation(session) -> None:
     # Admin can generate for a group in another tree than Skjenke.
     vakt = await service.preview_generation(VAKT, *NOVEMBER, scope=ALL_GROUPS)
     assert len(vakt.to_create) == 5
+
+
+# ----------------------------------------------- removing and closing generated shifts
+
+
+@pytest.mark.asyncio
+async def test_remove_shift_deletes_its_places_and_wishes_but_only_when_empty(session) -> None:
+    from sqlalchemy import insert
+
+    from app.domain.volunteers.tables import volunteer_records
+
+    service = _service()
+    await _template(service)
+    await service.generate(STJERNE, *NOVEMBER, scope=STJERNE_ONLY)
+    first, second, *_ = (await session.execute(select(shifts.c.id).order_by(shifts.c.starts_at))).scalars().all()
+    await session.execute(
+        insert(volunteer_records).values(id=5, first_name="Sigrid", last_name="Test", gender="A", created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    )
+    await session.execute(insert(shift_wishes).values(shift_id=first, volunteer_id=5, answer="vil"))
+    slot = (await session.execute(select(shift_slots.c.id).where(shift_slots.c.shift_id == second))).scalars().first()
+    await session.execute(insert(shift_assignments).values(slot_id=slot, volunteer_id=5, swap_requested=False))
+
+    leaders = ShiftsService(ShiftsRepository())
+    message = await leaders.remove_shift(shift_id=first, scope=STJERNE_ONLY)
+    assert "er fjernet" in message
+    assert first not in (await session.execute(select(shifts.c.id))).scalars().all()
+    assert (await session.execute(select(shift_slots.c.id).where(shift_slots.c.shift_id == first))).all() == []
+    assert (await session.execute(select(shift_wishes.c.shift_id))).all() == []
+
+    with pytest.raises(ShiftPlacementError, match="Det står folk"):
+        await leaders.remove_shift(shift_id=second, scope=STJERNE_ONLY)
+    # With people on it, it can still be closed, and opened again.
+    await leaders.set_shift_closed(shift_id=second, closed=True, scope=STJERNE_ONLY)
+    assert (await session.execute(select(shifts.c.is_closed).where(shifts.c.id == second))).scalar_one()
+    await leaders.set_shift_closed(shift_id=second, closed=False, scope=STJERNE_ONLY)
+    assert not (await session.execute(select(shifts.c.is_closed).where(shifts.c.id == second))).scalar_one()
+    with pytest.raises(ShiftForbiddenError):
+        await leaders.remove_shift(shift_id=second, scope=GroupScope(frozenset({HALVTIMEN})))
+    # The placed person is still on the shift.
+    assert await _count(session, shift_assignments) == 1
+
+
+@pytest.mark.asyncio
+async def test_new_groups_start_with_course_checks_off_and_the_switch_is_saved(session) -> None:
+    service = _service()
+    await service.add_group(KULTUR, scope=ALL_GROUPS)
+    leaders = ShiftsService(ShiftsRepository())
+    settings = {g.group_id: g for g in await leaders.list_group_settings(ALL_GROUPS)}
+    assert settings[KULTUR].courses_enabled is False
+    await leaders.save_group_settings(
+        KULTUR,
+        app_enabled=True,
+        samf_enabled=False,
+        meeting_point="",
+        courses_enabled=True,
+        scope=GroupScope(frozenset({KULTUR})),
+    )
+    settings = {g.group_id: g for g in await leaders.list_group_settings(ALL_GROUPS)}
+    assert settings[KULTUR].courses_enabled is True and settings[KULTUR].app_enabled is True
+
+
+@pytest.mark.asyncio
+async def test_removing_an_empty_shift_with_wishes_deletes_the_wishes_first(session) -> None:
+    from sqlalchemy import insert
+
+    from app.domain.volunteers.tables import volunteer_records
+
+    service = _service()
+    await _template(service)
+    await service.generate(STJERNE, *NOVEMBER, scope=STJERNE_ONLY)
+    doomed, kept, *_ = (await session.execute(select(shifts.c.id).order_by(shifts.c.starts_at))).scalars().all()
+    for volunteer_id in (5, 6):
+        await session.execute(
+            insert(volunteer_records).values(
+                id=volunteer_id, first_name="Vera", last_name="Test", gender="A",
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        )
+    await session.execute(insert(shift_wishes).values(shift_id=doomed, volunteer_id=5, answer="vil"))
+    await session.execute(insert(shift_wishes).values(shift_id=doomed, volunteer_id=6, answer="nei"))
+    await session.execute(insert(shift_wishes).values(shift_id=kept, volunteer_id=5, answer="kan"))
+
+    await ShiftsService(ShiftsRepository()).remove_shift(shift_id=doomed, scope=STJERNE_ONLY)
+
+    rows = (await session.execute(select(shift_wishes.c.shift_id, shift_wishes.c.volunteer_id))).all()
+    assert [tuple(row) for row in rows] == [(kept, 5)]
+    assert doomed not in (await session.execute(select(shifts.c.id))).scalars().all()
+    assert (await session.execute(select(shift_slots.c.id).where(shift_slots.c.shift_id == doomed))).all() == []

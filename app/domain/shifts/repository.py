@@ -30,6 +30,7 @@ from app.domain.shifts.tables import (
     shift_slots,
     shift_templates,
     shift_week_status,
+    shift_wishes,
     shifts,
 )
 from app.domain.volunteers.tables import volunteer_records
@@ -90,6 +91,7 @@ class ShiftsRepository(SqlAlchemyRepository):
                 shift_group_settings.c.app_enabled,
                 shift_group_settings.c.samf_enabled,
                 shift_group_settings.c.meeting_point,
+                shift_group_settings.c.courses_enabled,
             )
             .select_from(
                 groups.outerjoin(shift_group_settings, shift_group_settings.c.group_id == groups.c.id)
@@ -99,12 +101,19 @@ class ShiftsRepository(SqlAlchemyRepository):
         )
 
     async def save_group_settings(
-        self, group_id: int, *, app_enabled: bool, samf_enabled: bool, meeting_point: str | None
+        self,
+        group_id: int,
+        *,
+        app_enabled: bool,
+        samf_enabled: bool,
+        meeting_point: str | None,
+        courses_enabled: bool,
     ) -> None:
         values = {
             "app_enabled": app_enabled,
             "samf_enabled": samf_enabled,
             "meeting_point": meeting_point,
+            "courses_enabled": courses_enabled,
             "updated_at": datetime.now(UTC),
         }
         result = await self.session.execute(
@@ -393,6 +402,21 @@ class ShiftsRepository(SqlAlchemyRepository):
             )
         )
 
+    async def lock_shift(self, shift_id: int) -> None:
+        """Hold the shift row until commit so two changes cannot fill one place."""
+        await self.fetch_scalar(select(shifts.c.id).where(shifts.c.id == shift_id).with_for_update())
+
+    async def set_shift_closed(self, shift_id: int, closed: bool) -> None:
+        await self.execute(update(shifts).where(shifts.c.id == shift_id).values(is_closed=closed))
+
+    async def delete_shift(self, shift_id: int) -> None:
+        """Delete a shift with its places and wishes. The caller makes sure nobody is placed."""
+        slot_ids = select(shift_slots.c.id).where(shift_slots.c.shift_id == shift_id)
+        await self.execute(delete(shift_assignments).where(shift_assignments.c.slot_id.in_(slot_ids)))
+        await self.execute(delete(shift_wishes).where(shift_wishes.c.shift_id == shift_id))
+        await self.execute(delete(shift_slots).where(shift_slots.c.shift_id == shift_id))
+        await self.execute(delete(shifts).where(shifts.c.id == shift_id))
+
     async def remove_assignment(self, assignment_id: int) -> None:
         await self.execute(delete(shift_assignments).where(shift_assignments.c.id == assignment_id))
 
@@ -538,9 +562,10 @@ class ShiftsRepository(SqlAlchemyRepository):
 
     # ----------------------------------------------------------------- generator
 
-    async def list_existing_shift_starts(
+    async def list_existing_shift_days(
         self, template_ids: list[int], starts_from: datetime, starts_before: datetime
-    ) -> set[tuple[int, datetime]]:
+    ) -> set[tuple[int, date]]:
+        """(template id, Oslo date of the start) of shifts already made from the templates."""
         if not template_ids:
             return set()
         rows = await self.fetch_all_mappings(
@@ -550,7 +575,7 @@ class ShiftsRepository(SqlAlchemyRepository):
                 shifts.c.starts_at < starts_before,
             )
         )
-        return {(row["template_id"], _aware(row["starts_at"]).astimezone(UTC)) for row in rows}
+        return {(row["template_id"], _aware(row["starts_at"]).astimezone(OSLO).date()) for row in rows}
 
     async def create_planned_shift(self, planned: PlannedShift) -> None:
         shift_id = await self.fetch_scalar(

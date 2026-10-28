@@ -33,6 +33,10 @@
           <input type="checkbox" name="samf_enabled" value="true" {% if item.samf_enabled %}checked{% endif %}>
           Åpen for samfunnettjeneste (plasser som er åpne for samfunnettjeneste vises for alle frivillige)
         </label>
+        <label class="flex items-center gap-2 text-sm text-stone-900">
+          <input type="checkbox" name="courses_enabled" value="true" {% if item.courses_enabled %}checked{% endif %}>
+          Sjekk brann- og barkurs i appen før noen tar en plass (slå på når gruppa har satt opp kursene)
+        </label>
         <label class="grid gap-1">
           <span class="text-sm text-stone-500">Oppmøtested (vises på skiftet i appen)</span>
           <input class="app-input" maxlength="200" name="meeting_point" type="text" value="{{ item.meeting_point }}" placeholder="For eksempel: Møt skiftleder 30 minutter før">

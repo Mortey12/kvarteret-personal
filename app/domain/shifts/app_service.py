@@ -159,6 +159,9 @@ class _Person:
             return self.samf_ids
         return []
 
+    def courses_enabled(self, group_id: int) -> bool:
+        return self._setting(group_id).courses_enabled
+
     def meeting_point(self, group_id: int) -> str | None:
         return self._setting(group_id).meeting_point
 
@@ -451,7 +454,10 @@ class ShiftsAppService:
         await self._set_status(state.assignment_id, swap=True, cannot=False, message=message)
         self._log("shift.app.swap_requested", person, state.assignment_id)
         return ShiftActionResponse(
-            message="Lederne ser at du ønsker bytte. Du står på skiftet til noen tar over.",
+            message=(
+                "Markert som ønsker bytte. Lederne får ikke varsel ennå, så si også fra til skiftlederen. "
+                "Du står på skiftet til noen tar over."
+            ),
             shift=await self._my_shift(person, state.slot_id),
         )
 
@@ -479,7 +485,10 @@ class ShiftsAppService:
         await self._set_status(state.assignment_id, swap=False, cannot=True, message=message)
         self._log("shift.app.cannot_attend", person, state.assignment_id)
         return ShiftActionResponse(
-            message="Lederne ser at du ikke kan komme. Plassen er åpen for andre, og du går av skiftet når noen tar den.",
+            message=(
+                "Markert. Lederne får ikke varsel ennå, så si også fra til skiftlederen. "
+                "Plassen er åpen for andre, og du går av skiftet når noen tar den."
+            ),
             shift=await self._my_shift(person, state.slot_id),
         )
 
@@ -826,6 +835,8 @@ class ShiftsAppService:
         for record, slot, _ in mine.entries():
             if record.starts_at <= now or record.starts_at <= signup.starts_at:
                 continue
+            if not person.courses_enabled(record.group_id):
+                continue
             if key not in required_course_keys(slot.kind, person.is_skjenke_member):
                 continue
             if course_valid_in(courses.completions.get(key), semester_of(record.starts_at)):
@@ -945,7 +956,9 @@ class ShiftsAppService:
                 result.warnings.append("Ingen utlært på skiftet ennå")
 
         semester = semester_of(record.starts_at)
-        for key in required_course_keys(slot.kind, person.is_skjenke_member):
+        # Groups that have not switched course checks on skip them entirely.
+        checked = person.courses_enabled(record.group_id)
+        for key in required_course_keys(slot.kind, person.is_skjenke_member) if checked else []:
             if key not in courses.ids:
                 continue  # the course is not set up in Personal, so it cannot be checked
             rule = COURSE_RULES[key]
@@ -1130,7 +1143,7 @@ class ShiftsAppService:
         if entry.cannot_attend:
             tag = "Du har sagt at du ikke kan. Plassen er åpen for andre."
         elif entry.swap_requested:
-            tag = "Du ønsker bytte. Lederne ser det i Personal."
+            tag = "Du ønsker bytte. Lederne får ikke varsel ennå."
         elif samf:
             tag = "Teller som samfunnettjeneste"
         elif slot.kind == "opplaering":

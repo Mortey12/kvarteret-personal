@@ -793,6 +793,28 @@
         "title": "Body_shift_closed_period_add_shifts_settings__group_id__closed_periods_post",
         "type": "object"
       },
+      "Body_shift_delete_shifts_shifts__shift_id__delete_post": {
+        "properties": {
+          "view_group": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Group"
+          },
+          "week": {
+            "default": "",
+            "title": "Week",
+            "type": "string"
+          }
+        },
+        "title": "Body_shift_delete_shifts_shifts__shift_id__delete_post",
+        "type": "object"
+      },
       "Body_shift_generate_shifts_generate_post": {
         "properties": {
           "date_from": {
@@ -818,11 +840,45 @@
         "title": "Body_shift_generate_shifts_generate_post",
         "type": "object"
       },
+      "Body_shift_set_closed_shifts_shifts__shift_id__closed_post": {
+        "properties": {
+          "closed": {
+            "title": "Closed",
+            "type": "boolean"
+          },
+          "view_group": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Group"
+          },
+          "week": {
+            "default": "",
+            "title": "Week",
+            "type": "string"
+          }
+        },
+        "required": [
+          "closed"
+        ],
+        "title": "Body_shift_set_closed_shifts_shifts__shift_id__closed_post",
+        "type": "object"
+      },
       "Body_shift_settings_save_shifts_settings__group_id__post": {
         "properties": {
           "app_enabled": {
             "default": false,
             "title": "App Enabled",
+            "type": "boolean"
+          },
+          "courses_enabled": {
+            "default": false,
+            "title": "Courses Enabled",
             "type": "boolean"
           },
           "meeting_point": {
@@ -9299,6 +9355,99 @@
           }
         },
         "summary": "Shift Group Enable"
+      }
+    },
+    "/shifts/shifts/{shift_id}/closed": {
+      "post": {
+        "operationId": "shift_set_closed_shifts_shifts__shift_id__closed_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift_id",
+            "required": true,
+            "schema": {
+              "title": "Shift Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_shift_set_closed_shifts_shifts__shift_id__closed_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Set Closed"
+      }
+    },
+    "/shifts/shifts/{shift_id}/delete": {
+      "post": {
+        "operationId": "shift_delete_shifts_shifts__shift_id__delete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift_id",
+            "required": true,
+            "schema": {
+              "title": "Shift Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_shift_delete_shifts_shifts__shift_id__delete_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shift Delete"
       }
     },
     "/shifts/templates": {

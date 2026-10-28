@@ -149,10 +149,10 @@ class FakeShiftsService:
         return [GroupSettingsView(7, "Stjerne", True, True, False, "Ved baren")]
 
     async def save_group_settings(
-        self, group_id: int, *, app_enabled, samf_enabled, meeting_point, scope: GroupScope
+        self, group_id: int, *, app_enabled, samf_enabled, meeting_point, courses_enabled, scope: GroupScope
     ) -> str:
         self._check(scope)
-        self.calls.append(("settings", group_id, app_enabled, samf_enabled, meeting_point))
+        self.calls.append(("settings", group_id, app_enabled, samf_enabled, meeting_point, courses_enabled))
         return "Innstillingene for Stjerne er lagret."
 
     async def set_week_status(
@@ -163,6 +163,18 @@ class FakeShiftsService:
         if status == "nonsense":
             raise ShiftPlacementError("Ugyldig status.")
         return "Uke 45 for Stjerne: publisert."
+
+    async def remove_shift(self, *, shift_id: int, scope: GroupScope) -> str:
+        self._check(scope)
+        self.calls.append(("remove_shift", shift_id))
+        if shift_id == 99:
+            raise ShiftPlacementError("Det står folk på skiftet. Ta dem av først, eller steng skiftet i stedet.")
+        return "Skiftet er fjernet."
+
+    async def set_shift_closed(self, *, shift_id: int, closed: bool, scope: GroupScope) -> str:
+        self._check(scope)
+        self.calls.append(("set_shift_closed", shift_id, closed))
+        return "Skiftet er stengt." if closed else "Skiftet er åpnet igjen."
 
     async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult:
         self._check(scope)
@@ -429,7 +441,7 @@ def test_settings_are_saved_with_switches_and_meeting_point() -> None:
 
     saved = client.post(
         "/shifts/settings/7",
-        data={"app_enabled": "true", "meeting_point": "Ved baren"},
+        data={"app_enabled": "true", "courses_enabled": "true", "meeting_point": "Ved baren"},
         headers=csrf_headers(client),
         follow_redirects=False,
     )
@@ -437,8 +449,8 @@ def test_settings_are_saved_with_switches_and_meeting_point() -> None:
 
     assert saved.status_code == 303
     assert saved.headers["location"].startswith("/shifts/settings?notice=")
-    assert ("settings", 7, True, False, "Ved baren") in service.calls
-    assert ("settings", 7, False, False, "") in service.calls
+    assert ("settings", 7, True, False, "Ved baren", True) in service.calls
+    assert ("settings", 7, False, False, "", False) in service.calls
     assert off.status_code == 303
 
 
@@ -494,6 +506,55 @@ def test_open_for_wishes_button_is_disabled_for_the_current_week() -> None:
 
     assert "disabled" not in open_button(enabled)
     assert "disabled" in open_button(disabled)
+
+
+def test_board_has_close_and_delete_buttons_with_confirm_for_empty_shifts() -> None:
+    client, _ = _client(UserRole.GROUP_ADMIN)
+    page = client.get("/shifts?week=2026-11-02").text
+    assert 'action="/shifts/shifts/1/closed"' in page and "Steng skift" in page
+    # The fake shift has people on it, so it can be closed but not removed.
+    assert 'action="/shifts/shifts/1/delete"' not in page
+
+
+def test_shift_close_open_and_delete_post_scoped_csrf_checked_actions() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    prime_csrf(client, path="/shifts")
+
+    closed = client.post(
+        "/shifts/shifts/1/closed",
+        data={"closed": "true", "week": "2026-11-02", "view_group": "7"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    reopened = client.post(
+        "/shifts/shifts/1/closed", data={"closed": "false", "week": "2026-11-02"}, headers=csrf_headers(client), follow_redirects=False
+    )
+    removed = client.post(
+        "/shifts/shifts/2/delete", data={"week": "2026-11-02"}, headers=csrf_headers(client), follow_redirects=False
+    )
+    refused = client.post(
+        "/shifts/shifts/99/delete", data={"week": "2026-11-02"}, headers=csrf_headers(client), follow_redirects=False
+    )
+
+    assert closed.status_code == 303
+    assert closed.headers["location"].startswith("/shifts?week=2026-11-02&group=7&notice=")
+    assert ("set_shift_closed", 1, True) in service.calls and ("set_shift_closed", 1, False) in service.calls
+    assert reopened.status_code == 303 and removed.status_code == 303
+    assert ("remove_shift", 2) in service.calls
+    # A shift with people is refused with the reason shown on the board.
+    assert refused.status_code == 303 and "error=" in refused.headers["location"]
+
+
+def test_shift_actions_need_csrf_and_respect_scope() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    client.cookies.set(client.app.state.container.settings.session_cookie_name, "signed-in")
+    no_token = client.post("/shifts/shifts/1/delete", data={}, follow_redirects=False)
+    assert no_token.status_code == 403
+    assert not any(call[0] == "remove_shift" for call in service.calls if isinstance(call[0], str))
+    prime_csrf(client, path="/shifts")
+    service.forbidden = True
+    forbidden = client.post("/shifts/shifts/1/closed", data={"closed": "true"}, headers=csrf_headers(client))
+    assert forbidden.status_code == 403 and "Du har ikke tilgang" in forbidden.json()["detail"]
 
 
 def test_week_status_for_another_group_is_refused_and_bad_status_reports_an_error() -> None:

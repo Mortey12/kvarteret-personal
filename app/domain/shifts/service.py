@@ -68,6 +68,8 @@ class ShiftsServiceProtocol(Protocol):
     async def assign(self, *, slot_id: int, volunteer_id: int, scope: GroupScope) -> PlacementResult: ...
     async def move(self, *, assignment_id: int, slot_id: int, scope: GroupScope) -> PlacementResult: ...
     async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult: ...
+    async def remove_shift(self, *, shift_id: int, scope: GroupScope) -> str: ...
+    async def set_shift_closed(self, *, shift_id: int, closed: bool, scope: GroupScope) -> str: ...
     async def list_group_settings(self, scope: GroupScope) -> list[GroupSettingsView]: ...
     async def save_group_settings(
         self,
@@ -76,6 +78,7 @@ class ShiftsServiceProtocol(Protocol):
         app_enabled: bool,
         samf_enabled: bool,
         meeting_point: str,
+        courses_enabled: bool,
         scope: GroupScope,
     ) -> str: ...
     async def set_week_status(
@@ -367,6 +370,9 @@ class ShiftsService:
     async def assign(
         self, *, slot_id: int, volunteer_id: int, scope: GroupScope
     ) -> PlacementResult:
+        shift, _ = await self._load_slot(slot_id, scope)
+        await self._lock(shift.shift_id)
+        # Read again under the lock: someone may have filled the place meanwhile.
         shift, slot = await self._load_slot(slot_id, scope)
         name = await self.repository.get_volunteer_name(volunteer_id)
         if name is None:
@@ -375,6 +381,11 @@ class ShiftsService:
         await self._take_place(shift, slot)
         await self.repository.add_assignment(slot_id, volunteer_id)
         return PlacementResult(_message(f"{name} er satt opp som {self._describe(shift, slot)}.", warnings))
+
+    async def _lock(self, *shift_ids: int) -> None:
+        """Lock shifts in id order, so two moves between the same shifts cannot deadlock."""
+        for shift_id in sorted(set(shift_ids)):
+            await self.repository.lock_shift(shift_id)
 
     async def _take_place(self, shift: ShiftRecord, slot: SlotRecord) -> None:
         """Someone who said "kan ikke i dag" comes off when their place is taken."""
@@ -391,6 +402,13 @@ class ShiftsService:
         await self._load_slot(assignment.slot_id, scope)
         if assignment.slot_id == slot_id:
             return PlacementResult("Ingen endring.")
+        target, _ = await self._load_slot(slot_id, scope)
+        await self._lock(assignment.shift_id, target.shift_id)
+        # Read again under the locks: the places may have changed meanwhile.
+        assignment = await self.repository.get_assignment(assignment_id)
+        if assignment is None:
+            raise ShiftNotFoundError("Tildelingen finnes ikke lenger. Oppdater siden.")
+        await self._load_slot(assignment.slot_id, scope)
         shift, slot = await self._load_slot(slot_id, scope)
         warnings = await self._check(
             shift, slot, assignment.volunteer_id, moving_assignment_id=assignment_id
@@ -409,6 +427,35 @@ class ShiftsService:
         name = await self.repository.get_volunteer_name(assignment.volunteer_id) or "Personen"
         return PlacementResult(f"{name} er tatt av {self._describe(shift, slot)}. Plassen er ledig igjen.")
 
+
+    async def _load_shift(self, shift_id: int, scope: GroupScope) -> ShiftRecord:
+        shift = await self.repository.get_shift(shift_id)
+        if shift is None:
+            raise ShiftNotFoundError("Skiftet finnes ikke lenger. Oppdater siden.")
+        scope.require(shift.group_id, shift.group_name)
+        return shift
+
+    async def remove_shift(self, *, shift_id: int, scope: GroupScope) -> str:
+        """Delete a shift nobody is placed on. A shift with people can only be closed."""
+        shift = await self._load_shift(shift_id, scope)
+        await self._lock(shift_id)
+        shift = await self._load_shift(shift_id, scope)
+        if any(slot.people for slot in shift.slots):
+            raise ShiftPlacementError(
+                "Det står folk på skiftet. Ta dem av først, eller steng skiftet i stedet."
+            )
+        await self.repository.delete_shift(shift_id)
+        day = format_day(shift.starts_at.astimezone(OSLO).date()).lower()
+        return f"Skiftet «{shift.title}» {day} for {shift.group_name} er fjernet."
+
+    async def set_shift_closed(self, *, shift_id: int, closed: bool, scope: GroupScope) -> str:
+        shift = await self._load_shift(shift_id, scope)
+        await self._lock(shift_id)
+        await self.repository.set_shift_closed(shift_id, closed)
+        day = format_day(shift.starts_at.astimezone(OSLO).date()).lower()
+        if closed:
+            return f"Skiftet «{shift.title}» {day} for {shift.group_name} er stengt. Ingen kan settes opp eller ta plasser."
+        return f"Skiftet «{shift.title}» {day} for {shift.group_name} er åpnet igjen."
 
     async def set_week_status(
         self, *, group_id: int, week: date, status: str, whole_month: bool, scope: GroupScope
@@ -450,6 +497,7 @@ class ShiftsService:
                 app_enabled=bool(row["app_enabled"]),
                 samf_enabled=bool(row["samf_enabled"]),
                 meeting_point=row["meeting_point"] or "",
+                courses_enabled=bool(row["courses_enabled"]),
             )
             for row in rows
             if row["id"] in own and scope.allows(row["id"])
@@ -462,6 +510,7 @@ class ShiftsService:
         app_enabled: bool,
         samf_enabled: bool,
         meeting_point: str,
+        courses_enabled: bool,
         scope: GroupScope,
     ) -> str:
         name = await self.repository.get_group_name(group_id)
@@ -475,7 +524,11 @@ class ShiftsService:
         if len(point) > MEETING_POINT_MAX:
             raise ShiftPlacementError(f"Oppmøtested kan ha opptil {MEETING_POINT_MAX} tegn.")
         await self.repository.save_group_settings(
-            group_id, app_enabled=app_enabled, samf_enabled=samf_enabled, meeting_point=point or None
+            group_id,
+            app_enabled=app_enabled,
+            samf_enabled=samf_enabled,
+            meeting_point=point or None,
+            courses_enabled=courses_enabled,
         )
         state = "på" if app_enabled else "av"
         return f"Innstillingene for {name} er lagret. Skiftlista er {state} i appen."

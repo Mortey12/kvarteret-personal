@@ -12,8 +12,13 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, exists, insert, select, update
 
 from app.db.repository import SqlAlchemyRepository
-from app.domain.courses.tables import course_completions
+from app.domain.courses.tables import course_completions, course_session_signups
 from app.domain.role_assignments.tables import role_assignments
+from app.domain.shifts.tables import (
+    shift_assignments,
+    shift_availability_rules,
+    shift_wishes,
+)
 from app.domain.volunteer_applications.tables import volunteer_application_invites
 from app.domain.volunteers.tables import (
     volunteer_cards,
@@ -305,6 +310,15 @@ class VolunteersRepository(SqlAlchemyRepository):
             )
             .values(promoted_volunteer_id=None)
         )
+        # Skiftlista rows reference the person; all go in the same transaction
+        # as the record itself.
+        for table in (
+            shift_assignments,
+            shift_wishes,
+            shift_availability_rules,
+            course_session_signups,
+        ):
+            await self.execute(delete(table).where(table.c.volunteer_id == volunteer_id))
         await self.execute(
             delete(role_assignments).where(
                 role_assignments.c.volunteer_id == volunteer_id

@@ -248,6 +248,7 @@ def build_shift_view(shift: ShiftRecord) -> ShiftView:
         training_replaces_slot=shift.training_replaces_slot,
         open_places=total_open,
         slots=slots,
+        people_count=sum(len(slot.people) for slot in shift.slots),
     )
 
 

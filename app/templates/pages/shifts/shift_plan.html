@@ -138,6 +138,25 @@
                         <span class="text-xs text-stone-500">{{ shift.group_name }}</span>
                         {% if shift.is_closed %}<span class="app-badge">Stengt</span>{% endif %}
                       </div>
+                      <div class="flex flex-wrap items-center gap-2" data-shift-controls data-shift-id="{{ shift.shift_id }}">
+                        <form action="/shifts/shifts/{{ shift.shift_id }}/closed" method="post">
+                          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                          <input type="hidden" name="closed" value="{{ 'false' if shift.is_closed else 'true' }}">
+                          <input type="hidden" name="week" value="{{ plan.week_start.isoformat() }}">
+                          {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
+                          <button class="app-button-secondary" type="submit" data-shift-toggle-closed>{{ 'Åpne skift' if shift.is_closed else 'Steng skift' }}</button>
+                        </form>
+                        {% if shift.people_count == 0 %}
+                          <form action="/shifts/shifts/{{ shift.shift_id }}/delete" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            <input type="hidden" name="week" value="{{ plan.week_start.isoformat() }}">
+                            {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
+                            <button class="app-button-secondary" type="submit" data-shift-delete onclick="return confirm('Fjerne dette skiftet? Det kan ikke angres.')">Fjern skift</button>
+                          </form>
+                        {% elif shift.is_closed %}
+                          <span class="text-xs text-stone-500">{{ shift.people_count }} {{ 'person' if shift.people_count == 1 else 'personer' }} står på skiftet</span>
+                        {% endif %}
+                      </div>
                       {% if shift.note %}
                         <p class="bg-amber-50 px-3 py-2 text-sm text-stone-800">{{ shift.note }}</p>
                       {% endif %}

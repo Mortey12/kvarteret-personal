@@ -39,7 +39,14 @@ from app.domain.shifts.tables import (
     shift_wishes,
     shifts,
 )
-from app.domain.volunteers.tables import volunteer_records
+from app.domain.volunteer_applications.tables import volunteer_application_invites
+from app.domain.volunteers.repository import VolunteersRepository
+from app.domain.volunteers.tables import (
+    volunteer_cards,
+    volunteer_next_of_kin,
+    volunteer_photos,
+    volunteer_records,
+)
 
 OSLO = ZoneInfo("Europe/Oslo")
 SEMESTER = 20262
@@ -79,6 +86,10 @@ TABLES = [
     shift_week_status,
     shift_availability_rules,
     shift_wishes,
+    volunteer_cards,
+    volunteer_next_of_kin,
+    volunteer_photos,
+    volunteer_application_invites,
 ]
 
 
@@ -211,6 +222,7 @@ async def _build(session) -> World:
                 group_id=group_id,
                 app_enabled=True,
                 samf_enabled=True,
+                courses_enabled=True,
                 meeting_point="Møt skiftleder 30 minutter før." if group_id == STJERNE else None,
                 updated_at=now,
             )
@@ -550,6 +562,24 @@ async def test_sign_up_for_courses_and_claim_in_one_step(world: World) -> None:
     assert mine.samfunnettjeneste.planned == 1 and mine.samfunnettjeneste.done == 0
 
 
+async def test_course_checks_are_skipped_for_a_group_with_the_switch_off(world: World) -> None:
+    slot = world.slots[("tue", "skjenker")]
+    # On: Sander's brannkurs has run out, so the claim needs a course sign-up.
+    detail = await world.service.get_place(SANDER, slot)
+    assert detail.claim_label == "Meld meg på brannkurs 2. nov, og ta skiftet"
+    assert detail.requirements
+
+    await world.session.execute(
+        update(shift_group_settings).where(shift_group_settings.c.group_id == STJERNE).values(courses_enabled=False)
+    )
+    detail = await world.service.get_place(SANDER, slot)
+    assert detail.claim_label == "Ta skiftet"
+    assert detail.requirements == []
+    result = await world.service.claim(SANDER, slot, ClaimPlaceRequest(course_session_ids=[]))
+    assert result.shift is not None
+    assert (await world.assignments("tue")) == [("skjenker", SANDER, False)]
+
+
 async def test_full_course_session_is_not_offered(world: World) -> None:
     # Sander's brannkurs ran out; the only course before Tuesday has one spot.
     detail = await world.service.get_place(SANDER, world.slots[("tue", "skjenker")])
@@ -595,6 +625,10 @@ async def test_swap_request_and_cancel(world: World) -> None:
     assignment = await world.place("tue", "skjenker", SANDER)
     result = await world.service.request_swap(SANDER, assignment, "  Eksamen  ")
     assert result.shift.swap_requested and result.shift.can_request_swap
+    # No notification exists yet, so the text must not promise that leaders are told.
+    assert result.message.startswith("Markert som ønsker bytte. Lederne får ikke varsel ennå")
+    assert "si også fra til skiftlederen" in result.message
+    assert "Lederne ser" not in result.message
     message = (
         await world.session.execute(
             select(shift_assignments.c.status_message).where(shift_assignments.c.id == assignment)
@@ -615,6 +649,8 @@ async def test_cannot_attend_opens_the_place_and_the_taker_replaces(world: World
     world.clock.now = oslo(date(2026, 11, 5), 7)
     result = await world.service.report_cannot_attend(SANDER, assignment, None)
     assert result.shift.cannot_attend and not result.shift.can_report_cannot_attend
+    assert result.message.startswith("Markert. Lederne får ikke varsel ennå, så si også fra til skiftlederen.")
+    assert "Lederne ser" not in result.message
 
     # Thursday's skjenker place was only for Skjenke; now it is open to everyone.
     await world.complete(OLA, BRANN, SEMESTER)
@@ -721,3 +757,22 @@ async def test_full_session_and_sign_up_a_shift_depends_on(world: World) -> None
         await world.service.leave_session(SANDER, world.sessions["brann-2nov"])
     with pytest.raises(ShiftPlacementError, match="Velg en dato før det"):
         await world.service.sign_up(SANDER, world.sessions["brann-20nov"])
+
+
+async def test_deleting_a_volunteer_removes_their_shift_rows(world: World) -> None:
+    session = world.session
+    await world.place("tue", "skjenker", SANDER)
+    await world.place("tue", "skiftleder", SIGRID)
+    await world.service.set_weekday_rule(SANDER, 2, "vil")
+    await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "kan")
+    await session.execute(insert(course_session_signups).values(session_id=world.sessions["brann-20nov"], volunteer_id=SANDER))
+
+    await VolunteersRepository().delete_volunteer(SANDER)
+
+    for table in (shift_assignments, shift_wishes, shift_availability_rules, course_session_signups):
+        rows = (await session.execute(select(table.c.volunteer_id))).scalars().all()
+        assert SANDER not in rows
+    # Other people and the shifts themselves are untouched.
+    assert await world.assignments("tue") == [("skiftleder", SIGRID, False)]
+    assert (await session.execute(select(shifts.c.id).where(shifts.c.id == world.shift_ids["tue"]))).scalar_one()
+    assert SANDER not in (await session.execute(select(volunteer_records.c.id))).scalars().all()

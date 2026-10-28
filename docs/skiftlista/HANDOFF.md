@@ -41,6 +41,15 @@ the codebase again.
 | App API tests | `tests/unit/domain/test_shift_app_service.py` (real SQLite DB), `tests/unit/domain/test_shift_app_rules.py`, `tests/api/mobile_card/test_mobile_shifts_api.py` |
 | App client | `kvarteret-internbevis` branch `feat/skiftlista-mobile`: the app screens (step 2) live there; `npm run api:generate:personal` writes `src/core/api/kvarteret-personal` (only the `mobile-shifts` tag) |
 
+Pilot-blocker fixes from code review (done): deleting a volunteer also
+removes their shift assignments, wishes, availability rules and course
+sign-ups; the generator's "already exists" key is (template, Oslo date);
+leaders can remove an empty shift and close or reopen any shift on the board
+(scope-checked, CSRF, logged, confirm before delete); leader assign and move
+lock the shift row like the app claim; the swap and "kan ikke" texts say the
+leaders get no notification yet; course checks are a per-group switch
+(`courses_enabled`).
+
 Also fixed: dev seed produced semester code `20253` (now
 `get_previous_semester_code` in `app/shared/semester.py`).
 
@@ -56,7 +65,7 @@ Also fixed: dev seed produced semester code `20253` (now
   `garderobe` (`SLOT_KINDS` in `planning.py`). Crew kinds = skjenker,
   bartender, kokk.
 - App (step 1): `shift_group_settings` (per group: `app_enabled`,
-  `samf_enabled`, `meeting_point`), `shift_week_status` (per group and
+  `samf_enabled`, `meeting_point`, `courses_enabled`), `shift_week_status` (per group and
   week, `week_start` is the Monday: `open` / `allocating` / `published`; no
   row: the current week and earlier are published, later weeks are open),
   `shift_availability_rules` (weekday answers per semester),
@@ -87,6 +96,12 @@ Also fixed: dev seed produced semester code `20253` (now
 - App only: brannkurs for everyone, barkurs for samfunnettjeneste in
   skjenker/bartender places, valid 4 semesters from `completed_semester`, or
   a sign-up for a session before the shift. Not checked on the leader board.
+  Only for groups with `shift_group_settings.courses_enabled` on. It is off
+  for new groups and for every existing row (migration `20261031_1200` does
+  not look at course requirements). A leader turns it on in `/shifts/settings`
+  once real course completions are registered; the dev seed turns it on for
+  Stjerne. When it is off the app skips course checks for that group's
+  places.
 
 ## Run it locally
 
@@ -242,6 +257,8 @@ Known gaps, deliberately left to later steps:
 - **Pilot step when switching a group on:** open `/shifts`, pick the group
   and use "Publiser måneden" on the weeks already planned in the old sheet,
   or their shifts stay hidden from Ledige and Mine and open for wishes.
+- **Course checks** are off for every group until a leader turns on "Sjekk brann- og barkurs" in
+  `/shifts/settings`; do that once real completions are registered.
 - **Switching on** a group: `/shifts/settings` (linked from the board) has
   the app and samfunnettjeneste switches, the meeting point and closed
   periods per participating group; an Admin adds a new group there under
@@ -249,9 +266,11 @@ Known gaps, deliberately left to later steps:
   shifts come from `/shifts/generate`. Course dates have no screen in
   Personal yet (step 6).
 - **Generator limits:** it only creates; changing a template does not change
-  shifts that exist, and there is no unique constraint on (template, start),
-  so two runs at the same moment could both create a shift (step 4d may add
-  one). Closed periods only affect the generator, not shifts that exist.
+  shifts that exist. "Already exists" means the same template on the same
+  Oslo date (not the exact start time), so editing a template's time and
+  generating again creates nothing for days that already have its shift. There
+  is no unique constraint on that key yet, so two runs at the same moment
+  could both create a shift (step 4d). Closed periods only affect the generator, not shifts that exist.
   They inherit down the group tree: the generator skips a day when the group
   or any ancestor has a period on it, and the preview names the period and the
   group it came from. On `/shifts/settings` an ancestor such as Skjenkegruppen
@@ -321,13 +340,16 @@ Known gaps, deliberately left to later steps:
    or templates, in tree order. Step 4b status: done. Next is 4c.
 4c. **Privacy settings** (see decisions): per-group visibility of who is on
    a shift, and a member's own hide setting.
-4d. **Edit one shift or a whole series on the board** (time, staffing, note,
-   closed, opplæring mode). The per-group app switches and meeting point are
-   done (step 4a). Also in 4d:
-   - A unique index on (template, start time), so two generator runs cannot
-     both create the same shift.
-   - A daily top-up job that generates the next 12 weeks with the same rules
-     as the "Lag skift" button (templates, closed periods, existing shifts).
+4d. **Edit one shift on the board** (time, staffing, note, opplæring mode).
+   "Fjern skift" (only when nobody is placed; with a confirm) and "Steng
+   skift" / "Åpne skift" are done. The per-group app switches and meeting
+   point are done (step 4a). Dropped: editing a whole series, and the daily
+   top-up job that would generate the next 12 weeks. Still to do:
+   - A unique index so two generator runs cannot both create the same shift.
+     It uses the same key as the generator: (template, Oslo date of the
+     start), which on Postgres is an expression index on
+     `(template_id, (starts_at AT TIME ZONE 'Europe/Oslo')::date)`. Not built
+     yet; the generator itself already skips on that key.
    - What happens to shifts that already exist when a closed period is added
      later: offer to remove the empty ones, warn about the ones with people,
      and never remove a shift that has people on it.

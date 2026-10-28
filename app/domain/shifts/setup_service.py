@@ -100,7 +100,11 @@ class ShiftsSetupService:
         if group_id in participating:
             raise ShiftPlacementError(f"{name} tar allerede del i Skiftlista.")
         await self.repository.save_group_settings(
-            group_id, app_enabled=False, samf_enabled=False, meeting_point=None
+            group_id,
+            app_enabled=False,
+            samf_enabled=False,
+            meeting_point=None,
+            courses_enabled=False,
         )
         return f"{name} tar nå del i Skiftlista. Begge bryterne er av til du slår dem på."
 
@@ -205,7 +209,7 @@ class ShiftsSetupService:
         templates = await self.repository.list_templates([group_id])
         parents = await self.repository.list_group_parents()
         periods = await self.repository.list_closed_periods(ancestor_chain(group_id, parents))
-        existing = await self.repository.list_existing_shift_starts(
+        existing = await self.repository.list_existing_shift_days(
             [t.template_id for t in templates],
             datetime.combine(date_from - timedelta(days=1), time.min, tzinfo=OSLO),
             datetime.combine(date_to + timedelta(days=2), time.min, tzinfo=OSLO),
