@@ -17,7 +17,7 @@ def build_percentage_provider(settings: Settings) -> Callable[[], Awaitable[int]
     expires_at = 0.0
     refreshing = False
 
-    token = settings.posthog_feature_flags_token or settings.posthog_project_token
+    token = settings.posthog_flags_token
 
     async def get_percentage() -> int:
         nonlocal percentage, expires_at, refreshing

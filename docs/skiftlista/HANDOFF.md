@@ -236,6 +236,65 @@ the hosted demo use "Demo-leder" on the login page. Halvtimen
 is switched on for the demo (it is not in the request list, but the "20+" block
 only shows when Halvtimen is visible in the app).
 
+### Hosting the demo on Render
+
+`render.yaml` (Blueprint) describes one free web service, `skiftlista-demo`, in
+Frankfurt, native Python runtime, branch `skiftlista/demo`. It never runs
+migrations or seeds: migrate and seed the demo database by hand first (above).
+
+The build installs uv and bun (Render's Python runtime has no bun), runs
+`uv sync --frozen` (uvicorn is a dev dependency, so dev is included), `bun
+install` and `bun run build:css`. Only the CSS is built: the i18n catalogs,
+compiled emails and `vercel-observability.js` are committed. The service starts
+with `.venv/bin/uvicorn app.main:create_app --factory --host 0.0.0.0 --port
+$PORT` (uv itself is gone after the build) and is checked on `/health`.
+
+In Render's dashboard:
+
+1. New → Blueprint, connect the `kvarteret-personal` repo, pick branch
+   `skiftlista/demo`. Render reads `render.yaml`.
+2. Fill in the variables marked `sync: false` (table below) and create the
+   service. `APP_PUBLIC_BASE_URL` is the service URL, which is
+   `https://skiftlista-demo.onrender.com` unless the name is taken; check it on
+   the service page and fix the variable if it differs (this redeploys).
+3. Wait for the deploy to go live, open the URL and use "Demo-leder" on the
+   login page. If the startup check finds a real person, the deploy fails;
+   read the log for `auth.demo_login.refused`.
+4. Point the app's Personal URL at the Render URL for the demo build.
+
+Free plan: the service sleeps after 15 minutes without traffic and the first
+request then takes up to about a minute, so open it shortly before the meeting.
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | secret: the demo database, `postgresql+asyncpg://…?ssl=require` |
+| `APP_SECRET_KEY` | secret: at least 32 characters |
+| `PERSONAL_SIGNING_SECRET` | secret: at least 32 characters (unused on the demo, but required in production) |
+| `DEMO_ACCESS_CODE` | secret: at least 12 characters |
+| `APP_PUBLIC_BASE_URL` | typed in: the Render URL, `https://…onrender.com`, no trailing slash |
+| `APP_ENV` | `production` |
+| `DEMO_LOGIN_ENABLED` | `true` |
+| `EMAIL_DISPATCH_ENABLED` | `false` (so no `CRON_SECRET` is needed) |
+| `LEGACY_ADMIN_LOGIN_ENABLED` | `false` |
+| `POSTHOG_ENABLED` | `false` (nothing is sent to PostHog) |
+| `PYTHON_VERSION` | `3.13.14` |
+| `UV_PYTHON_DOWNLOADS` | `never` (use Render's Python, which is kept after the build) |
+| `FORWARDED_ALLOW_IPS` | `*` (uvicorn trusts Render's `X-Forwarded-Proto`, so URLs and cookies are https) |
+
+Without Azure, Supabase, Resend and the Vercel crons the app still starts.
+What does not work: photos (none are shown, uploads fail), every email
+(Resend has no key; app codes are only for `@example.dev` via the demo code),
+password login and password reset (no Supabase), feedback to Linear, the agent
+chat, Spotify "now playing". The session cookie is host-only on
+`onrender.com` (the `.samfunnetibergen.no` domain is only used on that domain).
+
+`POSTHOG_ENABLED=false` keeps the demo out of Kvarteret's PostHog project
+entirely: no OTLP logs or traces (and no per-request flush), no exception
+issues, no feature-flag lookups (Spotify "now playing" and the pooler trial
+stay off) and no agent-chat events. It defaults to `true`, so Kvarteret's real
+deployment is unchanged; there, an unreachable `POSTHOG_HOST` makes every
+request hang, because each request flushes telemetry before it answers.
+
 ## Decisions already made (do not re-ask)
 
 - Quota: 1 shift a week; pensioner agreement 1 a month (model as verv

@@ -17,7 +17,7 @@ def build_flag(settings: Settings, key: str) -> Callable[[], Awaitable[bool]]:
     expires_at = 0.0
     refreshing = False
 
-    token = settings.posthog_feature_flags_token or settings.posthog_project_token
+    token = settings.posthog_flags_token
 
     async def is_enabled() -> bool:
         nonlocal enabled, expires_at, refreshing

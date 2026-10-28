@@ -304,7 +304,7 @@ class AgentChatService:
                      trace_id: str, prompt_chars: int, distinct_id: str) -> None:
         """Admin id, length, tokens, latency only; never prompts or answers."""
         s = self.settings
-        if not (s.posthog_project_token and s.app_env == "production"):
+        if not (s.posthog_project_token and s.posthog_observability_enabled):
             return
         tokens_in = usage.get("input_tokens") or 0
         tokens_out = usage.get("output_tokens") or 0

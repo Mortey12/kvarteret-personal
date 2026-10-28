@@ -1,0 +1,60 @@
+# Render Blueprint for the hosted Skiftlista demo (fake data only).
+# Not Kvarteret's real deployment: that runs on Vercel (vercel.json).
+# See docs/skiftlista/HANDOFF.md, "Hosting the demo on Render".
+#
+# The database is migrated and seeded by hand; this service never runs
+# migrations or seeds.
+services:
+  - type: web
+    name: skiftlista-demo
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: skiftlista/demo
+    # uv and bun are installed in the build; only the CSS is built here
+    # (i18n catalogs, compiled emails and JS are committed).
+    buildCommand: >-
+      curl -LsSf https://astral.sh/uv/0.11.21/install.sh | sh &&
+      curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.14" &&
+      export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH" &&
+      uv sync --frozen &&
+      bun install --frozen-lockfile &&
+      bun run build:css
+    # uv and bun live in $HOME, which is not kept after the build; .venv is.
+    startCommand: .venv/bin/uvicorn app.main:create_app --factory --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.14
+      # Use Render's Python; a uv-downloaded one would live in $HOME and be gone at runtime.
+      - key: UV_PYTHON_DOWNLOADS
+        value: never
+      # Trust Render's proxy for X-Forwarded-Proto, so URLs and cookies are https.
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"
+      - key: APP_ENV
+        value: production
+      - key: EMAIL_DISPATCH_ENABLED
+        value: "false"
+      - key: LEGACY_ADMIN_LOGIN_ENABLED
+        value: "false"
+      - key: DEMO_LOGIN_ENABLED
+        value: "true"
+      # Nothing is sent to Kvarteret's PostHog: no logs, traces, errors, flags or events.
+      - key: POSTHOG_ENABLED
+        value: "false"
+      # The service's own https://<name>.onrender.com URL, no trailing slash.
+      - key: APP_PUBLIC_BASE_URL
+        sync: false
+      # postgresql+asyncpg://...?ssl=require (the demo database, never a real one).
+      - key: DATABASE_URL
+        sync: false
+      # At least 32 characters.
+      - key: APP_SECRET_KEY
+        sync: false
+      # At least 32 characters; nothing calls it on the demo, but production requires it.
+      - key: PERSONAL_SIGNING_SECRET
+        sync: false
+      # At least 12 characters.
+      - key: DEMO_ACCESS_CODE
+        sync: false

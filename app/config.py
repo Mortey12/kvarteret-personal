@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     posthog_project_token: str | None = Field(default=None)
     posthog_feature_flags_token: str | None = Field(default=None, repr=False)
     posthog_host: str = Field(default="https://eu.i.posthog.com")
+    # Off: nothing is sent to PostHog at all (hosted demo).
+    posthog_enabled: bool = Field(default=True)
     otel_service_name: str = Field(default="kvarteret-personal")
     email_dispatch_enabled: bool = Field(default=True)
     cron_secret: str | None = Field(default=None)
@@ -173,7 +175,9 @@ class Settings(BaseSettings):
             return stripped or None if value is not None else value
         return value
 
-    @field_validator("review_bypass_enabled", "demo_login_enabled", mode="before")
+    @field_validator(
+        "review_bypass_enabled", "demo_login_enabled", "posthog_enabled", mode="before"
+    )
     @classmethod
     def strip_boolean_settings(cls, value):
         if isinstance(value, str):
@@ -190,8 +194,15 @@ class Settings(BaseSettings):
 
     @property
     def posthog_observability_enabled(self) -> bool:
-        """OTLP logs/traces and exception issues: always on in production only."""
-        return self.app_env == "production"
+        """OTLP logs/traces and exception issues: on in production unless PostHog is off."""
+        return self.app_env == "production" and self.posthog_enabled
+
+    @property
+    def posthog_flags_token(self) -> str | None:
+        """Token for server-side flag lookups; None when PostHog is off."""
+        if not self.posthog_enabled:
+            return None
+        return self.posthog_feature_flags_token or self.posthog_project_token
 
     @property
     def personal_signing_secrets(self) -> tuple[str, ...]:
