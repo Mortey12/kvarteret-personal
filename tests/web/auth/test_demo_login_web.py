@@ -24,6 +24,7 @@ from app.runtime import build_application_container
 from tests.support.helpers import csrf_headers, make_authenticated_user, prime_csrf
 
 CODE = "demo-kode-1234"
+APP_CODE = "493021"
 
 
 def _leader(role: UserRole = UserRole.ADMIN) -> UserAccount:
@@ -34,7 +35,7 @@ def _leader(role: UserRole = UserRole.ADMIN) -> UserAccount:
 
 
 def _client(*, enabled: bool):
-    settings = Settings(demo_login_enabled=True, demo_access_code=CODE) if enabled else Settings()
+    settings = Settings(demo_login_enabled=True, demo_access_code=CODE, demo_app_code=APP_CODE) if enabled else Settings()
     app = create_app(build_application_container(settings))
     guard = SimpleNamespace(ensure_only_fake_people=AsyncMock())
     accounts = SimpleNamespace(get_user_account_by_identifier=AsyncMock(return_value=_leader()))
@@ -99,7 +100,7 @@ def test_the_code_logs_in_the_demo_leader_as_admin(enabled, caplog):
     assert CODE not in caplog.text
 
 
-@pytest.mark.parametrize("code", ["feil-kode-1234", CODE.upper(), "", "123456"])
+@pytest.mark.parametrize("code", ["feil-kode-1234", CODE.upper(), "", "123456", APP_CODE])
 def test_a_wrong_code_is_refused(enabled, code):
     client, fakes = enabled
     response = _post(client, code)

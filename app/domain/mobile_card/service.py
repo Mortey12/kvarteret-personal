@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 from app.auth.demo_login import (
     DemoLoginRefused,
-    demo_code_matches,
+    demo_app_code_matches,
     demo_login_enabled,
     is_demo_email,
     log_demo_login,
@@ -283,7 +283,7 @@ class MobileCardService:
             window_seconds=self.settings.mobile_card_session_attempt_window_seconds,
             message="Too many access-code attempts. Try again later.",
         )
-        if self._is_demo_email(normalized_email) and demo_code_matches(
+        if self._is_demo_email(normalized_email) and demo_app_code_matches(
             self.settings, normalized_access_code
         ):
             return await self._create_demo_session(

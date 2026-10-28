@@ -1,9 +1,10 @@
 """Demo login for a hosted demo that holds fake data only.
 
-Off unless ``DEMO_LOGIN_ENABLED=true`` and ``DEMO_ACCESS_CODE`` (at least 12
-characters) are set; ``validate_production_secrets`` refuses a shorter or missing
-code. When on, an email ending in ``@example.dev`` logs in to the app with
-``DEMO_ACCESS_CODE`` instead of an emailed code, and the demo leader
+Off unless ``DEMO_LOGIN_ENABLED=true``, ``DEMO_ACCESS_CODE`` (at least 12
+characters) and ``DEMO_APP_CODE`` (exactly 6 digits) are set;
+``validate_production_secrets`` refuses a missing or malformed code. When on, an
+email ending in ``@example.dev`` logs in to the app with ``DEMO_APP_CODE`` (the
+app's code box only takes 6 digits) instead of an emailed code, and the demo leader
 (``demo.leder@example.dev``) logs in to the leader pages as Admin at
 ``/login/demo``.
 
@@ -39,12 +40,21 @@ def is_demo_email(email: str) -> bool:
 
 
 def demo_code_matches(settings: Settings, access_code: str) -> bool:
-    """Constant-time check of a submitted code against DEMO_ACCESS_CODE."""
+    """Constant-time check of a submitted code against DEMO_ACCESS_CODE (leader login)."""
     if not demo_login_enabled(settings):
         return False
     assert settings.demo_access_code is not None
     return hmac.compare_digest(
         access_code.strip().encode("utf-8"), settings.demo_access_code.encode("utf-8")
+    )
+
+
+def demo_app_code_matches(settings: Settings, access_code: str) -> bool:
+    """Constant-time check of a submitted code against DEMO_APP_CODE (app login)."""
+    if not demo_login_enabled(settings) or not settings.demo_app_code:
+        return False
+    return hmac.compare_digest(
+        access_code.strip().encode("utf-8"), settings.demo_app_code.encode("utf-8")
     )
 
 

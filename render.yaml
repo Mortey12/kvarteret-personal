@@ -58,3 +58,6 @@ services:
       # At least 12 characters.
       - key: DEMO_ACCESS_CODE
         sync: false
+      # Exactly 6 digits: the Internbevis app's code box only takes 6 digits.
+      - key: DEMO_APP_CODE
+        sync: false

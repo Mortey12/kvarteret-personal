@@ -12,7 +12,12 @@ from sqlalchemy import BigInteger, Integer, insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.demo_guard import DemoDatabaseGuard
-from app.auth.demo_login import DemoLoginRefused, demo_code_matches, demo_login_enabled
+from app.auth.demo_login import (
+    DemoLoginRefused,
+    demo_app_code_matches,
+    demo_code_matches,
+    demo_login_enabled,
+)
 from app.config import Settings, validate_production_secrets
 from app.db.metadata import public_metadata
 from app.db.rate_limit import InMemoryRateLimiter
@@ -25,6 +30,7 @@ from app.domain.volunteers.tables import volunteer_records
 from app.runtime import app_lifespan, check_demo_database
 
 CODE = "demo-kode-1234"
+APP_CODE = "493021"
 DEMO_EMAIL = "demo.stjerne@example.dev"
 
 
@@ -33,7 +39,7 @@ def _settings(**values) -> Settings:
         _env_file=None,
         app_env="test",
         app_secret_key="test-secret",
-        **{"demo_login_enabled": True, "demo_access_code": CODE, **values},
+        **{"demo_login_enabled": True, "demo_access_code": CODE, "demo_app_code": APP_CODE, **values},
     )
 
 
@@ -53,9 +59,35 @@ def test_demo_login_is_off_by_default() -> None:
 
 @pytest.mark.parametrize("code", [None, "", "   ", "elleve-tegn"])
 def test_enabled_with_a_short_or_missing_code_refuses_to_start(code) -> None:
-    settings = Settings(_env_file=None, app_env="test", demo_login_enabled="true", demo_access_code=code)
+    settings = Settings(
+        _env_file=None, app_env="test", demo_login_enabled="true",
+        demo_access_code=code, demo_app_code=APP_CODE,
+    )
     with pytest.raises(ValueError, match="DEMO_ACCESS_CODE of at least 12 characters"):
         validate_production_secrets(settings)
+
+
+@pytest.mark.parametrize("code", [None, "", "   ", "12345", "1234567", "12345a", "abcdef", "١٢٣٤٥٦", CODE])
+def test_enabled_with_a_missing_or_non_six_digit_app_code_refuses_to_start(code) -> None:
+    settings = Settings(
+        _env_file=None, app_env="test", demo_login_enabled="true",
+        demo_access_code=CODE, demo_app_code=code,
+    )
+    with pytest.raises(ValueError, match="DEMO_APP_CODE of exactly 6 digits"):
+        validate_production_secrets(settings)
+
+
+def test_the_app_code_is_not_needed_when_demo_login_is_off() -> None:
+    validate_production_secrets(Settings(_env_file=None, app_env="test"))
+
+
+def test_the_two_codes_are_checked_separately() -> None:
+    settings = validate_production_secrets(_settings())
+    assert demo_app_code_matches(settings, f" {APP_CODE} ")
+    assert not demo_app_code_matches(settings, CODE)
+    assert demo_code_matches(settings, CODE)
+    assert not demo_code_matches(settings, APP_CODE)
+    assert APP_CODE not in repr(settings)
 
 
 def test_a_twelve_character_code_is_accepted() -> None:
@@ -221,7 +253,7 @@ async def test_a_demo_email_logs_in_to_the_app_with_the_code_as_a_real_volunteer
     service, repository, sender = _service()
     await service.request_access_code(DEMO_EMAIL)
     with caplog.at_level(logging.INFO):
-        session = await service.create_session(" Demo.Stjerne@Example.dev ", CODE, source_key="127.0.0.1")
+        session = await service.create_session(" Demo.Stjerne@Example.dev ", APP_CODE, source_key="127.0.0.1")
 
     assert sender.sent == [] and repository.stored_codes == []
     identity = service.authenticate_session(session.session_token)
@@ -231,19 +263,19 @@ async def test_a_demo_email_logs_in_to_the_app_with_the_code_as_a_real_volunteer
     records = [r for r in caplog.records if r.event == "auth.demo_login.succeeded"]
     assert [r.event_data["demo_account"] for r in records] == ["demo.stjerne"]
     assert records[0].event_data["login_kind"] == "app"
-    assert CODE not in caplog.text
+    assert APP_CODE not in caplog.text and CODE not in caplog.text
 
 
 async def test_the_code_does_not_work_for_any_other_email() -> None:
     service, _, sender = _service()
     with pytest.raises(MobileCardInvalidAccessCodeError):
-        await service.create_session("person@kvarteret.no", CODE)
+        await service.create_session("person@kvarteret.no", APP_CODE)
     # Requesting a code for a real email is unchanged: one is stored and sent.
     await service.request_access_code("person@kvarteret.no")
     assert sender.sent == ["person@kvarteret.no"]
 
 
-@pytest.mark.parametrize("code", ["wrong-code-1234", CODE.upper(), "123456", ""])
+@pytest.mark.parametrize("code", [CODE, "wrong-code-1234", CODE.upper(), "123456", "49302", ""])
 async def test_a_wrong_code_is_refused(code) -> None:
     service, repository, _ = _service()
     with pytest.raises(MobileCardInvalidAccessCodeError):
@@ -254,21 +286,21 @@ async def test_a_wrong_code_is_refused(code) -> None:
 async def test_a_demo_email_with_no_volunteer_is_refused() -> None:
     service, _, _ = _service()
     with pytest.raises(MobileCardInvalidAccessCodeError):
-        await service.create_session("nobody@example.dev", CODE)
+        await service.create_session("nobody@example.dev", APP_CODE)
 
 
 async def test_the_app_login_is_refused_when_the_database_check_fails() -> None:
     guard = FakeGuard(refuse=True)
     service, repository, _ = _service(guard=guard)
     with pytest.raises(MobileCardInvalidAccessCodeError):
-        await service.create_session(DEMO_EMAIL, CODE)
+        await service.create_session(DEMO_EMAIL, APP_CODE)
     assert guard.calls == 1 and repository.refresh_tokens == []
 
 
 async def test_the_code_does_nothing_when_demo_login_is_off() -> None:
     service, _, sender = _service(settings=Settings(_env_file=None, app_env="test", app_secret_key="test-secret"))
     with pytest.raises(MobileCardInvalidAccessCodeError):
-        await service.create_session(DEMO_EMAIL, CODE)
+        await service.create_session(DEMO_EMAIL, APP_CODE)
     await service.request_access_code(DEMO_EMAIL)
     assert sender.sent == [DEMO_EMAIL]  # behaves exactly as today
 
@@ -281,4 +313,4 @@ async def test_without_a_wired_guard_demo_login_stays_off() -> None:
         rate_limiter=InMemoryRateLimiter(),
     )
     with pytest.raises(MobileCardInvalidAccessCodeError):
-        await service.create_session(DEMO_EMAIL, CODE)
+        await service.create_session(DEMO_EMAIL, APP_CODE)

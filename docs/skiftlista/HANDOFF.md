@@ -186,12 +186,13 @@ fake domain; with the default `dev@kvarteret.dev` the demo login refuses to star
 The hosted demo runs with `APP_ENV=production`, where there is no web login
 (no Supabase) and app codes cannot be emailed. A demo login replaces both
 (`app/auth/demo_login.py`, `app/auth/demo_guard.py`). **Never enable it on
-Kvarteret's real deployment.** It is off unless both are set:
+Kvarteret's real deployment.** It is off unless all three are set:
 
 | Variable | Value |
 | --- | --- |
 | `DEMO_LOGIN_ENABLED` | `true` |
-| `DEMO_ACCESS_CODE` | at least 12 characters; the app refuses to start with a shorter or missing code |
+| `DEMO_ACCESS_CODE` | at least 12 characters (leader web login); the app refuses to start with a shorter or missing code |
+| `DEMO_APP_CODE` | exactly 6 digits (app login; the app's code box only takes 6 digits); the app refuses to start with a missing or non-6-digit code |
 
 When it is on:
 
@@ -202,7 +203,7 @@ When it is on:
   process, so a runtime that skips the startup hook still never accepts the
   code against a database with real people.
 - **App login.** For an email ending in `@example.dev`, "send code" sends
-  nothing and the code is `DEMO_ACCESS_CODE`. The session is the volunteer's
+  nothing and the code is `DEMO_APP_CODE` (`DEMO_ACCESS_CODE` is refused there). The session is the volunteer's
   own (real `person_id`, refresh token), so Skiftlista loads. A wrong code
   falls through to the normal check and is refused; the normal attempt limits
   apply. Any other email works exactly as before.
@@ -218,7 +219,7 @@ When it is on:
   `auth.demo_login.refused`.
 
 Log in to the app with an email and a code: locally the code is saved under
-`.devdata/outbox/`; on the hosted demo use `DEMO_ACCESS_CODE`.
+`.devdata/outbox/`; on the hosted demo use `DEMO_APP_CODE`.
 Good volunteers to log in as:
 
 | Email | Why |
@@ -271,6 +272,7 @@ request then takes up to about a minute, so open it shortly before the meeting.
 | `APP_SECRET_KEY` | secret: at least 32 characters |
 | `PERSONAL_SIGNING_SECRET` | secret: at least 32 characters (unused on the demo, but required in production) |
 | `DEMO_ACCESS_CODE` | secret: at least 12 characters |
+| `DEMO_APP_CODE` | secret: exactly 6 digits |
 | `APP_PUBLIC_BASE_URL` | typed in: the Render URL, `https://…onrender.com`, no trailing slash |
 | `APP_ENV` | `production` |
 | `DEMO_LOGIN_ENABLED` | `true` |

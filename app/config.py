@@ -19,6 +19,8 @@ PRODUCTION_DEFAULTS = {
 
 # Demo login (app/auth/demo_login.py) refuses to start with a shorter code.
 DEMO_ACCESS_CODE_MIN_LENGTH = 12
+# The app's code box only takes the normal 6-digit code, so the app login has its own.
+DEMO_APP_CODE_LENGTH = 6
 
 
 class Settings(BaseSettings):
@@ -93,6 +95,7 @@ class Settings(BaseSettings):
     # Hosted demo with fake data only (app/auth/demo_login.py). Never on for real data.
     demo_login_enabled: bool = Field(default=False)
     demo_access_code: str | None = Field(default=None, repr=False)
+    demo_app_code: str | None = Field(default=None, repr=False)
     # Admin agent chat (Azure OpenAI "skonk" deployment).
     azure_openai_endpoint: str | None = Field(default=None)
     azure_openai_api_key: str | None = Field(default=None, repr=False)
@@ -155,6 +158,7 @@ class Settings(BaseSettings):
         "review_bypass_email",
         "review_bypass_token",
         "demo_access_code",
+        "demo_app_code",
         "azure_openai_endpoint",
         "azure_openai_api_key",
         "azure_openai_agent_deployment",
@@ -239,6 +243,14 @@ def validate_production_secrets(settings: Settings) -> Settings:
             "DEMO_LOGIN_ENABLED needs DEMO_ACCESS_CODE of at least "
             f"{DEMO_ACCESS_CODE_MIN_LENGTH} characters."
         )
+        raise ValueError(msg)
+    if settings.demo_login_enabled and not (
+        settings.demo_app_code
+        and len(settings.demo_app_code) == DEMO_APP_CODE_LENGTH
+        and settings.demo_app_code.isascii()
+        and settings.demo_app_code.isdigit()
+    ):
+        msg = f"DEMO_LOGIN_ENABLED needs DEMO_APP_CODE of exactly {DEMO_APP_CODE_LENGTH} digits."
         raise ValueError(msg)
     if settings.app_env == "production":
         if settings.app_secret_key == "change-me" or len(settings.app_secret_key) < 32:
