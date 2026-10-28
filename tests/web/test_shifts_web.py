@@ -419,6 +419,19 @@ def test_settings_page_shows_current_state_and_the_app_note() -> None:
     assert "blir skiftene synlige for medlemmene i den gruppa i appen" in response.text
 
 
+def test_settings_page_warns_about_missing_courses_only_when_present() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    assert "data-missing-courses" not in client.get("/shifts/settings").text
+
+    async def missing(scope):
+        return [GroupSettingsView(7, "Stjerne", True, True, False, "", True, ["Brannkurs", "Barkurs"])]
+
+    service.list_group_settings = missing
+    text = client.get("/shifts/settings").text
+    assert "data-missing-courses" in text
+    assert "Fant ikke kurset Brannkurs og Barkurs" in text
+
+
 def test_settings_page_is_for_managers_only() -> None:
     client, _ = _client(UserRole.VOLUNTEER)
     assert client.get("/shifts/settings").status_code == 403

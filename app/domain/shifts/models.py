@@ -155,6 +155,9 @@ class GroupSettingsView:
     samf_enabled: bool
     meeting_point: str
     courses_enabled: bool = False
+    # Names of required courses (Brannkurs, Barkurs) not found in Personal, only
+    # filled in when courses_enabled is on.
+    missing_courses: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

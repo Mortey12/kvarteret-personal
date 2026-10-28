@@ -16,7 +16,6 @@ from app.domain.courses.tables import (
     course_completions,
     course_session_signups,
     course_sessions,
-    courses,
 )
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.models import ShiftRecord
@@ -294,17 +293,6 @@ class ShiftsAppRepository(ShiftsRepository):
             )
 
     # ------------------------------------------------------------ courses
-
-    async def find_courses(self, names: list[str]) -> dict[str, int]:
-        """Lower-cased course name to course id, for the names that exist."""
-        wanted = [name.lower() for name in names]
-        rows = await self.fetch_all_mappings(
-            select(courses.c.id, courses.c.name).where(func.lower(courses.c.name).in_(wanted))
-        )
-        found: dict[str, int] = {}
-        for row in sorted(rows, key=lambda item: item["id"]):
-            found.setdefault(row["name"].lower(), row["id"])
-        return found
 
     async def latest_completions(self, volunteer_id: int, course_ids: list[int]) -> dict[int, int]:
         if not course_ids:

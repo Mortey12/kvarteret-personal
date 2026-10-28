@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.db.metadata import public_metadata
 from app.db.session import reset_request_session, set_request_session
 from app.domain.admin_accounts.tables import group_admin_memberships
+from app.domain.courses.tables import courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.tables import (
@@ -35,6 +36,7 @@ from app.domain.volunteers.tables import volunteer_records
 TABLES = [
     volunteer_records,
     groups,
+    courses,
     assignment_roles,
     role_assignments,
     group_admin_memberships,

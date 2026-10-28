@@ -60,6 +60,7 @@ class FakeRepository:
         self.week_rows: dict[tuple[int, date], str] = {}
         self.events: list[tuple] = []
         self.settings: dict[int, dict] = {}
+        self.course_names: list[str] = []
 
     async def get_slot_shift_id(self, slot_id: int) -> int | None:
         return 1 if slot_id in (10, 11, 12) else None
@@ -137,6 +138,10 @@ class FakeRepository:
                 (20, "Kultur", None),
             )
         ]
+
+    async def find_courses(self, names: list[str]) -> dict[str, int]:
+        wanted = {n.lower() for n in names}
+        return {name.lower(): i for i, name in enumerate(self.course_names, start=1) if name.lower() in wanted}
 
     async def save_group_settings(
         self, group_id, *, app_enabled, samf_enabled, meeting_point, courses_enabled
@@ -522,6 +527,24 @@ async def test_banner_for_an_unpublished_week_and_none_once_published() -> None:
     far = ShiftsService(repo, now=_clock(date(2026, 10, 19)))
     repo.week_rows.clear()
     assert (await far.get_week_plan(date(2026, 10, 19), scope=SCOPE)).banners == []
+
+
+@pytest.mark.asyncio
+async def test_settings_warn_when_a_required_course_is_missing() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo)
+    repo.settings[7] = {"courses_enabled": True}
+    repo.settings[8] = {"courses_enabled": False}
+
+    both_missing = {g.name: g.missing_courses for g in await service.list_group_settings(ALL_GROUPS)}
+    assert both_missing == {"Stjerne": ["Brannkurs", "Barkurs"], "Grøndahls": []}
+
+    repo.course_names = ["Brannvernkurs"]
+    one_missing = {g.name: g.missing_courses for g in await service.list_group_settings(ALL_GROUPS)}
+    assert one_missing["Stjerne"] == ["Barkurs"]
+
+    repo.course_names = ["Brannkurs", "Barkurs"]
+    assert all(g.missing_courses == [] for g in await service.list_group_settings(ALL_GROUPS))
 
 
 @pytest.mark.asyncio

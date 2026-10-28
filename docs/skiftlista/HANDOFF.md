@@ -76,14 +76,22 @@ Also fixed: dev seed produced semester code `20253` (now
   verv (`role_assignments` + `assignment_roles`) this semester. Verv names
   used: `Skiftleder`, `Opplæring`, `Kokk`. Subgroups use
   `groups.parent_group_id`. Course requirements per group already exist in
-  `group_course_requirements`.
+  `group_course_requirements`, but that table is display-only (courses
+  module) and Skiftlista does not use it: the course checks use `COURSE_RULES`
+  in `app_rules.py` and the per-group `courses_enabled` switch.
+  Course rights are global on purpose, since brann- and barkurs are for all of
+  Kvarteret: any Admin or Gruppeadmin can manage courses, sessions and
+  completions for everyone, not only for their own groups.
 
 ### Rules implemented (server is the source of truth)
 
 - Skiftleder place: verv Skiftleder in the shift's group. Kokk: verv Kokk.
   Opplæring place: verv Opplæring in the group. Trainees may not take crew
-  places in their own group. Crew places: any Skjenke member, or anyone if
-  the place is open for samfunnettjeneste.
+  places in their own group. Crew places (`placement_problem` in
+  `planning.py`): a person with any verv other than Opplæring in a group that
+  has shifts, or a member without verv in such a group, or anyone if the place
+  is open for samfunnettjeneste. Otherwise refused with "Kun for medlemmer av
+  gruppa". It does not look at the Skjenke group.
 - Opplæring **takes a regular crew place** by default
   (`training_replaces_slot`); per shift it can be "i tillegg".
 - Closed shift, same person twice on a shift, full place: refused.
@@ -275,8 +283,8 @@ only shows when Halvtimen is visible in the app).
   a group (`/shifts/settings`, "Andre grupper"). Verv decides which places a
   person is eligible for; leader rights are explicit Admin assignments and
   never derived from verv.
-- Build order: 4b, then 4c (privacy settings), then 4d (edit one shift or a
-  whole series on the board), then 5 onward.
+- Build order: 4b, then 4c (privacy settings), then 4d (edit one shift on the
+  board; editing a whole series is dropped), then 5 onward.
 - Samfunnettjeneste is not a role; it is done by people in many groups.
   Open: Morten will describe how it works.
 - Ownership is role based (Skjenkeleder, HS leder/driftsansvarlig); role
@@ -333,7 +341,8 @@ Known gaps, deliberately left to later steps:
   was enough.
 - **Course names**: the app looks for a course named `Brannkurs` or
   `Brannvernkurs`, and `Barkurs` (`COURSE_RULES` in `app_rules.py`). A course
-  that does not exist is not checked. Ask etjenesten whether `Skjenkekurs` is
+  that does not exist is not checked; `/shifts/settings` shows a warning on a
+  group with course checks on when one of them cannot be found. Ask etjenesten whether `Skjenkekurs` is
   the barkurs. Register real brannkurs completions before the pilot, or
   members cannot claim in the app.
 - **Swap and "kan ikke"** are stored and shown on the board, but the message
@@ -389,7 +398,7 @@ Known gaps, deliberately left to later steps:
    Follow-up (done, same step): removed "Fordeles nå" from the leader UI,
    current-week guard on "Åpne for ønsker", closed periods inherited down the
    tree, templates and generate list only groups with their own settings row
-   or templates, in tree order. Step 4b status: done. Next is 4c.
+   or templates, in tree order.
 4c. **Privacy settings** (see decisions): per-group visibility of who is on
    a shift, and a member's own hide setting.
 4d. **Edit one shift on the board** (time, staffing, note, opplæring mode).

@@ -327,7 +327,7 @@ def placement_problem(
         return "I opplæring: bruk opplæringsplassen"
     if member_anywhere or open_for_samf:
         return None
-    return "Kun for Skjenke"
+    return "Kun for medlemmer av gruppa"
 
 
 def age_on(birth_date: date, day: date) -> int:

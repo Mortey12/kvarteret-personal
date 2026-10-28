@@ -6,7 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.auth.roles import UserRole
-from app.domain.shifts.app_rules import PERIOD_STATUSES, effective_week_status
+from app.domain.shifts.app_rules import COURSE_RULES, PERIOD_STATUSES, effective_week_status
 from app.domain.shifts.errors import (
     ShiftForbiddenError,
     ShiftNotFoundError,
@@ -499,6 +499,16 @@ class ShiftsService:
         roots = {gid for gid in tree if parents.get(gid) not in tree}
         own = set(await self.repository.list_direct_participating_group_ids())
         rows = await self.repository.list_groups_with_settings()
+        missing_courses: list[str] = []
+        if any(row["courses_enabled"] for row in rows if row["id"] in own and scope.allows(row["id"])):
+            found = await self.repository.find_courses(
+                [name for rule in COURSE_RULES.values() for name in rule.names_in_personal]
+            )
+            missing_courses = [
+                rule.name
+                for rule in COURSE_RULES.values()
+                if not any(name.lower() in found for name in rule.names_in_personal)
+            ]
         return [
             GroupSettingsView(
                 group_id=row["id"],
@@ -508,6 +518,7 @@ class ShiftsService:
                 samf_enabled=bool(row["samf_enabled"]),
                 meeting_point=row["meeting_point"] or "",
                 courses_enabled=bool(row["courses_enabled"]),
+                missing_courses=missing_courses if row["courses_enabled"] else [],
             )
             for row in rows
             if row["id"] in own and scope.allows(row["id"])
