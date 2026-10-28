@@ -52,7 +52,7 @@ Accepts diagnostics when the mobile app logs a user out due to missing or invali
 
 ### Skiftlista API
 
-The leader pages and actions in Personal (`GET /shifts`, `POST /shifts/assignments*`) are web routes, not part of this API. They are group-scoped: Admin may manage every group, Gruppeadmin only the groups in their group-admin assignment and those groups' subgroups, and everyone else is refused (`403`).
+The leader pages and actions in Personal (`/shifts`, `/shifts/settings`, `/shifts/templates`, `/shifts/generate` and their `POST` actions) are web routes, not part of this API. They are group-scoped to groups that take part in Skiftlista (a `shift_group_settings` row or shift templates, or a descendant with one): Admin may manage every participating group, Gruppeadmin only the participating groups in their group-admin assignment and those groups' descendants, and everyone else is refused (`403`). Only an Admin can add a group to Skiftlista.
 
 Mounted at `/api/v1/mobile-card/shifts` (OpenAPI tag `mobile-shifts`, code in
 `app/api/v1/mobile_shifts.py` and `app/domain/shifts/app_*.py`). Every call

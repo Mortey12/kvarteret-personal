@@ -34,6 +34,7 @@ the codebase again.
 | Service | `app/domain/shifts/service.py` (`get_week_plan`, `assign`, `move`, `remove`) |
 | Leader page | `app/web/routes/shifts/pages.py` (`GET /shifts`), `app/templates/pages/shifts/shift_plan.html` |
 | Drag and drop | `app/web/routes/shifts/actions.py` (POST `/shifts/assignments`, `/{id}/move`, `/{id}/delete`), `app/static/js/shift-board.js` |
+| Setup (4b) | `app/domain/shifts/setup_service.py`, `generator.py`, `template_input.py`, `permissions.py`, `app/web/routes/shifts/setup_actions.py`, pages `shift_settings.html`, `shift_templates.html`, `shift_generate.html`, migration `20261030_1200_shift_closed_periods.py` |
 | Test data | `scripts/dev/seed_shifts.py` (run by `scripts/dev/bootstrap.py`; skipped when a real snapshot is used) |
 | Tests | `tests/unit/domain/test_shift_planning.py`, `tests/unit/domain/test_shift_service.py`, `tests/web/test_shifts_web.py`, `tests/unit/shared/test_semester.py` |
 | App API (step 1) | `app/api/v1/mobile_shifts.py` (mounted at `/api/v1/mobile-card/shifts`), `app/domain/shifts/app_service.py`, `app_repository.py`, `app_rules.py`, `app_models.py`, migration `20261028_1200_shift_app_api.py` |
@@ -120,6 +121,14 @@ uv run python scripts/export_openapi.py --check   # web routes are in openapi.js
 Postgres e2e: set `DATABASE_URL` and `E2E_DATABASE_URL` to a migrated
 Postgres and run `uv run pytest tests/e2e`.
 
+Make shifts without the seed: open `/shifts/settings` and add closed periods
+(for example "Juleferie"), then `/shifts/templates` for the weekly pattern,
+then `/shifts/generate`: pick the group and range (default today to the end
+of the semester), check the preview and confirm. Running it again creates
+nothing new; weeks keep their status, so nothing shows in the app until the
+week is published on the board.
+Apply the closed-periods table locally with `uv run alembic upgrade head`.
+
 ## Decisions already made (do not re-ask)
 
 - Quota: 1 shift a week; pensioner agreement 1 a month (model as verv
@@ -166,6 +175,32 @@ Postgres and run `uv run pytest tests/e2e`.
   samfunnettjeneste; they come off when someone takes it.
 - Leader permissions: Admin all groups; Gruppeadmin own groups plus
   subgroups; nobody else (step 3).
+- Rights are explicit assignments made by an Admin, never derived from
+  free-text verv. A bar's leader or personalansvarlig is Gruppeadmin of that
+  bar's group, and the Skjenke leader is Gruppeadmin of the Skjenke group.
+  All logins are individual people, with no shared role accounts.
+- Privacy of who is on a shift (built in step 4c): what other volunteers
+  see is a per-group setting (`none`, `roles`, `first_names`, `full_names`),
+  default `first_names`. A member can hide their own name from other
+  volunteers (shown as role only); the group setting is the ceiling. Leaders
+  and the skiftleder on the day always see everyone.
+- "May not work together" pairs: no reason or case reference is stored. A
+  separate explicit permission "manage pairs", granted by an Admin per group
+  scope (a bar, Skjenke, or everything), and not implied by Admin. A pair is
+  visible and editable only by someone whose scope covers both people. It is
+  enforced everywhere a person can be placed (app claim, leader assign and
+  move, taking a swapped place, replacing someone who can't come), with a
+  neutral refusal that never names the other person. In the app the place is
+  simply not shown. Every view and change is logged. **Not built yet:**
+  Kvarteret's privacy person reviews the data model first.
+- Skiftlista will expand to other groups (for example Vakt), so nothing may
+  depend on the Skjenke group's slug. A group takes part when it has a
+  `shift_group_settings` row or shift templates, or has a descendant that
+  does; only an Admin adds a group (`/shifts/settings`, "Andre grupper").
+- Build order: 4b, then 4c (privacy settings), then 4d (edit one shift or a
+  whole series on the board), then 5 onward.
+- Samfunnettjeneste is not a role; it is done by people in many groups.
+  Open: Morten will describe how it works.
 - Ownership is role based (Skjenkeleder, HS leder/driftsansvarlig); role
   admins can grant access; a maintenance role for etjenesten.
 - Notifications: email for the pilot. Push to be built together with
@@ -196,8 +231,15 @@ Known gaps, deliberately left to later steps:
   and use "Publiser måneden" on the weeks already planned in the old sheet,
   or their shifts stay hidden from Ledige and Mine and open for wishes.
 - **Switching on** a group: `/shifts/settings` (linked from the board) has
-  the app and samfunnettjeneste switches and the meeting point per Skjenke
-  group. Course dates have no screen in Personal yet (step 6).
+  the app and samfunnettjeneste switches, the meeting point and closed
+  periods per participating group; an Admin adds a new group there under
+  "Andre grupper". Templates are at `/shifts/templates`, and the first
+  shifts come from `/shifts/generate`. Course dates have no screen in
+  Personal yet (step 6).
+- **Generator limits:** it only creates; changing a template does not change
+  shifts that exist, and there is no unique constraint on (template, start),
+  so two runs at the same moment could both create a shift (step 4d may add
+  one). Closed periods only affect the generator, not shifts that exist.
 - **Course names**: the app looks for a course named `Brannkurs` or
   `Brannvernkurs`, and `Barkurs` (`COURSE_RULES` in `app_rules.py`). A course
   that does not exist is not checked. Ask etjenesten whether `Skjenkekurs` is
@@ -234,18 +276,30 @@ Known gaps, deliberately left to later steps:
    Not seeded locally: the dev auth gateway only accepts one login
    (`DEV_ADMIN_EMAIL`), see `app/auth/dev_auth.py`.
 4a. ~~Pool, settings and week status~~ (done). The volunteer pool shows
-   every Skjenke member to leaders who may manage a Skjenke group (Skjenke or
-   a subgroup) and to Admin; a Gruppeadmin of any other group gets no
+   every member of the leader's groups and of participating sibling groups to
+   leaders who may manage a participating group, and every participating
+   member to Admin; a Gruppeadmin of any other group gets no
    shifts and no pool. The shifts shown and changed stay limited to
    permitted groups. `/shifts/settings` and the week status panel and banner
-   on the board replace the SQL; `week_status.py` holds the pure rules. The
-   Skjenke root group is found by slug (`SKJENKE_SLUGS` in
-   `permissions.py`).
-4. **Templates and series editing** in Personal: create/edit templates,
-   generate a semester, edit one shift or the whole weekday series (time,
-   staffing, note, closed, opplæring mode). Also the per-group app switches
-   and meeting point (`shift_group_settings`). The semester generator needs
-   closed periods (from date, to date, per group) so holidays get no shifts.
+   on the board replace the SQL; `week_status.py` holds the pure rules.
+   (4b replaced the Skjenke slug rule with the participating-group rule.)
+4b. ~~Participating groups, templates, closed periods, semester generator~~
+   (done). A group takes part when it has a `shift_group_settings` row or
+   templates, or a descendant that does (`participating_groups` in
+   `permissions.py`; the slug rule is gone). Leader scope is limited to
+   participating groups. The pool is the leader's groups plus participating
+   siblings (same parent); Admin sees all participating members. Only an
+   Admin adds a group (`/shifts/settings`, "Andre grupper"). New table
+   `shift_closed_periods` (migration `20261030_1200`), managed per group on
+   `/shifts/settings`. `/shifts/templates` creates, edits and deactivates
+   templates and their places. `/shifts/generate` previews and creates a
+   semester of shifts (`generator.py` pure rules, `setup_service.py`).
+   Code: `template_input.py` validates the template form.
+4c. **Privacy settings** (see decisions): per-group visibility of who is on
+   a shift, and a member's own hide setting.
+4d. **Edit one shift or a whole series on the board** (time, staffing, note,
+   closed, opplæring mode). The per-group app switches and meeting point are
+   done (step 4a).
 5. **Wishes and weekly allocation**: port `suggest()` and
    `fordelingWarnings()` from the prototype's `logic.js`; set
    `shift_week_status` (open → allocating → published) per week, with a

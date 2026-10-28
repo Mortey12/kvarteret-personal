@@ -10,6 +10,7 @@ a place.
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -122,6 +123,20 @@ shift_assignments = Table(
     Column("status_changed_at", DateTime(timezone=True)),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     UniqueConstraint("slot_id", "volunteer_id", name="shift_assignments_slot_volunteer_key"),
+)
+
+# Periods when a group has no shifts (holidays). The semester generator skips
+# every date from starts_on to ends_on, both included.
+shift_closed_periods = Table(
+    "shift_closed_periods",
+    public_metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("group_id", BigInteger, ForeignKey("public.groups.id"), nullable=False),
+    Column("starts_on", Date, nullable=False),
+    Column("ends_on", Date, nullable=False),
+    Column("label", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint("ends_on >= starts_on", name="shift_closed_periods_dates_ordered"),
 )
 
 # Per-group switches for the app. A group's shifts are only in the app when

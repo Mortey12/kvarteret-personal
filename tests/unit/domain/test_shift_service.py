@@ -109,8 +109,8 @@ class FakeRepository:
     async def list_group_parents(self) -> dict[int, int | None]:
         return self.parents
 
-    async def list_skjenke_root_ids(self, slugs) -> list[int]:
-        return [1]
+    async def list_direct_participating_group_ids(self) -> list[int]:
+        return [7, 8]
 
     async def get_group_name(self, group_id: int) -> str | None:
         return {1: "Skjenkegruppen", 7: "Stjerne", 8: "Grøndahls", 20: "Kultur"}.get(group_id)

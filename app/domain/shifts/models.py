@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 
 @dataclass(slots=True)
@@ -168,3 +168,65 @@ class WeekPlan:
     pool: list[PoolPerson] = field(default_factory=list)
     statuses: list[WeekStatusView] = field(default_factory=list)
     banners: list[WeekBanner] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ClosedPeriod:
+    period_id: int
+    group_id: int
+    starts_on: date
+    ends_on: date
+    label: str
+
+
+@dataclass(slots=True)
+class OtherGroup:
+    group_id: int
+    name: str
+
+
+@dataclass(slots=True)
+class TemplateSlot:
+    kind: str
+    count: int
+    open_for_samf: bool
+    sort_order: int
+
+
+@dataclass(slots=True)
+class ShiftTemplate:
+    template_id: int
+    group_id: int
+    group_name: str
+    venue: str
+    title: str
+    weekday: int
+    start_time: time
+    end_time: time
+    training_replaces_slot: bool
+    is_active: bool
+    slots: list[TemplateSlot] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class PlannedShift:
+    template_id: int
+    group_id: int
+    venue: str
+    title: str
+    day: date
+    starts_at: datetime
+    ends_at: datetime
+    training_replaces_slot: bool
+    slots: list[TemplateSlot]
+
+
+@dataclass(slots=True)
+class GenerationPreview:
+    group_id: int
+    group_name: str
+    date_from: date
+    date_to: date
+    to_create: list[PlannedShift] = field(default_factory=list)
+    existing: list[PlannedShift] = field(default_factory=list)
+    closed: list[tuple[PlannedShift, str]] = field(default_factory=list)

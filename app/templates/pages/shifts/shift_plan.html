@@ -9,7 +9,11 @@
     </header>
 
     {% if not no_groups %}
-      <p class="text-center text-sm"><a href="/shifts/settings">Innstillinger for Skiftlista i appen</a></p>
+      <p class="flex flex-wrap justify-center gap-x-5 gap-y-1 text-center text-sm">
+        <a href="/shifts/settings">Innstillinger og stengte perioder</a>
+        <a href="/shifts/templates">Maler</a>
+        <a href="/shifts/generate">Lag skift for semesteret</a>
+      </p>
     {% endif %}
     {{ flash_notice(notice, 'success', 'mb-0') }}
     {{ flash_notice(error, 'error', 'mb-0') }}

@@ -1,0 +1,67 @@
+{% extends "layouts/base.html" %}
+{% from "components/shared/ui_macros.html" import flash_notice %}
+
+{% block page_content %}
+  <section class="grid gap-7">
+    <header class="grid justify-items-center gap-3 pt-3 text-center">
+      <h1 class="text-5xl leading-none font-light tracking-tight text-stone-900 md:text-7xl">Lag skift</h1>
+      <p class="text-sm text-stone-700">Lager skift fra malene i en periode. Skift som finnes fra før, røres ikke. <a href="/shifts">Tilbake til skiftplanen</a></p>
+    </header>
+
+    {{ flash_notice(notice, 'success', 'mb-0') }}
+    {{ flash_notice(error, 'error', 'mb-0') }}
+
+    <form action="/shifts/generate" class="app-panel flex flex-wrap items-end gap-3" method="get">
+      <label class="grid gap-1"><span class="text-sm text-stone-500">Gruppe</span>
+        <select class="app-input" name="group">
+          <option value="">Velg gruppe</option>
+          {% for option in groups %}<option value="{{ option.group_id }}" {% if option.group_id == selected_group_id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="grid gap-1"><span class="text-sm text-stone-500">Fra og med</span><input class="app-input" name="date_from" type="date" value="{{ date_from.isoformat() }}"></label>
+      <label class="grid gap-1"><span class="text-sm text-stone-500">Til og med</span><input class="app-input" name="date_to" type="date" value="{{ date_to.isoformat() }}"></label>
+      <button class="app-button" type="submit">Forhåndsvis</button>
+    </form>
+
+    {% if preview %}
+      <section class="app-panel grid gap-4" data-generate-preview>
+        <h2 class="text-xl font-medium tracking-tight text-stone-900">{{ preview.group_name }}: {{ preview.date_from.strftime('%d.%m.%Y') }}–{{ preview.date_to.strftime('%d.%m.%Y') }}</h2>
+        <ul class="grid gap-1 text-sm text-stone-900">
+          <li data-count="create"><strong>{{ preview.to_create | length }}</strong> skift blir laget</li>
+          <li data-count="existing"><strong>{{ preview.existing | length }}</strong> finnes fra før og hoppes over</li>
+          <li data-count="closed"><strong>{{ preview.closed | length }}</strong> hoppes over fordi gruppen er stengt</li>
+        </ul>
+        {% if preview.to_create %}
+          <details><summary class="cursor-pointer text-sm">Vis skiftene som lages</summary>
+            <ul class="grid gap-1 pt-2 text-sm text-stone-800">
+              {% for planned in preview.to_create %}<li>{{ planned.day.strftime('%d.%m.%Y') }} · {{ planned.title }} · {{ planned.venue }}</li>{% endfor %}
+            </ul>
+          </details>
+        {% endif %}
+        {% if preview.closed %}
+          <details><summary class="cursor-pointer text-sm">Vis skiftene som hoppes over</summary>
+            <ul class="grid gap-1 pt-2 text-sm text-stone-800">
+              {% for planned, label in preview.closed %}<li>{{ planned.day.strftime('%d.%m.%Y') }} · {{ planned.title }} ({{ label }})</li>{% endfor %}
+            </ul>
+          </details>
+        {% endif %}
+        <p class="text-xs text-stone-600">Ukene får ikke ny status. Uker uten status følger vanlig regel, så ingenting er synlig i appen før uka er publisert.</p>
+        {% if preview.to_create %}
+          <form action="/shifts/generate" method="post">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <input type="hidden" name="group_id" value="{{ preview.group_id }}">
+            <input type="hidden" name="date_from" value="{{ preview.date_from.isoformat() }}">
+            <input type="hidden" name="date_to" value="{{ preview.date_to.isoformat() }}">
+            <button class="app-button" type="submit">Lag {{ preview.to_create | length }} skift</button>
+          </form>
+        {% else %}
+          <p class="text-sm text-stone-700">Ingenting nytt å lage i denne perioden.</p>
+        {% endif %}
+      </section>
+    {% elif not groups %}
+      <section class="app-panel"><div class="py-10 text-center text-sm text-stone-600">
+        {% if no_groups %}Du er ikke gruppeadmin for noen grupper med skift. Be en administrator om tilgang.{% else %}Ingen grupper å vise.{% endif %}
+      </div></section>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 
 def format_semester_code(value: int | None) -> str | None:
@@ -38,4 +38,15 @@ def get_previous_semester_code(value: int) -> int:
         return year * 10 + 1
     if season == 1:
         return (year - 1) * 10 + 2
+    raise ValueError(f"Unsupported semester code: {value}")
+
+
+def get_semester_end_date(value: int) -> date:
+    """Last day of the semester: 30 June (spring) or 31 December (autumn)."""
+    year = value // 10
+    season = value % 10
+    if season == 1:
+        return date(year, 6, 30)
+    if season == 2:
+        return date(year, 12, 31)
     raise ValueError(f"Unsupported semester code: {value}")

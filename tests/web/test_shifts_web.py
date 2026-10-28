@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 
 from fastapi.testclient import TestClient
 
 from app.auth.roles import UserRole
-from app.dependencies import get_shifts_service
+from app.dependencies import get_shifts_service, get_shifts_setup_service
 from app.domain.shifts.errors import ShiftForbiddenError, ShiftPlacementError
 from app.domain.shifts.permissions import ALL_GROUPS, NO_GROUPS, GroupScope
 from app.domain.shifts.models import (
@@ -15,6 +15,12 @@ from app.domain.shifts.models import (
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
+    ClosedPeriod,
+    GenerationPreview,
+    OtherGroup,
+    PlannedShift,
+    ShiftTemplate,
+    TemplateSlot,
     WeekBanner,
     WeekPlan,
     WeekStatusView,
@@ -161,11 +167,90 @@ class FakeShiftsService:
         return PlacementResult("Tatt av.")
 
 
+class FakeSetupService:
+    def __init__(self, shifts: FakeShiftsService) -> None:
+        self.shifts = shifts
+        self.calls: list[tuple] = []
+
+    def _check(self, scope: GroupScope) -> None:
+        assert scope == self.shifts.scope
+        if self.shifts.forbidden:
+            raise ShiftForbiddenError("Du har ikke tilgang til å endre skift for Grøndahls.")
+
+    async def permitted_groups(self, scope):
+        return [ShiftGroupOption(7, "Stjerne")]
+
+    async def list_closed_periods(self, scope):
+        return {7: [ClosedPeriod(4, 7, date(2026, 12, 19), date(2027, 1, 5), "Juleferie")]}
+
+    async def list_other_groups(self, scope):
+        return [OtherGroup(20, "Vakt")] if scope.is_all else []
+
+    async def add_group(self, group_id, *, scope):
+        self._check(scope)
+        self.calls.append(("add_group", group_id))
+        return "Vakt tar nå del i Skiftlista."
+
+    async def add_closed_period(self, group_id, *, starts_on, ends_on, label, scope):
+        self._check(scope)
+        self.calls.append(("add_period", group_id, starts_on, ends_on, label))
+        if ends_on < starts_on:
+            raise ShiftPlacementError("Sluttdatoen kan ikke være før startdatoen.")
+        return "Juleferie er lagt til."
+
+    async def remove_closed_period(self, period_id, *, scope):
+        self._check(scope)
+        self.calls.append(("remove_period", period_id))
+        return "Juleferie er fjernet."
+
+    async def list_templates(self, scope):
+        return [
+            ShiftTemplate(
+                3, 7, "Stjerne", "Stjernesalen", "Dagskift", 0, time(11, 30), time(17), True, True,
+                [TemplateSlot("skiftleder", 1, False, 0), TemplateSlot("skjenker", 2, True, 1)],
+            )
+        ]
+
+    async def create_template(self, group_id, form, *, scope):
+        self._check(scope)
+        self.calls.append(("create_template", group_id, dict(form)))
+        if not form.get("title"):
+            raise ShiftPlacementError("Tittel må fylles ut.")
+        return "Malen er lagt til."
+
+    async def update_template(self, template_id, form, *, scope):
+        self._check(scope)
+        self.calls.append(("update_template", template_id, dict(form)))
+        return "Malen er lagret."
+
+    async def set_template_active(self, template_id, active, *, scope):
+        self._check(scope)
+        self.calls.append(("template_active", template_id, active))
+        return "Malen er slått av."
+
+    def _preview(self, group_id, date_from, date_to) -> GenerationPreview:
+        start = datetime(2026, 11, 2, 10, 30, tzinfo=UTC)
+        planned = PlannedShift(3, group_id, "Stjernesalen", "Dagskift", date(2026, 11, 2), start, start, True, [])
+        return GenerationPreview(group_id, "Stjerne", date_from, date_to, [planned], [planned], [(planned, "Juleferie")])
+
+    async def preview_generation(self, group_id, date_from, date_to, *, scope):
+        self._check(scope)
+        return self._preview(group_id, date_from, date_to)
+
+    async def generate(self, group_id, date_from, date_to, *, scope):
+        self._check(scope)
+        self.calls.append(("generate", group_id, date_from, date_to))
+        return self._preview(group_id, date_from, date_to), "Opprettet 1 skift for Stjerne."
+
+
 def _client(role: UserRole) -> tuple[TestClient, FakeShiftsService]:
     app = create_app()
     override_authenticated_user(app, make_authenticated_user(role))
     service = FakeShiftsService()
     app.dependency_overrides[get_shifts_service] = lambda: service
+    setup = FakeSetupService(service)
+    service.setup = setup
+    app.dependency_overrides[get_shifts_setup_service] = lambda: setup
     return TestClient(app), service
 
 
@@ -423,3 +508,128 @@ def test_banner_is_shown_for_an_unpublished_week_and_hidden_otherwise() -> None:
     urgent = client.get("/shifts").text
     assert "border-amber-500" in urgent and 'role="alert"' in urgent
     assert '<input type="hidden" name="week" value="2026-11-30">' in urgent
+
+
+def test_settings_page_lists_closed_periods_and_other_groups_for_admin_only() -> None:
+    admin, admin_service = _client(UserRole.ADMIN)
+    page = admin.get("/shifts/settings").text
+    assert "Juleferie" in page and "19.12.2026–05.01.2027" in page
+    assert "Andre grupper" in page and "Slå på Skiftlista for gruppen" in page
+    assert 'action="/shifts/settings/20/enable"' in page
+
+    leader, leader_service = _client(UserRole.GROUP_ADMIN)
+    leader_service.scope = GroupScope(frozenset({7}))
+    leader_page = leader.get("/shifts/settings").text
+    assert "Juleferie" in leader_page and "Andre grupper" not in leader_page
+
+
+def test_closed_period_add_and_remove_are_scoped_and_validated() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    prime_csrf(client, path="/shifts")
+    ok = client.post(
+        "/shifts/settings/7/closed-periods",
+        data={"starts_on": "2026-12-19", "ends_on": "2027-01-05", "label": "Juleferie"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    backwards = client.post(
+        "/shifts/settings/7/closed-periods",
+        data={"starts_on": "2027-01-05", "ends_on": "2026-12-19", "label": ""},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    removed = client.post("/shifts/closed-periods/4/delete", headers=csrf_headers(client), follow_redirects=False)
+
+    assert ok.status_code == 303 and "notice=" in ok.headers["location"]
+    assert ("add_period", 7, date(2026, 12, 19), date(2027, 1, 5), "Juleferie") in service.setup.calls
+    assert backwards.status_code == 303 and "error=" in backwards.headers["location"]
+    assert removed.status_code == 303 and ("remove_period", 4) in service.setup.calls
+
+    service.forbidden = True
+    refused = client.post(
+        "/shifts/settings/8/closed-periods",
+        data={"starts_on": "2026-12-19", "ends_on": "2027-01-05"},
+        headers=csrf_headers(client),
+    )
+    assert refused.status_code == 403
+    assert client.post("/shifts/closed-periods/9/delete", headers=csrf_headers(client)).status_code == 403
+
+
+def test_only_admin_flow_adds_a_group() -> None:
+    client, service = _client(UserRole.ADMIN)
+    prime_csrf(client, path="/shifts")
+    response = client.post("/shifts/settings/20/enable", headers=csrf_headers(client), follow_redirects=False)
+    assert response.status_code == 303 and ("add_group", 20) in service.setup.calls
+    service.forbidden = True
+    assert client.post("/shifts/settings/20/enable", headers=csrf_headers(client)).status_code == 403
+
+
+def test_templates_page_lists_templates_with_their_places() -> None:
+    client, _ = _client(UserRole.GROUP_ADMIN)
+    page = client.get("/shifts/templates").text
+    assert "Dagskift" in page and "11:30–17:00" in page and "1 skiftleder, 2 skjenker" in page
+    assert 'action="/shifts/templates/3"' in page and 'action="/shifts/templates"' in page
+    assert "Slutt før start betyr at skiftet slutter etter midnatt." in page
+    assert "Slå av malen" in page
+    assert client.get("/shifts").status_code == 200 and "/shifts/templates" in client.get("/shifts").text
+
+
+def test_template_create_update_and_deactivate() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    prime_csrf(client, path="/shifts")
+    created = client.post(
+        "/shifts/templates",
+        data={"group_id": "7", "title": "Kveldsskift", "venue": "Stjernesalen", "slot_kind_0": "skjenker"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    invalid = client.post(
+        "/shifts/templates", data={"group_id": "7", "title": ""}, headers=csrf_headers(client), follow_redirects=False
+    )
+    updated = client.post(
+        "/shifts/templates/3", data={"title": "Dagskift"}, headers=csrf_headers(client), follow_redirects=False
+    )
+    off = client.post(
+        "/shifts/templates/3/active", data={"active": "false"}, headers=csrf_headers(client), follow_redirects=False
+    )
+
+    assert created.status_code == 303 and "notice=" in created.headers["location"]
+    assert service.setup.calls[0][:2] == ("create_template", 7)
+    assert service.setup.calls[0][2]["slot_kind_0"] == "skjenker"
+    assert invalid.status_code == 303 and "error=" in invalid.headers["location"]
+    assert updated.status_code == 303 and ("template_active", 3, False) in service.setup.calls
+    assert off.status_code == 303
+
+    service.forbidden = True
+    assert client.post("/shifts/templates/3", data={"title": "x"}, headers=csrf_headers(client)).status_code == 403
+
+
+def test_generate_page_shows_the_preview_counts_and_confirm_creates() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    page = client.get("/shifts/generate?group=7&date_from=2026-11-01&date_to=2026-12-31").text
+    assert 'data-count="create"><strong>1</strong> skift blir laget' in page
+    assert 'data-count="existing"><strong>1</strong> finnes fra før' in page
+    assert 'data-count="closed"><strong>1</strong> hoppes over fordi gruppen er stengt' in page
+    assert "Juleferie" in page and "Lag 1 skift" in page
+
+    prime_csrf(client, path="/shifts")
+    confirmed = client.post(
+        "/shifts/generate",
+        data={"group_id": "7", "date_from": "2026-11-01", "date_to": "2026-12-31"},
+        headers=csrf_headers(client),
+        follow_redirects=False,
+    )
+    assert confirmed.status_code == 303
+    assert confirmed.headers["location"].startswith("/shifts/generate?")
+    assert "group=7" in confirmed.headers["location"] and "notice=" in confirmed.headers["location"]
+    assert ("generate", 7, date(2026, 11, 1), date(2026, 12, 31)) in service.setup.calls
+
+    service.forbidden = True
+    assert (
+        client.post(
+            "/shifts/generate",
+            data={"group_id": "8", "date_from": "2026-11-01", "date_to": "2026-12-31"},
+            headers=csrf_headers(client),
+        ).status_code
+        == 403
+    )

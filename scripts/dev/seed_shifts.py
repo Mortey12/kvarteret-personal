@@ -5,7 +5,8 @@ Skjenkegruppen, their verv, made-up members for this semester, the H26
 shift templates and shifts from this week to the end of the semester (none
 from 19 December), partly filled. This and next month's weeks are published;
 later weeks stay open for wishes.
-Stjerne is switched on for the app (also for samfunnettjeneste), with
+Stjerne has a closed period (Julestenging) and is switched on for the app
+(also for samfunnettjeneste), with
 brann- and barkurs dates and brannkurs completions for most members.
 
 Deterministic and entirely fake. Idempotent: does nothing when shift
@@ -38,6 +39,7 @@ from app.db.tables import (
     groups,
     role_assignments,
     shift_assignments,
+    shift_closed_periods,
     shift_group_settings,
     shift_slots,
     shift_template_slots,
@@ -376,6 +378,19 @@ async def seed_shifts(database_url: str) -> None:
                     app_enabled=True,
                     samf_enabled=True,
                     meeting_point="Møt skiftleder i Stjernesalen 30 minutter før.",
+                )
+            )
+            # Julestenging, which the semester generator skips (the shifts below
+            # are made here, with assignments, and stop at the same date).
+            christmas = date(today.year, *CHRISTMAS_BREAK_FROM)
+            if today > christmas:
+                christmas = date(today.year + 1, *CHRISTMAS_BREAK_FROM)
+            await session.execute(
+                insert(shift_closed_periods).values(
+                    group_id=group_ids["Stjerne"],
+                    starts_on=christmas,
+                    ends_on=date(christmas.year + 1, 1, 5),
+                    label="Julestenging",
                 )
             )
             # Weeks starting in this or next month are allocated and published;

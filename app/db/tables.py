@@ -52,6 +52,7 @@ from app.domain.role_assignments.tables import assignment_roles, role_assignment
 from app.domain.shifts.tables import (
     shift_assignments,
     shift_availability_rules,
+    shift_closed_periods,
     shift_group_settings,
     shift_slots,
     shift_template_slots,
@@ -109,6 +110,7 @@ __all__ = [
     "role_assignments",
     "shift_assignments",
     "shift_availability_rules",
+    "shift_closed_periods",
     "shift_group_settings",
     "shift_slots",
     "shift_template_slots",

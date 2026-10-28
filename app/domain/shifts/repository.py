@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from uuid import UUID
 
 from sqlalchemy import delete, func, insert, select, update
@@ -11,6 +11,10 @@ from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.planning import OSLO
 from app.domain.shifts.models import (
+    ClosedPeriod,
+    PlannedShift,
+    ShiftTemplate,
+    TemplateSlot,
     AssignedPerson,
     AssignmentRef,
     MemberRole,
@@ -20,6 +24,8 @@ from app.domain.shifts.models import (
 )
 from app.domain.shifts.tables import (
     shift_assignments,
+    shift_closed_periods,
+    shift_template_slots,
     shift_group_settings,
     shift_slots,
     shift_templates,
@@ -60,9 +66,15 @@ class ShiftsRepository(SqlAlchemyRepository):
         )
         return {row["id"]: row["parent_group_id"] for row in rows}
 
-    async def list_skjenke_root_ids(self, slugs: frozenset[str]) -> list[int]:
+    async def list_direct_participating_group_ids(self) -> list[int]:
+        """Active groups with a settings row or shift templates."""
+        with_settings = select(shift_group_settings.c.group_id)
+        with_templates = select(shift_templates.c.group_id)
         return await self.fetch_scalars_all(
-            select(groups.c.id).where(groups.c.slug.in_(sorted(slugs)), groups.c.is_active.is_(True))
+            select(groups.c.id).where(
+                groups.c.is_active.is_(True),
+                groups.c.id.in_(with_settings.union(with_templates)),
+            )
         )
 
     async def get_group_name(self, group_id: int) -> str | None:
@@ -384,6 +396,194 @@ class ShiftsRepository(SqlAlchemyRepository):
     async def remove_assignment(self, assignment_id: int) -> None:
         await self.execute(delete(shift_assignments).where(shift_assignments.c.id == assignment_id))
 
+    # ------------------------------------------------------------ closed periods
+
+    async def list_closed_periods(self, group_ids: list[int] | None = None) -> list[ClosedPeriod]:
+        stmt = select(shift_closed_periods).order_by(
+            shift_closed_periods.c.starts_on.asc(), shift_closed_periods.c.id.asc()
+        )
+        if group_ids is not None:
+            if not group_ids:
+                return []
+            stmt = stmt.where(shift_closed_periods.c.group_id.in_(group_ids))
+        return [_closed_period(row) for row in await self.fetch_all_mappings(stmt)]
+
+    async def get_closed_period(self, period_id: int) -> ClosedPeriod | None:
+        row = await self.fetch_first_mapping(
+            select(shift_closed_periods).where(shift_closed_periods.c.id == period_id)
+        )
+        return _closed_period(row) if row else None
+
+    async def add_closed_period(
+        self, group_id: int, starts_on: date, ends_on: date, label: str
+    ) -> None:
+        await self.session.execute(
+            insert(shift_closed_periods).values(
+                group_id=group_id, starts_on=starts_on, ends_on=ends_on, label=label
+            )
+        )
+
+    async def delete_closed_period(self, period_id: int) -> None:
+        await self.session.execute(
+            delete(shift_closed_periods).where(shift_closed_periods.c.id == period_id)
+        )
+
+    # ----------------------------------------------------------------- templates
+
+    async def list_templates(self, group_ids: list[int]) -> list[ShiftTemplate]:
+        if not group_ids:
+            return []
+        return await self._load_templates(shift_templates.c.group_id.in_(group_ids))
+
+    async def get_template(self, template_id: int) -> ShiftTemplate | None:
+        found = await self._load_templates(shift_templates.c.id == template_id)
+        return found[0] if found else None
+
+    async def _load_templates(self, condition) -> list[ShiftTemplate]:
+        rows = await self.fetch_all_mappings(
+            select(shift_templates, groups.c.name.label("group_name"))
+            .select_from(shift_templates.join(groups, groups.c.id == shift_templates.c.group_id))
+            .where(condition)
+            .order_by(
+                groups.c.name.asc(),
+                shift_templates.c.weekday.asc(),
+                shift_templates.c.start_time.asc(),
+                shift_templates.c.id.asc(),
+            )
+        )
+        templates = {
+            row["id"]: ShiftTemplate(
+                template_id=row["id"],
+                group_id=row["group_id"],
+                group_name=row["group_name"],
+                venue=row["venue"],
+                title=row["title"],
+                weekday=row["weekday"],
+                start_time=_as_time(row["start_time"]),
+                end_time=_as_time(row["end_time"]),
+                training_replaces_slot=row["training_replaces_slot"],
+                is_active=row["is_active"],
+            )
+            for row in rows
+        }
+        if templates:
+            slot_rows = await self.fetch_all_mappings(
+                select(shift_template_slots)
+                .where(shift_template_slots.c.template_id.in_(list(templates)))
+                .order_by(shift_template_slots.c.sort_order.asc(), shift_template_slots.c.id.asc())
+            )
+            for row in slot_rows:
+                templates[row["template_id"]].slots.append(
+                    TemplateSlot(row["kind"], row["count"], row["open_for_samf"], row["sort_order"])
+                )
+        return list(templates.values())
+
+    async def create_template(self, group_id: int, data) -> int:
+        template_id = await self.fetch_scalar(
+            insert(shift_templates)
+            .values(
+                group_id=group_id,
+                venue=data.venue,
+                title=data.title,
+                weekday=data.weekday,
+                start_time=data.start_time,
+                end_time=data.end_time,
+                training_replaces_slot=data.training_replaces_slot,
+                is_active=True,
+            )
+            .returning(shift_templates.c.id)
+        )
+        await self._insert_template_slots(template_id, data.slots)
+        return template_id
+
+    async def update_template(self, template_id: int, data) -> None:
+        await self.session.execute(
+            update(shift_templates)
+            .where(shift_templates.c.id == template_id)
+            .values(
+                venue=data.venue,
+                title=data.title,
+                weekday=data.weekday,
+                start_time=data.start_time,
+                end_time=data.end_time,
+                training_replaces_slot=data.training_replaces_slot,
+            )
+        )
+        await self.session.execute(
+            delete(shift_template_slots).where(shift_template_slots.c.template_id == template_id)
+        )
+        await self._insert_template_slots(template_id, data.slots)
+
+    async def _insert_template_slots(self, template_id: int, slots: list[TemplateSlot]) -> None:
+        if not slots:
+            return
+        await self.session.execute(
+            insert(shift_template_slots),
+            [
+                {
+                    "template_id": template_id,
+                    "kind": slot.kind,
+                    "count": slot.count,
+                    "open_for_samf": slot.open_for_samf,
+                    "sort_order": slot.sort_order,
+                }
+                for slot in slots
+            ],
+        )
+
+    async def set_template_active(self, template_id: int, active: bool) -> None:
+        await self.session.execute(
+            update(shift_templates).where(shift_templates.c.id == template_id).values(is_active=active)
+        )
+
+    # ----------------------------------------------------------------- generator
+
+    async def list_existing_shift_starts(
+        self, template_ids: list[int], starts_from: datetime, starts_before: datetime
+    ) -> set[tuple[int, datetime]]:
+        if not template_ids:
+            return set()
+        rows = await self.fetch_all_mappings(
+            select(shifts.c.template_id, shifts.c.starts_at).where(
+                shifts.c.template_id.in_(template_ids),
+                shifts.c.starts_at >= starts_from,
+                shifts.c.starts_at < starts_before,
+            )
+        )
+        return {(row["template_id"], _aware(row["starts_at"]).astimezone(UTC)) for row in rows}
+
+    async def create_planned_shift(self, planned: PlannedShift) -> None:
+        shift_id = await self.fetch_scalar(
+            insert(shifts)
+            .values(
+                group_id=planned.group_id,
+                template_id=planned.template_id,
+                venue=planned.venue,
+                title=planned.title,
+                starts_at=planned.starts_at,
+                ends_at=planned.ends_at,
+                note=None,
+                is_closed=False,
+                training_replaces_slot=planned.training_replaces_slot,
+            )
+            .returning(shifts.c.id)
+        )
+        if not planned.slots:
+            return
+        await self.session.execute(
+            insert(shift_slots),
+            [
+                {
+                    "shift_id": shift_id,
+                    "kind": slot.kind,
+                    "count": slot.count,
+                    "open_for_samf": slot.open_for_samf,
+                    "sort_order": slot.sort_order,
+                }
+                for slot in planned.slots
+            ],
+        )
+
 
 def _shift_select():
     return select(
@@ -400,6 +600,7 @@ def _shift_select():
     ).select_from(shifts.join(groups, groups.c.id == shifts.c.group_id))
 
 
+
 def _aware(value: datetime | str | None) -> datetime:
     moment = require_datetime(value)
     return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
@@ -407,3 +608,17 @@ def _aware(value: datetime | str | None) -> datetime:
 
 def _as_date(value) -> date:
     return value.date() if isinstance(value, datetime) else value
+
+
+def _closed_period(row) -> ClosedPeriod:
+    return ClosedPeriod(
+        period_id=row["id"],
+        group_id=row["group_id"],
+        starts_on=_as_date(row["starts_on"]),
+        ends_on=_as_date(row["ends_on"]),
+        label=row["label"],
+    )
+
+
+def _as_time(value) -> time:
+    return time.fromisoformat(value) if isinstance(value, str) else value

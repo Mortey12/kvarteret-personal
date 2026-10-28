@@ -1,0 +1,97 @@
+{% extends "layouts/base.html" %}
+{% from "components/shared/ui_macros.html" import flash_notice %}
+
+{% macro template_fields(template, prefix) %}
+  <div class="grid gap-3 md:grid-cols-4">
+    <label class="grid gap-1"><span class="text-sm text-stone-500">Sted</span><input class="app-input" list="venue-suggestions" maxlength="100" name="venue" required type="text" value="{{ template.venue if template else '' }}"></label>
+    <label class="grid gap-1"><span class="text-sm text-stone-500">Tittel</span><input class="app-input" maxlength="100" name="title" required type="text" value="{{ template.title if template else '' }}"></label>
+    <label class="grid gap-1"><span class="text-sm text-stone-500">Ukedag</span>
+      <select class="app-input" name="weekday">
+        {% for name in weekdays %}<option value="{{ loop.index0 }}" {% if template and template.weekday == loop.index0 %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="grid gap-1"><span class="text-sm text-stone-500">Start</span><input class="app-input" name="start_time" required type="time" value="{{ template.start_time.strftime('%H:%M') if template else '' }}"></label>
+      <label class="grid gap-1"><span class="text-sm text-stone-500">Slutt</span><input class="app-input" name="end_time" required type="time" value="{{ template.end_time.strftime('%H:%M') if template else '' }}"></label>
+    </div>
+  </div>
+  <p class="text-xs text-stone-500">Slutt før start betyr at skiftet slutter etter midnatt.</p>
+  <label class="flex items-center gap-2 text-sm text-stone-900">
+    <input type="checkbox" name="training_replaces_slot" value="true" {% if template is none or template.training_replaces_slot %}checked{% endif %}>
+    Opplæring tar en av de vanlige plassene
+  </label>
+  <table class="w-full text-sm">
+    <thead><tr class="text-left text-stone-500"><th>Type plass</th><th>Antall</th><th>Åpen for samfunnettjeneste</th><th>Rekkefølge</th></tr></thead>
+    <tbody>
+      {% for index in range(slot_rows) %}
+        {% set slot = template.slots[index] if template and index < template.slots | length else none %}
+        <tr data-slot-row>
+          <td>
+            <select class="app-input" name="slot_kind_{{ index }}">
+              <option value="">(ingen)</option>
+              {% for kind, info in slot_kinds.items() %}<option value="{{ kind }}" {% if slot and slot.kind == kind %}selected{% endif %}>{{ info.label }}</option>{% endfor %}
+            </select>
+          </td>
+          <td><input class="app-input w-20" max="20" min="1" name="slot_count_{{ index }}" type="number" value="{{ slot.count if slot else 1 }}"></td>
+          <td><input name="slot_samf_{{ index }}" type="checkbox" value="true" {% if slot and slot.open_for_samf %}checked{% endif %}></td>
+          <td><input class="app-input w-20" name="slot_order_{{ index }}" type="number" value="{{ slot.sort_order if slot else index }}"></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% block page_content %}
+  <section class="grid gap-7">
+    <header class="grid justify-items-center gap-3 pt-3 text-center">
+      <h1 class="text-5xl leading-none font-light tracking-tight text-stone-900 md:text-7xl">Maler</h1>
+      <p class="text-sm text-stone-700">Den faste uka for hver gruppe. Skift lages fra malene under <a href="/shifts/generate">Lag skift</a>. <a href="/shifts">Tilbake til skiftplanen</a></p>
+    </header>
+
+    {{ flash_notice(notice, 'success', 'mb-0') }}
+    {{ flash_notice(error, 'error', 'mb-0') }}
+    <datalist id="venue-suggestions"><option value="Stjernesalen"><option value="Grøndahls"><option value="Halvtimen"></datalist>
+
+    {% for group in groups %}
+      <section class="grid gap-4" data-template-group data-group-id="{{ group.group_id }}">
+        <h2 class="text-2xl font-medium tracking-tight text-stone-900">{{ group.name }}</h2>
+        {% for template in templates_by_group[group.group_id] %}
+          <details class="app-panel grid gap-3" data-template data-template-id="{{ template.template_id }}">
+            <summary class="cursor-pointer text-sm text-stone-900">
+              <strong>{{ template.title }}</strong> · {{ template.venue }} · {{ weekdays[template.weekday] }} {{ template.start_time.strftime('%H:%M') }}–{{ template.end_time.strftime('%H:%M') }}
+              · {% for slot in template.slots %}{{ slot.count }} {{ slot_kinds[slot.kind].label.lower() }}{{ ", " if not loop.last }}{% endfor %}
+              {% if not template.is_active %}<span class="app-badge">Av</span>{% endif %}
+            </summary>
+            <form action="/shifts/templates/{{ template.template_id }}" class="grid gap-3 pt-3" method="post">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              {{ template_fields(template, 'edit') }}
+              <div class="flex flex-wrap gap-2"><button class="app-button" type="submit">Lagre malen</button></div>
+            </form>
+            <form action="/shifts/templates/{{ template.template_id }}/active" method="post">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <input type="hidden" name="active" value="{{ 'false' if template.is_active else 'true' }}">
+              <button class="app-button-secondary" type="submit">{{ "Slå av malen" if template.is_active else "Slå på malen" }}</button>
+            </form>
+          </details>
+        {% else %}
+          <p class="text-sm text-stone-600">Ingen maler ennå.</p>
+        {% endfor %}
+        <details class="app-panel grid gap-3">
+          <summary class="cursor-pointer text-sm font-semibold text-stone-900">Ny mal for {{ group.name }}</summary>
+          <form action="/shifts/templates" class="grid gap-3 pt-3" data-new-template method="post">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <input type="hidden" name="group_id" value="{{ group.group_id }}">
+            {{ template_fields(none, 'new') }}
+            <div><button class="app-button" type="submit">Legg til malen</button></div>
+          </form>
+        </details>
+      </section>
+    {% else %}
+      <section class="app-panel">
+        <div class="py-10 text-center text-sm text-stone-600">
+          {% if no_groups %}Du er ikke gruppeadmin for noen grupper med skift. Be en administrator om tilgang.{% else %}Ingen grupper å vise.{% endif %}
+        </div>
+      </section>
+    {% endfor %}
+  </section>
+{% endblock %}

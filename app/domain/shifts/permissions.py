@@ -16,6 +16,10 @@ class GroupScope:
     group_ids: frozenset[int] | None
 
     @property
+    def is_all(self) -> bool:
+        return self.group_ids is None
+
+    @property
     def is_empty(self) -> bool:
         return self.group_ids is not None and not self.group_ids
 
@@ -35,9 +39,6 @@ class GroupScope:
             )
 
 
-# Skiftlista is for Skjenke and its subgroups; the root is found by slug.
-SKJENKE_SLUGS = frozenset({"skjenke-gruppen", "skjenkegruppen"})
-
 ALL_GROUPS = GroupScope(None)
 NO_GROUPS = GroupScope(frozenset())
 
@@ -55,6 +56,34 @@ def with_subgroups(
                 result.add(child)
                 grew = True
     return frozenset(result)
+
+
+def participating_groups(
+    direct_group_ids: Iterable[int], parent_by_group: Mapping[int, int | None]
+) -> frozenset[int]:
+    """Groups in Skiftlista: those with settings or templates, and their ancestors."""
+    result: set[int] = set()
+    for group_id in direct_group_ids:
+        current: int | None = group_id
+        while current is not None and current not in result and current in parent_by_group:
+            result.add(current)
+            current = parent_by_group[current]
+    return frozenset(result)
+
+
+def pool_group_ids(
+    scope: GroupScope,
+    participating: frozenset[int],
+    parent_by_group: Mapping[int, int | None],
+) -> frozenset[int]:
+    """Whose members a leader can place: own groups plus their participating siblings."""
+    if scope.group_ids is None:
+        return participating
+    parents = {parent_by_group.get(group_id) for group_id in scope.group_ids} - {None}
+    siblings = {
+        group_id for group_id in participating if parent_by_group.get(group_id) in parents
+    }
+    return frozenset(scope.group_ids | siblings)
 
 
 def manageable_groups(

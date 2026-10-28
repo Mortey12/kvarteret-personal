@@ -22,6 +22,7 @@ from app.domain.courses.service import CoursesService
 from app.domain.shifts.app_service import ShiftsAppService
 from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.service import ShiftsService
+from app.domain.shifts.setup_service import ShiftsSetupService
 from app.domain.groups.service import GroupsService
 from app.domain.mobile_card.service import MobileCardService
 from app.domain.mobile_card.april_state import MobileCardAprilStateService
@@ -149,6 +150,10 @@ def get_courses_service(request: Request) -> CoursesService:
 
 def get_shifts_service(request: Request) -> ShiftsService:
     return get_container(request).shifts_service
+
+
+def get_shifts_setup_service(request: Request) -> ShiftsSetupService:
+    return get_container(request).shifts_setup_service
 
 
 async def get_shift_scope(

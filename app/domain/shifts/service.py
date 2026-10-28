@@ -24,10 +24,10 @@ from app.domain.shifts.models import (
     WeekStatusView,
 )
 from app.domain.shifts.permissions import (
-    SKJENKE_SLUGS,
     GroupScope,
     manageable_groups,
-    with_subgroups,
+    participating_groups,
+    pool_group_ids,
 )
 from app.domain.shifts.planning import (
     OSLO,
@@ -117,12 +117,12 @@ class ShiftsService:
         scope = manageable_groups(role, assigned, parents)
         if scope.is_empty:
             return scope
-        # Skiftlista is for Skjenke and its subgroups; other groups give no access.
-        return scope.narrowed_to(await self._skjenke_group_ids(parents))
+        # Only groups that take part in Skiftlista give access.
+        return scope.narrowed_to(await self._participating_group_ids(parents))
 
-    async def _skjenke_group_ids(self, parents: dict[int, int | None]) -> frozenset[int]:
-        roots = await self.repository.list_skjenke_root_ids(SKJENKE_SLUGS)
-        return with_subgroups(roots, parents)
+    async def _participating_group_ids(self, parents: dict[int, int | None]) -> frozenset[int]:
+        direct = await self.repository.list_direct_participating_group_ids()
+        return participating_groups(direct, parents)
 
     async def get_week_plan(
         self, week: date, group_id: int | None = None, *, scope: GroupScope
@@ -162,6 +162,7 @@ class ShiftsService:
             else await self._pool(
                 [option.group_id for option in all_groups],
                 [option.group_id for option in group_options],
+                await self._pool_group_ids(scope),
                 group_id,
                 week_counts,
             )
@@ -225,17 +226,23 @@ class ShiftsService:
                         banners.append(banner)
         return statuses, banners
 
+    async def _pool_group_ids(self, scope: GroupScope) -> list[int]:
+        parents = await self.repository.list_group_parents()
+        participating = await self._participating_group_ids(parents)
+        return sorted(pool_group_ids(scope, participating, parents))
+
     async def _pool(
         self,
         shift_group_ids: list[int],
         visible_group_ids: list[int],
+        pool_ids: list[int],
         selected_group_id: int | None,
         week_counts: dict[int, int],
     ) -> list[PoolPerson]:
-        members = await self.repository.list_shift_members(
-            get_current_semester_code(), shift_group_ids
-        )
-        roles = _roles_by_group(members)
+        semester = get_current_semester_code()
+        # Eligibility is judged on verv in the shift groups only; the pool is wider.
+        roles = _roles_by_group(await self.repository.list_shift_members(semester, shift_group_ids))
+        members = await self.repository.list_shift_members(semester, pool_ids)
         pool: list[PoolPerson] = []
         seen: set[int] = set()
         for member in members:
@@ -251,7 +258,7 @@ class ShiftsService:
                     group_name=member.group_name,
                     role_name=member.role_name or "Medlem",
                     shifts_this_week=week_counts.get(member.volunteer_id, 0),
-                    allowed_tokens=allowed_tokens(roles[member.volunteer_id], visible_group_ids),
+                    allowed_tokens=allowed_tokens(roles.get(member.volunteer_id, {}), visible_group_ids),
                 )
             )
         return pool
@@ -424,7 +431,7 @@ class ShiftsService:
 
     async def list_group_settings(self, scope: GroupScope) -> list[GroupSettingsView]:
         parents = await self.repository.list_group_parents()
-        tree = await self._skjenke_group_ids(parents)
+        tree = await self._participating_group_ids(parents)
         roots = {gid for gid in tree if parents.get(gid) not in tree}
         rows = await self.repository.list_groups_with_settings()
         return [
@@ -453,9 +460,9 @@ class ShiftsService:
         if name is None:
             raise ShiftNotFoundError("Gruppen finnes ikke.")
         scope.require(group_id, name)
-        tree = await self._skjenke_group_ids(await self.repository.list_group_parents())
+        tree = await self._participating_group_ids(await self.repository.list_group_parents())
         if group_id not in tree:
-            raise ShiftForbiddenError("Skiftlista kan bare slås på for Skjenke og undergruppene.")
+            raise ShiftForbiddenError("Gruppen tar ikke del i Skiftlista ennå.")
         point = meeting_point.strip()
         if len(point) > MEETING_POINT_MAX:
             raise ShiftPlacementError(f"Oppmøtested kan ha opptil {MEETING_POINT_MAX} tegn.")

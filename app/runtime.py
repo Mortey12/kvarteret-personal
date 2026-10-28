@@ -53,6 +53,7 @@ from app.domain.shifts.app_repository import ShiftsAppRepository
 from app.domain.shifts.app_service import ShiftsAppService
 from app.domain.shifts.repository import ShiftsRepository
 from app.domain.shifts.service import ShiftsService
+from app.domain.shifts.setup_service import ShiftsSetupService
 from app.domain.agent_chat.repository import AgentChatRepository
 from app.domain.agent_chat.service import AgentChatService
 from app.domain.groups.service import GroupsService
@@ -144,6 +145,7 @@ class ApplicationContainer:
     groups_service: GroupsService
     courses_service: CoursesService
     shifts_service: ShiftsService
+    shifts_setup_service: ShiftsSetupService
     shifts_app_service: ShiftsAppService
     volunteer_search_service: VolunteerSearchService
     admin_accounts_service: AdminAccountsService
@@ -250,6 +252,7 @@ def build_application_container(
         groups_service=GroupsService(),
         courses_service=CoursesService(repository=CoursesRepository()),
         shifts_service=ShiftsService(repository=ShiftsRepository()),
+        shifts_setup_service=ShiftsSetupService(repository=ShiftsRepository()),
         shifts_app_service=ShiftsAppService(repository=ShiftsAppRepository()),
         volunteer_search_service=VolunteerSearchService(VolunteerSearchRepository()),
         admin_accounts_service=AdminAccountsService(

@@ -12,7 +12,7 @@
     {{ flash_notice(error, 'error', 'mb-0') }}
 
     <p class="border-2 border-stone-300 bg-white px-4 py-3 text-sm text-stone-800">
-      Når du slår på Skiftlista for en gruppe, blir skiftene synlige for medlemmene i den gruppa i appen.
+      Når du slår på Skiftlista for en gruppe, blir skiftene synlige for medlemmene i den gruppa i appen. <a href="/shifts/templates">Maler</a> og <a href="/shifts/generate">lag skift for semesteret</a> finner du under skiftplanen.
       «Åpen for samfunnettjeneste» viser i tillegg plassene som er åpne for samfunnettjeneste til alle frivillige.
     </p>
 
@@ -39,6 +39,30 @@
         </label>
         <div><button class="app-button" type="submit">Lagre</button></div>
       </form>
+      <section class="app-panel grid gap-3" data-closed-periods data-group-id="{{ item.group_id }}" aria-label="Stengte perioder for {{ item.name }}">
+        <h3 class="text-lg font-medium text-stone-900">Stengte perioder: {{ item.name }}</h3>
+        <p class="text-xs text-stone-600">Ingen skift lages i disse periodene når du lager skift for semesteret. Begge datoene er med.</p>
+        <ul class="grid gap-2">
+          {% for period in closed_periods.get(item.group_id, []) %}
+            <li class="flex flex-wrap items-center justify-between gap-2 border-2 border-stone-300 bg-white px-3 py-2 text-sm">
+              <span><strong>{{ period.label }}</strong> · {{ period.starts_on.strftime('%d.%m.%Y') }}–{{ period.ends_on.strftime('%d.%m.%Y') }}</span>
+              <form action="/shifts/closed-periods/{{ period.period_id }}/delete" method="post">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button class="app-button-secondary" type="submit">Fjern</button>
+              </form>
+            </li>
+          {% else %}
+            <li class="text-sm text-stone-600">Ingen stengte perioder.</li>
+          {% endfor %}
+        </ul>
+        <form action="/shifts/settings/{{ item.group_id }}/closed-periods" class="flex flex-wrap items-end gap-3" method="post">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <label class="grid gap-1"><span class="text-sm text-stone-500">Navn</span><input class="app-input" maxlength="100" name="label" placeholder="Juleferie" type="text"></label>
+          <label class="grid gap-1"><span class="text-sm text-stone-500">Fra og med</span><input class="app-input" name="starts_on" required type="date"></label>
+          <label class="grid gap-1"><span class="text-sm text-stone-500">Til og med</span><input class="app-input" name="ends_on" required type="date"></label>
+          <button class="app-button" type="submit">Legg til</button>
+        </form>
+      </section>
     {% else %}
       <section class="app-panel">
         <div class="py-10 text-center text-sm text-stone-600">
@@ -46,5 +70,23 @@
         </div>
       </section>
     {% endfor %}
+
+    {% if other_groups %}
+      <section class="app-panel grid gap-3" data-other-groups>
+        <h2 class="text-xl font-medium tracking-tight text-stone-900">Andre grupper</h2>
+        <p class="text-sm text-stone-700">Bare en administrator kan slå på Skiftlista for en ny gruppe. Begge bryterne står av til gruppa selv slår dem på.</p>
+        <ul class="grid gap-2">
+          {% for other in other_groups %}
+            <li class="flex flex-wrap items-center justify-between gap-2 border-2 border-stone-300 bg-white px-3 py-2 text-sm">
+              <span>{{ other.name }}</span>
+              <form action="/shifts/settings/{{ other.group_id }}/enable" method="post">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button class="app-button-secondary" type="submit">Slå på Skiftlista for gruppen</button>
+              </form>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
   </section>
 {% endblock %}
