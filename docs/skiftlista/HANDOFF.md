@@ -367,6 +367,23 @@ Known gaps, deliberately left to later steps:
 9. Small: keyboard alternative to drag and drop ("Legg til" on each place),
    semester-end data cleanup, per-person "tar ikke opplæring".
 
+## Security review: open items
+
+- **Finding D (fixed):** leader assign only accepts a volunteer in the leader's
+  pool (`list_shift_members` over `_pool_group_ids(scope)`), checked before
+  anything else. Outside the pool and nonexistent give the same answer,
+  "Fann ikke personen i gruppa." (400), so no name, age rule or existence
+  leaks. Move is unchanged. A side effect: a leader can no longer place a
+  samfunnettjeneste volunteer who is in no participating group; they take
+  open places themselves in the app.
+- **Finding A:** the CSRF cookie is not tied to the session (app-wide). Fix by
+  renaming it to `__Host-` or making it an HMAC with the session. Reported to
+  etjenesten, not fixed in this branch.
+- **Finding C:** the CSP allows `'unsafe-inline'` (app-wide). Reported to
+  etjenesten, not fixed in this branch.
+- **Finding B:** `?notice=` and `?error=` text in URLs. Low priority.
+- Mobile login session handling was not reviewed.
+
 ## Not code, but on the critical path
 
 - Review by etjenesten (show the prototype and this branch).

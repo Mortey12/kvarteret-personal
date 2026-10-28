@@ -265,18 +265,6 @@ async def test_taking_a_place_left_by_kan_ikke_takes_the_absent_person_off() -> 
 
 
 @pytest.mark.asyncio
-async def test_place_left_by_kan_ikke_opens_for_samfunnettjeneste() -> None:
-    repo = FakeRepository()
-    repo.shift.slots[1].open_for_samf = False
-    repo.outsiders[555] = "Ola Samf"
-    with pytest.raises(ShiftPlacementError, match="Kun for Skjenke"):
-        await ShiftsService(repo).assign(slot_id=11, volunteer_id=555, scope=SCOPE)
-    repo.place(11, 101, assignment_id=5, absent=True)
-    await ShiftsService(repo).assign(slot_id=11, volunteer_id=555, scope=SCOPE)
-    assert repo.added == [(11, 555)]
-
-
-@pytest.mark.asyncio
 async def test_halvtimen_needs_20() -> None:
     repo = FakeRepository()
     repo.shift.venue = "Halvtimen"
@@ -641,3 +629,21 @@ async def test_shift_removal_and_closing_respect_the_leaders_groups() -> None:
         repo_missing.get_shift = none
         await ShiftsService(repo_missing).remove_shift(shift_id=5, scope=SCOPE)
     assert repo.events == []
+
+
+@pytest.mark.asyncio
+async def test_assign_refuses_people_outside_the_pool_before_any_other_check() -> None:
+    repo = FakeRepository()
+    repo.outsiders[555] = "Ola Utenfor"
+    repo.birth_dates[555] = date(2015, 1, 1)
+    repo.shift.venue = "Halvtimen"
+    repo.shift.is_closed = True  # would also be refused, but the person comes first
+    service = ShiftsService(repo)
+    for volunteer_id in (555, 999):  # outside the pool, and one that does not exist
+        with pytest.raises(ShiftPlacementError) as caught:
+            await service.assign(slot_id=11, volunteer_id=volunteer_id, scope=SCOPE)
+        assert str(caught.value) == "Fann ikke personen i gruppa."
+    assert repo.added == [] and repo.events == []
+    # Even a slot the leader may not touch gives the neutral answer first.
+    with pytest.raises(ShiftPlacementError, match="Fann ikke personen"):
+        await service.assign(slot_id=11, volunteer_id=555, scope=GroupScope(frozenset({8})))

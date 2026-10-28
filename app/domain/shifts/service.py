@@ -370,17 +370,27 @@ class ShiftsService:
     async def assign(
         self, *, slot_id: int, volunteer_id: int, scope: GroupScope
     ) -> PlacementResult:
+        # First of all, so a leader cannot probe for people outside their pool: the same
+        # answer whether the person is outside it or does not exist.
+        await self._require_in_pool(volunteer_id, scope)
         shift, _ = await self._load_slot(slot_id, scope)
         await self._lock(shift.shift_id)
         # Read again under the lock: someone may have filled the place meanwhile.
         shift, slot = await self._load_slot(slot_id, scope)
         name = await self.repository.get_volunteer_name(volunteer_id)
         if name is None:
-            raise ShiftNotFoundError("Personen finnes ikke.")
+            raise ShiftPlacementError(NOT_IN_POOL)
         warnings = await self._check(shift, slot, volunteer_id)
         await self._take_place(shift, slot)
         await self.repository.add_assignment(slot_id, volunteer_id)
         return PlacementResult(_message(f"{name} er satt opp som {self._describe(shift, slot)}.", warnings))
+
+    async def _require_in_pool(self, volunteer_id: int, scope: GroupScope) -> None:
+        members = await self.repository.list_shift_members(
+            get_current_semester_code(), await self._pool_group_ids(scope)
+        )
+        if all(member.volunteer_id != volunteer_id for member in members):
+            raise ShiftPlacementError(NOT_IN_POOL)
 
     async def _lock(self, *shift_ids: int) -> None:
         """Lock shifts in id order, so two moves between the same shifts cannot deadlock."""
@@ -535,6 +545,7 @@ class ShiftsService:
 
 
 MEETING_POINT_MAX = 200
+NOT_IN_POOL = "Fann ikke personen i gruppa."
 
 
 def _message(text: str, warnings: list[str]) -> str:

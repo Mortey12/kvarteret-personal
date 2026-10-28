@@ -12,6 +12,7 @@ from app.domain.shifts.models import (
     AssignedPerson,
     PlacementResult,
     PoolPerson,
+    MemberRole,
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
@@ -29,6 +30,7 @@ from app.domain.shifts.models import (
     GroupSettingsView,
 )
 from app.domain.shifts.planning import format_week, group_into_days, monday_of
+from app.domain.shifts.service import ShiftsService
 from app.main import create_app
 from tests.support.helpers import (
     csrf_headers,
@@ -555,6 +557,93 @@ def test_shift_actions_need_csrf_and_respect_scope() -> None:
     service.forbidden = True
     forbidden = client.post("/shifts/shifts/1/closed", data={"closed": "true"}, headers=csrf_headers(client))
     assert forbidden.status_code == 403 and "Du har ikke tilgang" in forbidden.json()["detail"]
+
+
+class _PoolRepository:
+    """Just enough of ShiftsRepository for ShiftsService.assign, with a real service on top."""
+
+    def __init__(self) -> None:
+        start = datetime(2026, 11, 2, 10, 30, tzinfo=UTC)
+        self.shift = ShiftRecord(
+            shift_id=1, group_id=7, group_name="Stjerne", venue="Stjernesalen", title="Dagskift",
+            starts_at=start, ends_at=start.replace(hour=16), note=None, is_closed=False,
+            training_replaces_slot=True,
+            slots=[SlotRecord(11, "skjenker", 2, False, 0, [])],
+        )
+        self.names = {3: "Sander Skjenker", 77: "Hemmelig Utenfor"}
+        self.added: list[tuple[int, int]] = []
+
+    async def list_group_parents(self):
+        return {7: None}
+
+    async def list_direct_participating_group_ids(self):
+        return [7]
+
+    async def list_shift_members(self, semester, group_ids):
+        return [MemberRole(3, "Sander Skjenker", 7, "Stjerne", "Skjenker")]
+
+    async def get_slot_shift_id(self, slot_id):
+        return 1 if slot_id == 11 else None
+
+    async def get_shift(self, shift_id):
+        return self.shift
+
+    async def lock_shift(self, shift_id):
+        return None
+
+    async def get_volunteer_name(self, volunteer_id):
+        return self.names.get(volunteer_id)
+
+    async def list_shift_groups(self):
+        return [ShiftGroupOption(7, "Stjerne")]
+
+    async def get_volunteer_birth_date(self, volunteer_id):
+        return date(2000, 1, 1)
+
+    async def count_shifts_by_volunteer(self, starts_from, starts_before):
+        return {}
+
+    async def add_assignment(self, slot_id, volunteer_id):
+        self.added.append((slot_id, volunteer_id))
+        return 1
+
+
+def _pool_client() -> tuple[TestClient, _PoolRepository]:
+    app = create_app()
+    override_authenticated_user(app, make_authenticated_user(UserRole.ADMIN))
+    repository = _PoolRepository()
+    app.dependency_overrides[get_shifts_service] = lambda: ShiftsService(repository)
+    return TestClient(app), repository
+
+
+def test_assign_refuses_a_volunteer_outside_the_pool_with_a_neutral_message() -> None:
+    client, repository = _pool_client()
+    prime_csrf(client, path="/")
+
+    outside = client.post(
+        "/shifts/assignments", data={"slot_id": "11", "volunteer_id": "77"}, headers=csrf_headers(client)
+    )
+    missing = client.post(
+        "/shifts/assignments", data={"slot_id": "11", "volunteer_id": "4040"}, headers=csrf_headers(client)
+    )
+
+    assert outside.status_code == missing.status_code == 400
+    assert outside.json() == missing.json() == {"detail": "Fann ikke personen i gruppa."}
+    assert "Hemmelig" not in outside.text
+    assert repository.added == []
+
+
+def test_assign_still_places_a_pool_member() -> None:
+    client, repository = _pool_client()
+    prime_csrf(client, path="/")
+
+    ok = client.post(
+        "/shifts/assignments", data={"slot_id": "11", "volunteer_id": "3"}, headers=csrf_headers(client)
+    )
+
+    assert ok.status_code == 200
+    assert ok.json()["message"].startswith("Sander Skjenker er satt opp som")
+    assert repository.added == [(11, 3)]
 
 
 def test_week_status_for_another_group_is_refused_and_bad_status_reports_an_error() -> None:
