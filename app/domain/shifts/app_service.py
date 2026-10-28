@@ -80,6 +80,7 @@ from app.domain.shifts.app_rules import (
     utc_now,
     week_label,
     week_start,
+    effective_answer,
     wish_window_end,
 )
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
@@ -561,7 +562,7 @@ class ShiftsAppService:
                 shift_rows.append(
                     WishShift(
                         **self._summary(record).model_dump(),
-                        answer=explicit or rules.get(weekday),  # type: ignore[arg-type]
+                        answer=effective_answer(explicit, rules.get(weekday)),  # type: ignore[arg-type]
                         from_rule=explicit is None,
                     )
                 )

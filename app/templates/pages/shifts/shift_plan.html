@@ -157,6 +157,22 @@
                           <span class="text-xs text-stone-500">{{ shift.people_count }} {{ 'person' if shift.people_count == 1 else 'personer' }} står på skiftet</span>
                         {% endif %}
                       </div>
+                      {% if shift.wishes %}
+                        {% set w = shift.wishes %}
+                        <details class="text-sm text-stone-800" data-shift-wishes data-shift-id="{{ shift.shift_id }}">
+                          <summary class="cursor-pointer">Ønsker: {{ w.vil | length }} vil · {{ w.kan | length }} kan · {{ w.nei | length }} nei · {{ w.ikke_satt | length }} ikke satt</summary>
+                          <dl class="mt-2 grid gap-2">
+                            {% for key, label, names in [('vil', 'Vil', w.vil), ('kan', 'Kan', w.kan), ('nei', 'Nei', w.nei), ('ikke_satt', 'Ikke satt', w.ikke_satt)] %}
+                              {% if names %}
+                                <div data-wish-group="{{ key }}">
+                                  <dt class="font-semibold">{{ label }} ({{ names | length }})</dt>
+                                  <dd class="text-stone-700">{{ names | join(', ') }}</dd>
+                                </div>
+                              {% endif %}
+                            {% endfor %}
+                          </dl>
+                        </details>
+                      {% endif %}
                       {% if shift.note %}
                         <p class="bg-amber-50 px-3 py-2 text-sm text-stone-800">{{ shift.note }}</p>
                       {% endif %}

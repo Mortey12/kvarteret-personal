@@ -15,6 +15,7 @@ from app.domain.shifts.models import (
     MemberRole,
     ShiftGroupOption,
     ShiftRecord,
+    ShiftWishes,
     SlotRecord,
     ClosedPeriod,
     ClosedPeriodSection,
@@ -47,6 +48,7 @@ class FakeShiftsService:
         self.forbidden = False
         self.banners: list[WeekBanner] = []
         self.can_open = True
+        self.wishes: ShiftWishes | None = None
 
     async def manageable_scope(self, role, auth_user_id) -> GroupScope:
         self.calls.append(("scope", role))
@@ -109,6 +111,9 @@ class FakeShiftsService:
                 ),
             ],
         )
+        days = group_into_days([record])
+        if self.wishes is not None:
+            days[0].venues[0].shifts[0].wishes = self.wishes
         week_start = monday_of(week)
         return WeekPlan(
             week_start=week_start,
@@ -117,7 +122,7 @@ class FakeShiftsService:
             next_week=date(2026, 11, 9),
             selected_group_id=group_id,
             groups=[ShiftGroupOption(7, "Stjerne")],
-            days=group_into_days([record]),
+            days=days,
             open_places=0,
             swap_requests=1,
             statuses=[WeekStatusView(7, "Stjerne", "open", "Åpen for ønsker", False, False, self.can_open)],
@@ -823,3 +828,18 @@ def test_generate_page_shows_the_preview_counts_and_confirm_creates() -> None:
         ).status_code
         == 403
     )
+
+
+def test_board_renders_wishes_as_a_collapsed_details_with_names() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    assert "data-shift-wishes" not in client.get("/shifts?week=2026-11-02").text
+
+    service.wishes = ShiftWishes(
+        vil=["Vera Vil", "Ola Vil"], kan=["Kari Kan"], nei=["Nora Nei"], ikke_satt=["Ida Ikke", "Per Ikke"]
+    )
+    page = client.get("/shifts?week=2026-11-02").text
+    assert "Ønsker: 2 vil · 1 kan · 1 nei · 2 ikke satt" in page
+    details = page.split("data-shift-wishes")[1].split("</details>")[0]
+    assert "<summary" in details and "<details" in page and " open" not in page.split("data-shift-wishes")[0][-60:]
+    for name in ("Vera Vil", "Ola Vil", "Kari Kan", "Nora Nei", "Ida Ikke", "Per Ikke"):
+        assert name in details

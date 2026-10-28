@@ -30,6 +30,7 @@ from app.domain.shifts.tables import (
     shift_group_settings,
     shift_slots,
     shift_templates,
+    shift_availability_rules,
     shift_week_status,
     shift_wishes,
     shifts,
@@ -347,6 +348,41 @@ class ShiftsRepository(SqlAlchemyRepository):
             )
             for row in rows
         ]
+
+    async def list_wishes_for(
+        self, shift_ids: list[int], volunteer_ids: list[int]
+    ) -> dict[tuple[int, int], str]:
+        """Per-shift answers, keyed (shift_id, volunteer_id). One query."""
+        if not shift_ids or not volunteer_ids:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(shift_wishes.c.shift_id, shift_wishes.c.volunteer_id, shift_wishes.c.answer).where(
+                shift_wishes.c.shift_id.in_(shift_ids),
+                shift_wishes.c.volunteer_id.in_(volunteer_ids),
+            )
+        )
+        return {(row["shift_id"], row["volunteer_id"]): row["answer"] for row in rows}
+
+    async def list_rules_for(
+        self, semesters: list[int], volunteer_ids: list[int]
+    ) -> dict[tuple[int, int, int], str]:
+        """Weekday answers, keyed (volunteer_id, semester, weekday). One query."""
+        if not semesters or not volunteer_ids:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(
+                shift_availability_rules.c.volunteer_id,
+                shift_availability_rules.c.semester,
+                shift_availability_rules.c.weekday,
+                shift_availability_rules.c.answer,
+            ).where(
+                shift_availability_rules.c.semester.in_(semesters),
+                shift_availability_rules.c.volunteer_id.in_(volunteer_ids),
+            )
+        )
+        return {
+            (row["volunteer_id"], row["semester"], row["weekday"]): row["answer"] for row in rows
+        }
 
     async def count_shifts_by_volunteer(
         self, starts_from: datetime, starts_before: datetime

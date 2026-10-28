@@ -776,3 +776,24 @@ async def test_deleting_a_volunteer_removes_their_shift_rows(world: World) -> No
     assert await world.assignments("tue") == [("skiftleder", SIGRID, False)]
     assert (await session.execute(select(shifts.c.id).where(shifts.c.id == world.shift_ids["tue"]))).scalar_one()
     assert SANDER not in (await session.execute(select(volunteer_records.c.id))).scalars().all()
+
+
+@pytest.mark.asyncio
+async def test_leader_wish_queries_read_the_requested_people_and_shifts_only(world: World) -> None:
+    from app.domain.shifts.repository import ShiftsRepository
+
+    shift, _ = await add_stjerne_shift(world, oslo(date(2026, 11, 10), 11), oslo(date(2026, 11, 10), 17))
+    await world.service.set_shift_wish(SANDER, shift, "vil")
+    await world.service.set_weekday_rule(SANDER, 1, "nei")
+    await world.service.set_weekday_rule(TORA, 1, "kan")
+    repository = ShiftsRepository()
+
+    assert await repository.list_wishes_for([shift], [SANDER, TORA]) == {(shift, SANDER): "vil"}
+    assert await repository.list_wishes_for([shift], [TORA]) == {}
+    assert await repository.list_rules_for([SEMESTER], [SANDER, TORA]) == {
+        (SANDER, SEMESTER, 1): "nei",
+        (TORA, SEMESTER, 1): "kan",
+    }
+    assert await repository.list_rules_for([SEMESTER], [TORA]) == {(TORA, SEMESTER, 1): "kan"}
+    assert await repository.list_rules_for([SEMESTER - 1], [SANDER]) == {}
+    assert await repository.list_wishes_for([], [SANDER]) == {}

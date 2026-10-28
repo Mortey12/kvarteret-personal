@@ -414,6 +414,16 @@ Known gaps, deliberately left to later steps:
    - What happens to shifts that already exist when a closed period is added
      later: offer to remove the empty ones, warn about the ones with people,
      and never remove a shift that has people on it.
+5a. ~~Show wishes to leaders on the board~~ (done). Each shift card on
+   `/shifts` has a collapsed `<details>` line "Ønsker: 4 vil · 2 kan · 3 nei ·
+   5 ikke satt" that lists the names under each answer. The answer per person
+   and shift is `effective_answer` in `app_rules.py` (per-shift wish, else the
+   weekday rule of the shift's semester and Oslo weekday, else "ikke satt");
+   the app's `get_wishes` uses the same function. `ShiftsService._attach_wishes`
+   reads the pool's wishes and rules with one query per table for the whole
+   displayed week (`list_wishes_for`, `list_rules_for`). Only people in the
+   leader's pool are counted or named; an empty scope reads nothing. No reasons
+   exist, and the app API shows wishes only to the person themselves.
 5. **Wishes and weekly allocation**: port `suggest()` and
    `fordelingWarnings()` from the prototype's `logic.js`; set
    `shift_week_status` (open → published for leaders; `allocating` is legacy) per week, with a

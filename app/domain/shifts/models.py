@@ -66,6 +66,16 @@ class SlotView:
 
 
 @dataclass(slots=True)
+class ShiftWishes:
+    """Who answered what for one shift, names only for the leader's pool."""
+
+    vil: list[str] = field(default_factory=list)
+    kan: list[str] = field(default_factory=list)
+    nei: list[str] = field(default_factory=list)
+    ikke_satt: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ShiftView:
     shift_id: int
     group_name: str
@@ -77,6 +87,7 @@ class ShiftView:
     open_places: int
     slots: list[SlotView]
     people_count: int = 0
+    wishes: ShiftWishes | None = None
 
 
 @dataclass(slots=True)
