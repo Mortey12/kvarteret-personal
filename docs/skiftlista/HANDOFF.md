@@ -144,6 +144,58 @@ nothing new; weeks keep their status, so nothing shows in the app until the
 week is published on the board.
 Apply the closed-periods table locally with `uv run alembic upgrade head`.
 
+## Demo for a meeting
+
+Fake data only. `scripts/dev/seed_demo.py` adds demo data on top of
+`seed_synthetic` and `seed_shifts`: about 100 volunteers, Halvtimen members
+under 20, barkurs and a few expired brannkurs, weekday answers and shift
+wishes, two "kan ikke" and one more swap request in the coming two weeks,
+Grøndahls and Halvtimen switched on in the app with this and next month
+published, course checks on for Stjerne and Grøndahls, and two people with
+verv outside the Skjenke groups (samfunnettjeneste). It is safe to run twice.
+
+Locally:
+
+```bash
+uv run python scripts/dev/bootstrap.py      # migrations, synthetic seed, shift seed
+uv run python scripts/dev/seed_demo.py      # the demo data on top
+```
+
+On a hosted demo database (an empty database that holds no real people):
+
+```bash
+export DATABASE_URL=postgresql+asyncpg://...   # the demo database; direct endpoint, ssl=require
+uv run alembic upgrade head
+uv run python -c "import asyncio, os, sys; sys.path.insert(0, 'scripts/dev'); \
+from seed_synthetic import seed; from seed_shifts import seed_shifts; \
+u = os.environ['DATABASE_URL']; asyncio.run(seed(u)); asyncio.run(seed_shifts(u))"
+DEMO_SEED_CONFIRM=<the host name in DATABASE_URL> uv run python scripts/dev/seed_demo.py
+```
+
+`seed_demo.py` refuses to run unless the host is `localhost` / `127.0.0.1` or
+`DEMO_SEED_CONFIRM` is exactly the host name, and unless every volunteer has an
+email ending in `@example.dev` (a volunteer with no email also stops it). The
+other two seeds have no such checks, so never point them at a real database.
+
+Log in to the app with an email and a code. In development the code is saved
+under `.devdata/outbox/`; on a hosted demo there is no way to read it without
+email delivery (Resend) or a demo-login flag, which does not exist yet.
+Good volunteers to log in as:
+
+| Email | Why |
+| --- | --- |
+| `demo.stjerne@example.dev` | Stjerne member with valid brann- and barkurs: own-group tab, "Andre" (Grøndahls), claims a place |
+| `demo.mangler-kurs@example.dev` | Stjerne, brannkurs ran out and no barkurs: the app offers a course sign-up with the claim |
+| `demo.under20@example.dev` (also `-b`, `-c`) | Halvtimen, 19 or 18: Halvtimen places are blocked ("20+"); the leader board refuses them too |
+| `demo.kan-ikke@example.dev` | Grøndahls, has a "kan ikke" in the coming two weeks (Mine, and marked red on the board) |
+| `demo.bytte@example.dev` | Stjerne, has a swap request in the coming two weeks |
+| `demo.skiftleder@example.dev` | Stjerne skiftleder: skiftleder places |
+| `demo.samf@example.dev`, `demo.samf-b@example.dev` | Verv in Lydgruppen / Eksponeringsetaten only: samfunnettjeneste, sees places open for samf in Stjerne and Grøndahls |
+
+Leader side: log in to Personal as the dev admin and open `/shifts`. Halvtimen
+is switched on for the demo (it is not in the request list, but the "20+" block
+only shows when Halvtimen is visible in the app).
+
 ## Decisions already made (do not re-ask)
 
 - Quota: 1 shift a week; pensioner agreement 1 a month (model as verv
