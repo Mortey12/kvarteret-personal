@@ -206,17 +206,60 @@ only shows when Halvtimen is visible in the app).
 
 ## Decisions already made (do not re-ask)
 
-- Quota: 1 shift a week; pensioner agreement 1 a month (model as verv
-  `Pensjonist` unless etjenesten prefers a contract-type field). No hard
-  max for people who want more; warn leaders instead (limit as a group
-  setting, suggestion "more than 3 a week").
+- Quota and requirements (from the demo meeting with the bar leaders, incl.
+  Grøndahls) replace the old "1 shift a week" idea as the general model.
+  Requirements are **per bar and warnings only, never blocking**. Max per
+  week and the pensioner rule "1 a month" (verv `Pensjonist` unless
+  etjenesten prefers a contract-type field) become rule types in the same
+  per-bar settings. No hard max for people who want more; warn leaders
+  instead (suggestion "more than 3 a week").
+  - Weekend shifts: a requirement set per bar. Weekend days are set per bar
+    (Grøndahls: Friday and Saturday; Kvarteret is not open on Sundays except
+    special events).
+  - Counted per semester (spring: January to early June; autumn: mid-August
+    to just after mid-December), for example "at least 4 weekend shifts per
+    semester". The leader gets a pace warning halfway through the semester.
+    Closed periods never count against anyone.
+  - Option B, splitting each semester into two halves with its own target, is
+    kept open for later as a per-bar choice.
+  - The volunteer sees progress in Mine ("Helgeskift 1 av 4"), and
+    `suggest()` prioritises people who are behind.
+- Leaders see who has sent in wishes: per bar and period, "x av y har
+  svart", with the list of who has not answered. A reminder button comes
+  with email (step 8).
+- Training and approval: one shared pattern for skjenker training, skiftleder
+  training and new chefs.
+  - The system counts completed training shifts from the schedule: the shift
+    has happened, the person was on a training place, and no "kan ikke". No
+    attendance confirmation.
+  - The number of shifts before approval is set per bar (default 3). At that
+    number the leader gets "Klar for godkjenning" with "Godkjenn" or "Ett
+    skift til".
+  - Approval can be done by the bar's leader/personalleder or Skjenkeleder
+    (and Admin).
+  - The volunteer sees "x av 3" and "venter på godkjenning" in the app.
+- Skiftleder training: the trainee is the skiftleder on the shift, with an
+  experienced skiftleder who "tar opplæring" present. The kitchen has no
+  skiftledere; a new chef works with a kokk who "tar opplæring".
+- "Tar opplæring / tar ikke opplæring" is a setting on the **role**
+  (skiftleder, kokk), set only by a leader, chosen at approval and changeable
+  later. Anyone in training is only placed on shifts where the skiftleder (or
+  kokk in the kitchen) tar opplæring; the board and `suggest()` check this,
+  and leaders get a warning otherwise. This replaces the earlier per-person
+  "tar ikke opplæring" note (the old "(AS)/(AV)").
+- Wishes in the app become a month calendar: each day shows one dot per
+  shift, coloured by the answer (vil green, kan yellow, kan ikke the app's
+  maroon, not set white with border). The volunteer selects dates, or taps a
+  weekday letter (M–S) to select all those days, picks which shifts the
+  answer applies to (all, dagskift, kveldsskift), then vil / kan hvis
+  nødvendig / kan ikke. Weekday taps stay standing rules for the semester, as
+  today, with a line saying so. The three answers stay. App change only (JS,
+  can ship by OTA) on top of the existing wishes API (step 5e).
 - Halvtimen requires age 20+ (show only "20+" in the app, never birth date).
 - Kjøkken is part of Skjenke; kitchen places are for chefs only; kitchen
   shifts are shown in the Stjernesalen card ("Stjernesalen og kjøkken").
-- Becoming skiftleder: three skiftleder training shifts, not a course.
-- "(AS)/(AV)" in the old sheets = skiftledere who do not want to train
-  people. Implement as a per-person setting "tar ikke opplæring"; never put
-  a trainee on their shifts.
+- Becoming skiftleder: skiftleder training shifts (default three, per bar),
+  not a course. See the training and approval decision below.
 - Brann- and barkurs valid 2 years; completions are stored per semester, so
   compute expiry as 4 semesters later. Barkurs is only required for
   samfunnettjeneste in bar places; brannkurs for everyone. A person must be
@@ -265,15 +308,10 @@ only shows when Halvtimen is visible in the app).
   default `first_names`. A member can hide their own name from other
   volunteers (shown as role only); the group setting is the ceiling. Leaders
   and the skiftleder on the day always see everyone.
-- "May not work together" pairs: no reason or case reference is stored. A
-  separate explicit permission "manage pairs", granted by an Admin per group
-  scope (a bar, Skjenke, or everything), and not implied by Admin. A pair is
-  visible and editable only by someone whose scope covers both people. It is
-  enforced everywhere a person can be placed (app claim, leader assign and
-  move, taking a swapped place, replacing someone who can't come), with a
-  neutral refusal that never names the other person. In the app the place is
-  simply not shown. Every view and change is logged. **Not built yet:**
-  Kvarteret's privacy person reviews the data model first.
+- **Dropped:** "may not work together" pairs. It would store sensitive data
+  in one more place; the leader handles this when planning. The earlier
+  design (explicit "manage pairs" permission, neutral refusals, logging) is
+  not built and is no longer planned.
 - Skiftlista will expand to other groups (for example Vakt), so nothing may
   depend on the Skjenke group's slug. A group takes part when it has a
   `shift_group_settings` row or shift templates, or has a descendant that
@@ -351,7 +389,7 @@ Known gaps, deliberately left to later steps:
 - **Review account** (App/Play Store): review sessions get `enabled: false`,
   so reviewers do not see Skiftlista. Decide whether the review user needs
   demo access before submitting.
-- "Tar ikke opplæring" is not considered yet (step 9).
+- "Tar opplæring" is not considered yet (step 5d).
 
 ## Next steps, in order
 
@@ -424,8 +462,39 @@ Known gaps, deliberately left to later steps:
    displayed week (`list_wishes_for`, `list_rules_for`). Only people in the
    leader's pool are counted or named; an empty scope reads nothing. No reasons
    exist, and the app API shows wishes only to the person themselves.
+   Later: narrow the counts to people whose own groups include the shift's
+   group (today it is the whole pool).
+5b. **Who has answered** (demo feedback): per bar and period, "x av y har
+   svart" for leaders, with the list of who has not answered. "Svart" needs a
+   definition first (any wish or weekday rule in the period?). The reminder
+   button comes with email (step 8).
+5c. **Per-bar requirements** (see decisions): a per-bar settings table with
+   rule types: weekend shifts per semester (weekend days per bar), max per
+   week, pensioner 1 a month. Warnings only, never blocking. Pace warning to
+   the leader halfway through the semester; closed periods never count. The
+   app shows progress in Mine ("Helgeskift 1 av 4") and `suggest()` favours
+   people who are behind. Option B (two halves per semester) later, per bar.
+5d. **Training and approval** (see decisions): count completed training
+   shifts from the schedule (happened, on a training place, no "kan ikke");
+   threshold per bar (default 3); "Klar for godkjenning" with "Godkjenn" /
+   "Ett skift til"; approval by the bar's leader/personalleder, Skjenkeleder
+   or Admin; "x av 3" and "venter på godkjenning" in the app. Add the "tar
+   opplæring" setting on the skiftleder and kokk roles (leader-only, set at
+   approval), a board check and warning, and the same check in `suggest()`.
+   Skiftleder trainee = skiftleder on the shift with a skiftleder who tar
+   opplæring present; kitchen trainee works with a kokk who tar opplæring.
+   This also replaces the planned per-person setting in step 9.
+5e. **Wish calendar in the app** (JS only, can ship by OTA): month calendar
+   with one coloured dot per shift, select dates or weekday letters, pick all
+   / dagskift / kveldsskift, then vil / kan hvis nødvendig / kan ikke. Check
+   the existing wishes API first. It has `PUT /wishes/weekdays/{weekday}` and
+   `PUT /wishes/shifts/{shift_id}`, so a multi-date answer is one call per
+   shift. Likely gaps: a batch endpoint, and weekday rules limited to dagskift
+   or kveldsskift (a rule today covers the whole weekday). Decide when
+   building; the week list only covers weeks that accept wishes.
 5. **Wishes and weekly allocation**: port `suggest()` and
-   `fordelingWarnings()` from the prototype's `logic.js`; set
+   `fordelingWarnings()` from the prototype's `logic.js` (with the weekend,
+   behind-on-requirements and "tar opplæring" rules from 5c and 5d); set
    `shift_week_status` (open → published for leaders; `allocating` is legacy) per week, with a
    "Publiser måneden" shortcut that publishes all weeks of a month, and the
    unpublished-week warning described under known gaps. Wishes are already
@@ -435,8 +504,10 @@ Known gaps, deliberately left to later steps:
 7. **Samfunnettjeneste**: events, places open for samf, progress per group.
 8. **Swaps and sick days** with email to the right leaders, show
    `status_message` to them (not to skiftleder), delete it after the shift.
+   Also the reminder button for volunteers who have not sent in wishes (5b).
 9. Small: keyboard alternative to drag and drop ("Legg til" on each place),
-   semester-end data cleanup, per-person "tar ikke opplæring".
+   semester-end data cleanup. (The per-person "tar ikke opplæring" is gone;
+   see 5d.)
 
 ## Security review: open items
 
@@ -464,7 +535,6 @@ Known gaps, deliberately left to later steps:
 - Ask etjenesten how Personal is hosted and billed. It affects polling from
   the app, the daily top-up job (4d) and the `/open` endpoint, which
   evaluates 92 days per call.
-- Kvarteret's privacy person must review the data model before "may not work
-  together" pairs are built.
 - Stjerne has no weekend shifts, so check that templates and the generator
-  match that when the first templates are entered.
+  match that when the first templates are entered. Weekend days are a per-bar
+  setting (Grøndahls: Friday and Saturday).
