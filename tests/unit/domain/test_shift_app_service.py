@@ -38,6 +38,7 @@ from app.domain.shifts.tables import (
     shift_templates,
     shift_wishes,
     shifts,
+    volunteer_qualifications,
 )
 from app.domain.volunteer_applications.tables import volunteer_application_invites
 from app.domain.volunteers.repository import VolunteersRepository
@@ -86,6 +87,7 @@ TABLES = [
     shift_week_status,
     shift_availability_rules,
     shift_wishes,
+    volunteer_qualifications,
     volunteer_cards,
     volunteer_next_of_kin,
     volunteer_photos,
@@ -767,13 +769,30 @@ async def test_deleting_a_volunteer_removes_their_shift_rows(world: World) -> No
     await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "kan")
     await session.execute(insert(course_session_signups).values(session_id=world.sessions["brann-20nov"], volunteer_id=SANDER))
 
+    await session.execute(
+        insert(volunteer_qualifications).values(
+            [
+                {"volunteer_id": SANDER, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": SANDER, "qualification": "kokk", "status": "training", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": SIGRID, "qualification": "skiftleder", "status": "approved", "group_id": STJERNE, "takes_trainees": True},
+            ]
+        )
+    )
+
     await VolunteersRepository().delete_volunteer(SANDER)
 
-    for table in (shift_assignments, shift_wishes, shift_availability_rules, course_session_signups):
+    for table in (
+        shift_assignments,
+        shift_wishes,
+        shift_availability_rules,
+        course_session_signups,
+        volunteer_qualifications,
+    ):
         rows = (await session.execute(select(table.c.volunteer_id))).scalars().all()
         assert SANDER not in rows
     # Other people and the shifts themselves are untouched.
     assert await world.assignments("tue") == [("skiftleder", SIGRID, False)]
+    assert (await session.execute(select(volunteer_qualifications.c.volunteer_id))).scalars().all() == [SIGRID]
     assert (await session.execute(select(shifts.c.id).where(shifts.c.id == world.shift_ids["tue"]))).scalar_one()
     assert SANDER not in (await session.execute(select(volunteer_records.c.id))).scalars().all()
 
@@ -797,3 +816,67 @@ async def test_leader_wish_queries_read_the_requested_people_and_shifts_only(wor
     assert await repository.list_rules_for([SEMESTER], [TORA]) == {(TORA, SEMESTER, 1): "kan"}
     assert await repository.list_rules_for([SEMESTER - 1], [SANDER]) == {}
     assert await repository.list_wishes_for([], [SANDER]) == {}
+
+
+@pytest.mark.asyncio
+async def test_qualification_reads_return_rows_per_person_and_per_group(world: World) -> None:
+    from app.domain.shifts.models import QualificationRecord
+    from app.domain.shifts.repository import ShiftsRepository
+
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            [
+                {"volunteer_id": SANDER, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False, "training_target": None},
+                {"volunteer_id": SIGRID, "qualification": "skiftleder", "status": "approved", "group_id": STJERNE, "takes_trainees": True, "training_target": None},
+                {"volunteer_id": TORA, "qualification": "skjenker", "status": "training", "group_id": HALVTIMEN, "takes_trainees": False, "training_target": 3},
+            ]
+        )
+    )
+    repository = ShiftsRepository()
+
+    assert await repository.list_qualifications([]) == []
+    sander = await repository.list_qualifications([SANDER])
+    assert sander == [
+        QualificationRecord(
+            volunteer_id=SANDER,
+            qualification="skjenker",
+            status="approved",
+            group_id=STJERNE,
+            training_target=None,
+            takes_trainees=False,
+            approved_by=None,
+            approved_at=None,
+        )
+    ]
+    both = await repository.list_qualifications([SIGRID, TORA])
+    assert [(row.volunteer_id, row.qualification, row.status) for row in both] == [
+        (SIGRID, "skiftleder", "approved"),
+        (TORA, "skjenker", "training"),
+    ]
+    assert both[0].takes_trainees is True
+    assert both[1].training_target == 3
+
+    in_halvtimen = await repository.list_group_qualifications([HALVTIMEN])
+    assert [row.volunteer_id for row in in_halvtimen] == [TORA]
+    assert await repository.list_group_qualifications([]) == []
+    assert await repository.list_group_qualifications([KULTUR]) == []
+
+
+@pytest.mark.asyncio
+async def test_qualification_settings_default_when_a_group_has_no_row(world: World) -> None:
+    from app.domain.shifts.models import QualificationSettings
+    from app.domain.shifts.repository import ShiftsRepository
+
+    await world.session.execute(
+        update(shift_group_settings)
+        .where(shift_group_settings.c.group_id == HALVTIMEN)
+        .values(training_shifts_needed=5, sibling_skiftleder_allowed=True)
+    )
+    repository = ShiftsRepository()
+
+    assert await repository.get_qualification_settings([]) == {}
+    assert await repository.get_qualification_settings([STJERNE, HALVTIMEN, KULTUR]) == {
+        STJERNE: QualificationSettings(training_shifts_needed=3, sibling_skiftleder_allowed=False),
+        HALVTIMEN: QualificationSettings(training_shifts_needed=5, sibling_skiftleder_allowed=True),
+        KULTUR: QualificationSettings(),
+    }

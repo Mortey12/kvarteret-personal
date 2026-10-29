@@ -18,6 +18,7 @@ from app.domain.shifts.tables import (
     shift_assignments,
     shift_availability_rules,
     shift_wishes,
+    volunteer_qualifications,
 )
 from app.domain.volunteer_applications.tables import volunteer_application_invites
 from app.domain.volunteers.tables import (
@@ -317,6 +318,7 @@ class VolunteersRepository(SqlAlchemyRepository):
             shift_wishes,
             shift_availability_rules,
             course_session_signups,
+            volunteer_qualifications,
         ):
             await self.execute(delete(table).where(table.c.volunteer_id == volunteer_id))
         await self.execute(

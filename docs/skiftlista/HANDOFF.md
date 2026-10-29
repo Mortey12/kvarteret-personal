@@ -76,8 +76,8 @@ Also fixed: dev seed produced semester code `20253` (now
   verv (`role_assignments` + `assignment_roles`) this semester. Verv names
   used: `Skiftleder`, `Opplæring`, `Kokk`. **This changes before the pilot:**
   qualifications decide who may take which places, not verv (see the
-  "Qualifications" decision and step 5d; no `qualifications` table exists
-  yet). Subgroups use
+  "Qualifications" decision and step 5d; `volunteer_qualifications` exists
+  since 5d step 1 but nothing reads it yet). Subgroups use
   `groups.parent_group_id`. Course requirements per group already exist in
   `group_course_requirements`, but that table is display-only (courses
   module) and Skiftlista does not use it: the course checks use `COURSE_RULES`
@@ -241,8 +241,9 @@ only shows when Halvtimen is visible in the app).
   - The number of shifts before approval is set per bar (default 3). At that
     number the leader gets "Klar for godkjenning" with "Godkjenn" or "Ett
     skift til".
-  - Approval can be done by the bar's leader/personalleder or Skjenkeleder
-    (and Admin).
+  - Approval can be done by anyone who is Gruppeadmin of that bar (the
+    leader, the personalansvarlig, or anyone an Admin assigns), the Skjenke
+    Gruppeadmin (Skjenkeleder), and Admin, as in the rights decision below.
   - The volunteer sees "x av 3" and "venter på godkjenning" in the app.
 - Skiftleder training: the trainee is the skiftleder on the shift, with an
   experienced skiftleder who "tar opplæring" present. The kitchen has no
@@ -266,16 +267,31 @@ only shows when Halvtimen is visible in the app).
     qualification works in that group and in its participating sibling
     groups (same parent, the same rule as the leader pool; no Skjenke slug).
     Halvtimen is included, and its 20+ rule stays. A skiftleder
-    qualification works only in the group where it was approved. Kokk stays
-    kitchen only (the group where it was approved). A sibling bar's leader
-    can place the person, since the pool already allows it; people often
-    agree this on Slack first.
-  - **"Godkjenn direkte"** (decided): a leader can grant an approved
+    qualification works in the group where it was approved, and in sibling
+    bars only when the receiving bar has switched that on (next bullet).
+    Kokk stays kitchen only (the group where it was approved), with no
+    switch. Anyone who is Gruppeadmin of a sibling bar (leader,
+    personalansvarlig, or anyone an Admin assigns), the Skjenke Gruppeadmin
+    and Admin can place the person, since the pool already allows it; people
+    often agree this on Slack first.
+  - **Skiftledere from other bars** (decided 2026-10-29): a per-bar switch
+    on the receiving bar, in `/shifts/settings`: "Skiftledere fra andre barer
+    kan lede skift her". Off by default. Off: a skiftleder place needs a
+    skiftleder row for the shift's own group (approved there, or by
+    "Godkjenn direkte"). On: any approved skiftleder row in a participating
+    sibling group also counts. Kokk has no switch. Anyone who is Gruppeadmin
+    of the receiving bar, the Skjenke Gruppeadmin and Admin can flip it. The
+    column (`shift_group_settings.sibling_skiftleder_allowed`) is added in 5d
+    step 1; the logic is 5d step 2.
+  - **"Godkjenn direkte"** (decided): anyone who is Gruppeadmin of the bar
+    (leader, personalansvarlig, or anyone an Admin assigns), the Skjenke
+    Gruppeadmin and Admin can grant an approved
     qualification without training shifts, for people who already know bar
     work, chefs who can stand in the bar, or a skiftleder from another bar.
     Logged with who and when.
-  - **"Start opplæring"** is explicit (decided): a leader starts it, for one
-    or several people at once. Nobody is in training automatically.
+  - **"Start opplæring"** is explicit (decided): the same people (Gruppeadmin
+    of the bar, the Skjenke Gruppeadmin, Admin) start it, for one or several
+    people at once. Nobody is in training automatically.
   - **Migrated skiftledere and kokker** get "tar opplæring" on (decided);
     leaders untick the exceptions.
   - **The skiftleder seeing trainees in the app**: later (decided), not
@@ -639,7 +655,7 @@ Known gaps, deliberately left to later steps:
    leader's pool are counted or named; an empty scope reads nothing. No reasons
    exist, and the app API shows wishes only to the person themselves.
    Later: narrow the counts to people whose own groups include the shift's
-   group (today it is the whole pool).
+   group (today it is the whole pool); see 5a2.
 5b. **Who has answered** (demo feedback): per bar and period, "x av y har
    svart" for leaders, with the list of who has not answered. Someone "har
    svart" for a period if they have weekday rules for the semester or at least
@@ -654,6 +670,12 @@ Known gaps, deliberately left to later steps:
 5d. **Qualifications, training and approval** (see decisions; design done
    in a read-only pass on 2026-10-29, not built). Do the training
    simplification in the same step.
+   - **"Leader" in 5d** always means anyone who is Gruppeadmin of that bar
+     (the leader, the personalansvarlig, or anyone an Admin assigns), plus the
+     Skjenke Gruppeadmin and Admin, as in the rights decision. It is never
+     derived from verv. This applies to approving, starting training,
+     "Godkjenn direkte", flipping the sibling-skiftleder switch and placing
+     people.
    - **Where verv and `opplaering` live today.** Verv names `Skiftleder`,
      `Opplæring`, `Kokk` are constants in `planning.py` (`placement_problem`,
      `allowed_tokens`). Verv are read by `ShiftsRepository.list_shift_members`
@@ -684,15 +706,19 @@ Known gaps, deliberately left to later steps:
      rows. New columns: `shift_assignments.training_for` (null, or the
      qualification trained for on that shift; this is the per-assignment
      record, the number "2/3" is computed) and
-     `shift_group_settings.training_shifts_needed` (default 3). Revoking
+     `shift_group_settings.training_shifts_needed` (default 3). One more new
+     column on `shift_group_settings`: `sibling_skiftleder_allowed` (default
+     false, see "Skiftledere from other bars"). Revoking
      deletes the row and writes to the `app.audit` log. Deleting a volunteer
      also deletes their qualification rows: add `volunteer_qualifications`
      to the Skiftlista cleanup loop in `VolunteersRepository.delete_volunteer`
      (`app/domain/volunteers/repository.py`), next to assignments, wishes,
      availability rules and course sign-ups, in the same transaction.
    - **Who manages.** By the row's `group_id` through `GroupScope`:
-     Gruppeadmin of the bar or an ancestor (Skjenkeleder is Gruppeadmin of
-     Skjenke) and Admin. The samfunnettjeneste MANAGE / VIEW rights give no
+     anyone who is Gruppeadmin of the bar or an ancestor (leader,
+     personalansvarlig or anyone an Admin assigns; Skjenkeleder is Gruppeadmin
+     of Skjenke) and Admin. This covers approving, "Start opplæring",
+     "Godkjenn direkte", the sibling-skiftleder switch and placing people. The samfunnettjeneste MANAGE / VIEW rights give no
      access to qualifications, and samfunnettjeneste volunteers need none:
      places open for samf stay open to all.
    - **Eligibility** (decided, see "Where qualifications are valid").
@@ -709,13 +735,19 @@ Known gaps, deliberately left to later steps:
      need = NEEDS.get(kind); g = shift_group
      if need is None and g in area: return ok
      if need == "skjenker" and g in area and approved("skjenker"): return ok
-     if need in ("skiftleder", "kokk") and g in members and approved(need, group=g): return ok
+     if need in ("skiftleder", "kokk") and g in area and approved(need, group=g): return ok
+     if need == "skiftleder" and g in area and sibling_switch_on(g)
+        and approved("skiftleder", group in siblings(g)): return ok
      if g in members and training(need, group=g): return ok, training_for=need
      if open_for_everyone and kind not in RESTRICTED_KINDS: return ok
      return "Kun for medlemmer av gruppa" if g not in area else "Kun for godkjente <need>"
      ```
-     Training is valid only in the row's own group, so counts and the "tar
-     opplæring" check stay in one bar.
+     A skiftleder or kokk place uses `g in area`, not `g in members`, so
+     "Godkjenn direkte" works for a skiftleder from a sibling bar who is not a
+     member of the shift's group (the row is then for group `g`). The switch
+     line is the only way a row for another bar counts, and only for
+     skiftleder. Training is valid only in the row's own group, so counts and
+     the "tar opplæring" check stay in one bar.
    - **Training.** No `opplaering` kind, no `training_replaces_slot`. A
      person with a `training` row placed on a place that needs that
      qualification gets `training_for` set automatically (board and app;
@@ -734,10 +766,13 @@ Known gaps, deliberately left to later steps:
      and nobody else present with an approved skiftleder qualification (kokk
      in the kitchen) that tar opplæring. "I tillegg" means adding a place
      (the 4d "+").
-   - **Migration** (two revisions, Postgres only). A, additive: create the
-     table and columns; give both `training_replaces_slot` columns a server
-     default so the new code can insert before B; copy verv from the current
-     and previous semester only (decided; returning people from older
+   - **Migration** (three revisions, Postgres only, in this order).
+     **A, additive (step 1):** create the table and columns
+     (`volunteer_qualifications`, `shift_assignments.training_for`,
+     `shift_group_settings.training_shifts_needed` and
+     `sibling_skiftleder_allowed`); give both `training_replaces_slot` columns
+     a server default so the new code can insert before B; copy verv from the
+     current and previous semester only (decided; returning people from older
      semesters get "Godkjenn direkte" from a leader) in groups with templates
      or a settings row:
      Skiftleder to skiftleder (in that group) and skjenker approved, Kokk to
@@ -746,20 +781,24 @@ Known gaps, deliberately left to later steps:
      in a group whose templates have kokk and no bar places, else skjenker);
      any other verv or none to skjenker approved. A skjenker row is kept once
      per person (first group wins); skiftleder and kokk rows are kept per
-     group. Move each assignment
-     in an `opplaering` slot to the shift's crew place (kokk in the kitchen;
-     create a skjenker place if none) with `training_for` set, raising that
-     place's count by the number moved where `training_replaces_slot` was
-     off; add template `opplaering` counts to the crew slot only where the
-     template had it off; delete all `opplaering` slots. Print a check list
-     (every Opplæring person, Kjøkken members without Kokk, people in several
-     groups). B, after the new code is live: drop both `training_replaces_slot`
-     columns. Run on Neon through the direct endpoint, after taking a Neon
-     branch as the rollback. Tests build SQLite from `tables.py` with
-     `create_all`, never from migrations, so keep the verv mapping a small
-     pure function in the migration file with a unit test, and test the
-     upgrade on Postgres e2e. Downgrade is schema only and lossy (no
-     `opplaering` slots come back).
+     group. The verv names the migration reads (Skiftleder, Kokk, Opplæring)
+     live in one constant, and the migration prints every verv name it did
+     not recognise, so a run on real data shows misses instead of silently
+     giving people no qualification. A prints a check list (every Opplæring
+     person, Kjøkken members without Kokk, people in several groups).
+     **The opplaering move (step 3), its own revision** that runs together
+     with the code that stops using `opplaering`: move each assignment in an
+     `opplaering` slot to the shift's crew place (kokk in the kitchen; create
+     a skjenker place if none) with `training_for` set, raising that place's
+     count by the number moved where `training_replaces_slot` was off; add
+     template `opplaering` counts to the crew slot only where the template had
+     it off; delete all `opplaering` slots. **B (after step 3 is live):**
+     drop both `training_replaces_slot` columns. Run on Neon through the direct
+     endpoint, after taking a Neon branch as the rollback. Tests build SQLite
+     from `tables.py` with `create_all`, never from migrations, so keep the
+     verv mapping a small pure function in the migration file with a unit
+     test, and test the upgrade on Postgres e2e. Downgrade is schema only and
+     lossy (no `opplaering` slots come back).
    - **App API.** Shapes stay, values change: `slot_kinds` drops
      `opplaering`; `groups[].in_training`, `training_done`, `training_needed`
      come from the qualification rows; new optional `groups[].training_text`
@@ -776,8 +815,34 @@ Known gaps, deliberately left to later steps:
      build.
    - **Build steps** (each with its own tests; update seeds and tests where a
      step breaks them):
-     1. Tables, migration A, repository reads, and the volunteer delete
-        cleanup. Tests: the mapping function (verv older than the previous
+     1. **Done (2026-10-29).** Tables, migration A (additive changes and the
+        verv copy only), repository reads, and the volunteer delete cleanup.
+        Built in `app/domain/shifts/tables.py` (`volunteer_qualifications`,
+        `shift_assignments.training_for`, `training_shifts_needed`,
+        `sibling_skiftleder_allowed`, server defaults on both
+        `training_replaces_slot` columns), `app/db/tables.py`,
+        `migrations/versions/20261101_1200_shift_qualifications.py`
+        (`map_verv`, `RECOGNISED_VERV`, the printout),
+        `app/domain/shifts/models.py` (`QualificationRecord`,
+        `QualificationSettings`), `app/domain/shifts/repository.py`
+        (`list_qualifications`, `list_group_qualifications`,
+        `get_qualification_settings`) and
+        `app/domain/volunteers/repository.py` (delete cleanup). Tests:
+        `tests/unit/test_shift_qualifications_migration.py`, the extended
+        delete test and two repository tests in
+        `tests/unit/domain/test_shift_app_service.py`, and
+        `tests/e2e/test_shift_qualifications_migration.py` (written, not yet
+        run). Decided while building: migration matching ignores case and
+        surrounding spaces; every verv name that is not Skiftleder, Kokk or
+        Opplæring is printed as unrecognised with a count (so ordinary names
+        like Skjenker show up too); a training row gets target 3 (the column
+        default); a training row is dropped when the person is already
+        approved for that qualification (skjenker: anywhere, kokk: in that
+        group); approved rows get `approved_at` = migration time and no
+        `approved_by`; the check list prints volunteer ids only, no names;
+        nothing reads the new rows or columns yet, so eligibility is still
+        from verv. Still to do for the switch: the `/shifts/settings` control
+        and `save_group_settings` (step 2 and 4). Original plan: Tests: the mapping function (verv older than the previous
         semester is ignored), Postgres e2e upgrade on a seeded database, and
         extend `test_deleting_a_volunteer_removes_their_shift_rows`
         (`tests/unit/domain/test_shift_app_service.py`) so it also checks
@@ -793,8 +858,10 @@ Known gaps, deliberately left to later steps:
      3. Training simplification: remove `opplaering`, the shared room and
         `training_replaces_slot` from code, templates, generator and form; set
         `training_for` on assign, claim and move; dashed outline and counter
-        on the board; migration B. Tests: room, generator, template form,
-        `training_for` on placement and move.
+        on the board; the opplaering move (own revision, see Migration); migration B
+        only after this is live. Tests: room, generator, template form,
+        `training_for` on placement and move, and the opplaering move
+        revision (its own migration, run together with this code).
      4. Count and approval: the per-bar setting, the count,
         `/shifts/qualifications` (per group: Start opplæring for one or
         several people, Godkjenn with tar opplæring, Godkjenn direkte, Ett
@@ -822,6 +889,25 @@ Known gaps, deliberately left to later steps:
    all of them, and nothing deletes old members automatically). Open
    question for Morten: do helpfuls need to see the shift in the app? If
    not, (a) is enough.
+5a2. **Wish list per shift on the board** (planned after 5d step 2, not
+   built). Clicking a shift selects it, and the volunteer sidebar becomes that
+   shift's list:
+   - A search field at the top that searches the whole pool by name.
+   - Then the shift's own bar's people in groups Vil, Kan hvis nødvendig, Ikke
+     satt, Kan ikke (the last folded).
+   - Then a separate, folded "Andre barer" section with the same groups.
+   - Each card: name, group, qualification, shifts this week, warnings, and a
+     "Legg til" button that places the person in the first free place they
+     can take. This also covers the keyboard alternative in step 9; drag
+     still works.
+   - People who cannot take any place are shown greyed out with the reason,
+     with a "Godkjenn direkte" link when the viewer manages that bar (anyone
+     who is Gruppeadmin of it, the Skjenke Gruppeadmin, or Admin).
+   - The count line on each shift card counts only the shift's own group
+     (replaces the "Later" note in 5a).
+   - `suggest()` can later reorder this list.
+   - Open question for the bar leaders: should clicking a free place narrow
+     the list to that place's kind?
 5e. **Wish calendar in the app** (JS only, can ship by OTA): month calendar
    with one coloured dot per shift, select dates or weekday letters, pick all
    / dagskift / kveldsskift, then vil / kan hvis nødvendig / kan ikke. Check
@@ -871,7 +957,8 @@ Known gaps, deliberately left to later steps:
    and the samfunnettjeneste reminders (7h): to the group's leader, and for
    per-member duties also to members who have not done a shift. Needs new
    email templates and a cron route.
-9. Small: keyboard alternative to drag and drop ("Legg til" on each place),
+9. Small: keyboard alternative to drag and drop (the "Legg til" button in
+   5a2 covers it),
    semester-end data cleanup. (The per-person "tar ikke opplæring" is gone;
    see 5d.)
 

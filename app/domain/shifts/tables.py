@@ -23,7 +23,10 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    true,
 )
+
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.metadata import public_metadata
 
@@ -40,7 +43,7 @@ shift_templates = Table(
     # An end time earlier than the start time means the shift ends after midnight.
     Column("end_time", Time, nullable=False),
     # True: an opplæring place takes one of the regular places (little room in the bar).
-    Column("training_replaces_slot", Boolean, nullable=False),
+    Column("training_replaces_slot", Boolean, nullable=False, server_default=true()),
     Column("is_active", Boolean, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
@@ -77,7 +80,7 @@ shifts = Table(
     Column("ends_at", DateTime(timezone=True), nullable=False),
     Column("note", Text),
     Column("is_closed", Boolean, nullable=False),
-    Column("training_replaces_slot", Boolean, nullable=False),
+    Column("training_replaces_slot", Boolean, nullable=False, server_default=true()),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 
@@ -114,6 +117,9 @@ shift_assignments = Table(
         nullable=False,
     ),
     Column("swap_requested", Boolean, nullable=False),
+    # The qualification (skjenker / skiftleder / kokk) this person is in
+    # training for on this shift; null for a normal place.
+    Column("training_for", Text),
     # "Kan ikke i dag": the person stays on the shift, marked, and the place
     # is open to others; they come off when someone takes it.
     Column("cannot_attend", Boolean, nullable=False, server_default=false()),
@@ -155,6 +161,10 @@ shift_group_settings = Table(
     # Check brannkurs and barkurs before the app lets someone take this group's
     # places. Off for new groups until the group has set its courses up.
     Column("courses_enabled", Boolean, nullable=False, server_default=false()),
+    # Training shifts a person does before a leader can approve them.
+    Column("training_shifts_needed", Integer, nullable=False, server_default="3"),
+    # Skiftledere approved in a participating sibling bar may lead shifts here.
+    Column("sibling_skiftleder_allowed", Boolean, nullable=False, server_default=false()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 
@@ -207,4 +217,47 @@ shift_wishes = Table(
     ),
     Column("answer", Text, nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+# What a person may do on shifts. Rows are per bar: a skiftleder or kokk row
+# is valid in its own group (see the HANDOFF decisions for the sibling rules).
+# "training" rows count training shifts; "approved" rows are the qualification.
+volunteer_qualifications = Table(
+    "volunteer_qualifications",
+    public_metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "volunteer_id",
+        BigInteger,
+        ForeignKey("public.volunteer_records.id"),
+        nullable=False,
+    ),
+    # skjenker / skiftleder / kokk.
+    Column("qualification", Text, nullable=False),
+    # training / approved.
+    Column("status", Text, nullable=False),
+    Column("group_id", BigInteger, ForeignKey("public.groups.id"), nullable=False),
+    # Copied from the bar's setting when training starts; null for rows
+    # granted directly and for migrated rows.
+    Column("training_target", Integer),
+    # "Tar opplæring": whether this skiftleder or kokk takes trainees.
+    Column("takes_trainees", Boolean, nullable=False, server_default=false()),
+    # Auth user who approved; null for migrated rows.
+    Column("approved_by", UUID(as_uuid=True)),
+    Column("approved_at", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint(
+        "volunteer_id",
+        "qualification",
+        "group_id",
+        name="volunteer_qualifications_volunteer_qualification_group_key",
+    ),
+    CheckConstraint(
+        "qualification IN ('skjenker', 'skiftleder', 'kokk')",
+        name="volunteer_qualifications_qualification_valid",
+    ),
+    CheckConstraint(
+        "status IN ('training', 'approved')",
+        name="volunteer_qualifications_status_valid",
+    ),
 )

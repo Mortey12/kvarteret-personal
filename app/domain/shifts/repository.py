@@ -19,6 +19,8 @@ from app.domain.shifts.models import (
     AssignedPerson,
     AssignmentRef,
     MemberRole,
+    QualificationRecord,
+    QualificationSettings,
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
@@ -34,6 +36,7 @@ from app.domain.shifts.tables import (
     shift_week_status,
     shift_wishes,
     shifts,
+    volunteer_qualifications,
 )
 from app.domain.volunteers.tables import volunteer_records
 from app.shared.coercion import require_datetime
@@ -348,6 +351,66 @@ class ShiftsRepository(SqlAlchemyRepository):
             )
             for row in rows
         ]
+
+    async def list_qualifications(self, volunteer_ids: list[int]) -> list[QualificationRecord]:
+        """Qualification rows (training and approved) of the given people."""
+        if not volunteer_ids:
+            return []
+        return await self._load_qualifications(
+            volunteer_qualifications.c.volunteer_id.in_(volunteer_ids)
+        )
+
+    async def list_group_qualifications(self, group_ids: list[int]) -> list[QualificationRecord]:
+        """Qualification rows whose bar is one of the given groups."""
+        if not group_ids:
+            return []
+        return await self._load_qualifications(volunteer_qualifications.c.group_id.in_(group_ids))
+
+    async def _load_qualifications(self, condition) -> list[QualificationRecord]:
+        rows = await self.fetch_all_mappings(
+            select(volunteer_qualifications)
+            .where(condition)
+            .order_by(
+                volunteer_qualifications.c.volunteer_id.asc(),
+                volunteer_qualifications.c.qualification.asc(),
+                volunteer_qualifications.c.group_id.asc(),
+            )
+        )
+        return [
+            QualificationRecord(
+                volunteer_id=row["volunteer_id"],
+                qualification=row["qualification"],
+                status=row["status"],
+                group_id=row["group_id"],
+                training_target=row["training_target"],
+                takes_trainees=row["takes_trainees"],
+                approved_by=row["approved_by"],
+                approved_at=row["approved_at"],
+            )
+            for row in rows
+        ]
+
+    async def get_qualification_settings(
+        self, group_ids: list[int]
+    ) -> dict[int, QualificationSettings]:
+        """Training and sibling settings per group; defaults when a group has no row."""
+        if not group_ids:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(
+                shift_group_settings.c.group_id,
+                shift_group_settings.c.training_shifts_needed,
+                shift_group_settings.c.sibling_skiftleder_allowed,
+            ).where(shift_group_settings.c.group_id.in_(group_ids))
+        )
+        found = {
+            row["group_id"]: QualificationSettings(
+                training_shifts_needed=row["training_shifts_needed"],
+                sibling_skiftleder_allowed=row["sibling_skiftleder_allowed"],
+            )
+            for row in rows
+        }
+        return {group_id: found.get(group_id, QualificationSettings()) for group_id in group_ids}
 
     async def list_wishes_for(
         self, shift_ids: list[int], volunteer_ids: list[int]
