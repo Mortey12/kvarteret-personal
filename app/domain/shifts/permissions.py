@@ -113,6 +113,41 @@ def pool_group_ids(
     return frozenset(scope.group_ids | siblings)
 
 
+def participating_siblings(
+    group_id: int,
+    participating: frozenset[int],
+    parent_by_group: Mapping[int, int | None],
+) -> frozenset[int]:
+    """Participating groups with the same parent as ``group_id`` (not the group itself)."""
+    parent = parent_by_group.get(group_id)
+    if parent is None:
+        return frozenset()
+    return frozenset(
+        other
+        for other in participating
+        if other != group_id and parent_by_group.get(other) == parent
+    )
+
+
+def person_area(
+    member_group_ids: Iterable[int],
+    participating: frozenset[int],
+    parent_by_group: Mapping[int, int | None],
+) -> frozenset[int]:
+    """The groups whose places a person may take, qualifications permitting.
+
+    The participating groups they are an active member of, plus the
+    participating siblings of those (the pool's sibling rule), plus the
+    participating groups below them.
+    """
+    members = frozenset(member_group_ids) & participating
+    area = set(members)
+    for group_id in members:
+        area |= participating_siblings(group_id, participating, parent_by_group)
+    area |= with_subgroups(members, parent_by_group) & participating
+    return frozenset(area)
+
+
 def manageable_groups(
     role: UserRole,
     admin_group_ids: Iterable[int],

@@ -352,6 +352,18 @@ class ShiftsRepository(SqlAlchemyRepository):
             for row in rows
         ]
 
+    async def list_member_group_ids(self, volunteer_id: int, semester: int) -> list[int]:
+        """Groups the person is a member of this semester (any verv)."""
+        rows = await self.fetch_all_mappings(
+            select(role_assignments.c.group_id)
+            .where(
+                role_assignments.c.volunteer_id == volunteer_id,
+                role_assignments.c.semester == semester,
+            )
+            .distinct()
+        )
+        return [row["group_id"] for row in rows]
+
     async def list_qualifications(self, volunteer_ids: list[int]) -> list[QualificationRecord]:
         """Qualification rows (training and approved) of the given people."""
         if not volunteer_ids:

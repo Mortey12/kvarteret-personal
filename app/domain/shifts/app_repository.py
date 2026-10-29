@@ -46,6 +46,7 @@ class GroupSetting:
     samf_enabled: bool
     meeting_point: str | None
     courses_enabled: bool = False
+    sibling_skiftleder_allowed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +124,7 @@ class ShiftsAppRepository(ShiftsRepository):
                 shift_group_settings.c.samf_enabled,
                 shift_group_settings.c.meeting_point,
                 shift_group_settings.c.courses_enabled,
+                shift_group_settings.c.sibling_skiftleder_allowed,
             )
         )
         return {
@@ -131,6 +133,7 @@ class ShiftsAppRepository(ShiftsRepository):
                 samf_enabled=row["samf_enabled"],
                 meeting_point=row["meeting_point"],
                 courses_enabled=bool(row["courses_enabled"]),
+                sibling_skiftleder_allowed=bool(row["sibling_skiftleder_allowed"]),
             )
             for row in rows
         }

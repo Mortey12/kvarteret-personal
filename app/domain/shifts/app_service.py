@@ -85,8 +85,10 @@ from app.domain.shifts.app_rules import (
 )
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
+from app.domain.shifts.permissions import participating_groups
 from app.domain.shifts.planning import (
     MONTHS_NO,
+    EligibilityContext,
     OSLO,
     RESTRICTED_KINDS,
     SLOT_KINDS,
@@ -97,10 +99,11 @@ from app.domain.shifts.planning import (
     age_on,
     format_day,
     format_time_range,
+    group_rules,
     open_for_everyone,
     open_places,
     opened_by_absence,
-    placement_problem,
+    person_eligibility,
     slot_kind,
 )
 from app.domain.shifts.service import ShiftsService
@@ -128,6 +131,9 @@ class _Person:
     active: bool
     group_names: dict[int, str]
     settings: dict[int, GroupSetting]
+    # Who may take what, from membership and qualification rows (not verv).
+    # Built once per request; never read inside the per-slot evaluation.
+    eligibility: EligibilityContext
 
     @property
     def enabled_ids(self) -> list[int]:
@@ -379,7 +385,9 @@ class ShiftsAppService:
                 f"Du må være påmeldt {COURSE_RULES[first].name.lower()} før skiftet. "
                 "Velg et kurs og prøv igjen."
             )
-        await self.shifts._check(record, slot, person.volunteer_id)
+        await self.shifts._check(
+            record, slot, person.volunteer_id, eligibility=person.eligibility
+        )
 
         for session_id in requested:
             await self._sign_up(person, courses, session_id, before=record.starts_at)
@@ -650,6 +658,25 @@ class ShiftsAppService:
                 roles = roles_by_group.setdefault(group_id, set())
                 if role_name:
                     roles.add(role_name)
+        settings = await self.repository.list_group_settings()
+        parents = await self.repository.list_group_parents()
+        participating = participating_groups(
+            await self.repository.list_direct_participating_group_ids(), parents
+        )
+        qualification_rows = [
+            (record.qualification, record.status, record.group_id)
+            for record in await self.repository.list_qualifications([volunteer_id])
+        ]
+        eligibility = EligibilityContext(
+            person_eligibility(
+                [group_id for group_id, _ in role_rows], qualification_rows, participating, parents
+            ),
+            group_rules(
+                participating,
+                parents,
+                {gid: setting.sibling_skiftleder_allowed for gid, setting in settings.items()},
+            ),
+        )
         return _Person(
             volunteer_id=row.volunteer_id,
             first_name=row.first_name,
@@ -658,7 +685,8 @@ class ShiftsAppService:
             roles_by_group=roles_by_group,
             active=bool(role_rows),
             group_names=group_names,
-            settings=await self.repository.list_group_settings(),
+            settings=settings,
+            eligibility=eligibility,
         )
 
     async def _require_person(self, volunteer_id: int) -> _Person:
@@ -903,8 +931,7 @@ class ShiftsAppService:
         """Can this person take this place? Mirrors ``check()`` in the prototype."""
         now = self._now()
         result = _Eval()
-        roles = person.roles_by_group
-        problem = placement_problem(slot.kind, record.group_id, open_for_everyone(slot), roles)
+        problem = person.eligibility.problem(slot.kind, record.group_id, open_for_everyone(slot))
         on_shift = any(p.volunteer_id == person.volunteer_id for s in record.slots for p in s.people)
         free = open_places(record, slot)
         reasons = [

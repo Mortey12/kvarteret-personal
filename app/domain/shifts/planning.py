@@ -6,10 +6,12 @@ The same rules live in the clickable prototype (mstene.no/skiftliste,
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from app.domain.shifts.permissions import participating_siblings, person_area
 from app.domain.shifts.models import (
     AssignedPerson,
     DayBlock,
@@ -295,39 +297,160 @@ def _open_label(shift: ShiftRecord, slot: SlotRecord) -> str:
     return "Ledig"
 
 
-# Verv names in Personal that give access to each kind of place.
-SKIFTLEDER_ROLE = "Skiftleder"
+# The verv that marks someone in training. Eligibility no longer reads it (it
+# comes from qualification rows); the app still shows it as ``in_training``.
 TRAINEE_ROLE = "Opplæring"
-CHEF_ROLE = "Kokk"
+
+# The qualification each kind of place needs. Garderobe needs none.
+NEEDS: dict[str, str | None] = {
+    "skiftleder": "skiftleder",
+    "kokk": "kokk",
+    "skjenker": "skjenker",
+    "bartender": "skjenker",
+    "garderobe": None,
+}
+
+TRAINEE_CREW_PROBLEM = "I opplæring: bruk opplæringsplassen"
+TRAINING_PLACE_PROBLEM = "Kun for de som er i opplæring i gruppen"
+NOT_IN_AREA_PROBLEM = "Kun for medlemmer av gruppa"
+
+# (qualification, status, group id): one row of ``volunteer_qualifications``.
+QualificationRow = tuple[str, str, int]
+
+
+@dataclass(frozen=True, slots=True)
+class PersonEligibility:
+    """What decides a person's places: membership, area and qualification rows."""
+
+    member_groups: frozenset[int] = frozenset()
+    area: frozenset[int] = frozenset()
+    qualifications: tuple[QualificationRow, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ShiftGroupRules:
+    """What the shift's group says about who may come in from other bars."""
+
+    sibling_skiftleder_allowed: bool = False
+    # Participating groups with the same parent (not the group itself).
+    siblings: frozenset[int] = frozenset()
+
+
+NO_RULES = ShiftGroupRules()
+
+
+@dataclass(frozen=True, slots=True)
+class EligibilityContext:
+    """Everything eligibility needs for one person, built once per request."""
+
+    person: PersonEligibility
+    rules: dict[int, ShiftGroupRules]
+
+    def rules_for(self, group_id: int) -> ShiftGroupRules:
+        return self.rules.get(group_id, NO_RULES)
+
+    def problem(self, kind: str, shift_group_id: int, open_for_samf: bool) -> str | None:
+        return placement_problem(
+            kind, shift_group_id, open_for_samf, self.person, self.rules_for(shift_group_id)
+        )
+
+
+def group_rules(
+    participating: frozenset[int],
+    parent_by_group: Mapping[int, int | None],
+    sibling_switches: Mapping[int, bool],
+) -> dict[int, ShiftGroupRules]:
+    """The rules of every participating group."""
+    return {
+        group_id: ShiftGroupRules(
+            sibling_skiftleder_allowed=bool(sibling_switches.get(group_id, False)),
+            siblings=participating_siblings(group_id, participating, parent_by_group),
+        )
+        for group_id in participating
+    }
+
+
+def person_eligibility(
+    member_group_ids: Iterable[int],
+    qualifications: Iterable[QualificationRow],
+    participating: frozenset[int],
+    parent_by_group: Mapping[int, int | None],
+) -> PersonEligibility:
+    members = frozenset(member_group_ids) & participating
+    return PersonEligibility(
+        member_groups=members,
+        area=person_area(members, participating, parent_by_group),
+        qualifications=tuple(qualifications),
+    )
+
+
+def _has(rows: Iterable[QualificationRow], qualification: str, status: str, groups: Iterable[int]) -> bool:
+    wanted = set(groups)
+    return any(q == qualification and s == status and g in wanted for q, s, g in rows)
+
+
+def _training_rows(person: PersonEligibility, group_id: int) -> set[str]:
+    """Qualifications the person is training for in this group (needs membership).
+
+    A training row does not count when the same qualification is already
+    approved in the group: approved wins.
+    """
+    if group_id not in person.member_groups:
+        return set()
+    return {
+        q
+        for q, s, g in person.qualifications
+        if s == "training" and g == group_id and not _has(person.qualifications, q, "approved", [g])
+    }
 
 
 def placement_problem(
     kind: str,
     shift_group_id: int,
     open_for_samf: bool,
-    roles_by_group: dict[int, set[str]],
+    person: PersonEligibility,
+    rules: ShiftGroupRules = NO_RULES,
 ) -> str | None:
     """Why this person cannot take this kind of place, or None if they can.
 
-    ``roles_by_group`` holds the person's verv this semester in groups that
-    have shifts (group id to verv names; a member without verv has an
-    empty set).
+    ``person`` holds the participating groups they are an active member of
+    this semester, their area and their qualification rows. ``rules`` is
+    about the shift's group: the sibling-skiftleder switch and its
+    participating siblings. ``open_for_samf`` is true for a place open to
+    everyone (set by the leader, or opened by "kan ikke i dag"). The
+    age rules (Halvtimen 20+) are checked by the caller, after this.
     """
-    own = roles_by_group.get(shift_group_id)
-    member_anywhere = any(roles - {TRAINEE_ROLE} for roles in roles_by_group.values()) or any(
-        not roles for roles in roles_by_group.values()
-    )
-    if kind == "skiftleder":
-        return None if own and SKIFTLEDER_ROLE in own else "Kun for skiftledere i gruppen"
+    group_id = shift_group_id
+    in_area = group_id in person.area
+    rows = person.qualifications
     if kind == "opplaering":
-        return None if own and TRAINEE_ROLE in own else "Kun for de som er i opplæring i gruppen"
-    if kind == "kokk":
-        return None if own and CHEF_ROLE in own else "Kun for kokker"
-    if own is not None and own == {TRAINEE_ROLE}:
-        return "I opplæring: bruk opplæringsplassen"
-    if member_anywhere or open_for_samf:
+        # Step 2 only: membership of the group and a training row for it. Never
+        # open to everyone.
+        if _training_rows(person, group_id):
+            return None
+        return TRAINING_PLACE_PROBLEM
+    need = NEEDS.get(kind)
+    if in_area:
+        if need is None:
+            return None
+        peers = rules.siblings | {group_id}
+        if need == "skjenker" and _has(rows, "skjenker", "approved", peers):
+            return None
+        if need in ("skiftleder", "kokk") and _has(rows, need, "approved", [group_id]):
+            return None
+        if (
+            need == "skiftleder"
+            and rules.sibling_skiftleder_allowed
+            and _has(rows, "skiftleder", "approved", rules.siblings)
+        ):
+            return None
+        if need in _training_rows(person, group_id) and slot_kind(kind).crew:
+            return TRAINEE_CREW_PROBLEM
+    if open_for_samf and kind not in RESTRICTED_KINDS:
         return None
-    return "Kun for medlemmer av gruppa"
+    if not in_area or need is None:
+        return NOT_IN_AREA_PROBLEM
+    return f"Kun for godkjente {need}"
 
 
 def age_on(birth_date: date, day: date) -> int:
@@ -358,11 +481,17 @@ def age_problem(venue: str, birth_date: date | None, day: date) -> str | None:
     return None
 
 
-def allowed_tokens(roles_by_group: dict[int, set[str]], shift_group_ids: list[int]) -> list[str]:
+def allowed_tokens(
+    person: PersonEligibility,
+    shift_group_ids: list[int],
+    rules: Mapping[int, ShiftGroupRules] | None = None,
+) -> list[str]:
+    """Drag-and-drop tokens ``group:kind:open``, from the same rule as ``placement_problem``."""
     tokens: list[str] = []
     for group_id in shift_group_ids:
+        group_rule = (rules or {}).get(group_id, NO_RULES)
         for kind in SLOT_KINDS:
             for open_for_samf in (False, True):
-                if placement_problem(kind, group_id, open_for_samf, roles_by_group) is None:
+                if placement_problem(kind, group_id, open_for_samf, person, group_rule) is None:
                     tokens.append(f"{group_id}:{kind}:{int(open_for_samf)}")
     return tokens

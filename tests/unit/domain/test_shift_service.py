@@ -12,6 +12,8 @@ from app.domain.shifts.models import (
     AssignedPerson,
     AssignmentRef,
     MemberRole,
+    QualificationRecord,
+    QualificationSettings,
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
@@ -47,6 +49,15 @@ class FakeRepository:
             MemberRole(101, "Sander Skjenker", 7, "Stjerne", "Skjenker"),
             MemberRole(102, "Tora Trainee", 7, "Stjerne", "Opplæring"),
         ]
+        # (volunteer, qualification, status, group): eligibility comes from these, not verv.
+        self.qualifications: list[tuple[int, str, str, int]] = [
+            (100, "skiftleder", "approved", 7),
+            (100, "skjenker", "approved", 7),
+            (101, "skjenker", "approved", 7),
+            (102, "skjenker", "training", 7),
+        ]
+        self.sibling_switch: dict[int, bool] = {}
+        self.qualification_queries = 0
         self.week_counts: dict[int, int] = {}
         self.added: list[tuple[int, int]] = []
         self.moved: list[tuple[int, int]] = []
@@ -88,6 +99,23 @@ class FakeRepository:
         if self.restrict_members_to_groups:
             return [m for m in self.members if m.group_id in group_ids]
         return self.members
+
+    async def list_member_group_ids(self, volunteer_id: int, semester: int) -> list[int]:
+        return sorted({m.group_id for m in self.members if m.volunteer_id == volunteer_id})
+
+    async def list_qualifications(self, volunteer_ids: list[int]) -> list[QualificationRecord]:
+        self.qualification_queries += 1
+        return [
+            QualificationRecord(v, q, status, g, None, False, None, None)
+            for v, q, status, g in self.qualifications
+            if v in volunteer_ids
+        ]
+
+    async def get_qualification_settings(self, group_ids: list[int]) -> dict[int, QualificationSettings]:
+        return {
+            gid: QualificationSettings(sibling_skiftleder_allowed=self.sibling_switch.get(gid, False))
+            for gid in group_ids
+        }
 
     async def list_wishes_for(self, shift_ids, volunteer_ids) -> dict:
         self.wish_queries += 1
@@ -207,7 +235,7 @@ async def test_assign_skiftleder() -> None:
 @pytest.mark.asyncio
 async def test_skjenker_cannot_take_skiftleder_place() -> None:
     repo = FakeRepository()
-    with pytest.raises(ShiftPlacementError, match="Kun for skiftledere"):
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftleder"):
         await ShiftsService(repo).assign(slot_id=10, volunteer_id=101, scope=SCOPE)
     assert repo.added == []
 

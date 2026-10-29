@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import BigInteger, Integer, insert, select, update
+from sqlalchemy import BigInteger, Integer, delete, insert, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.metadata import public_metadata
@@ -293,6 +293,17 @@ async def _build(session) -> World:
                 .returning(course_sessions.c.id)
             )
         ).scalar_one()
+    # Eligibility comes from qualification rows, not verv.
+    await session.execute(
+        insert(volunteer_qualifications).values(
+            [
+                {"volunteer_id": SIGRID, "qualification": "skiftleder", "status": "approved", "group_id": STJERNE, "takes_trainees": True},
+                {"volunteer_id": SIGRID, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": SANDER, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": TORA, "qualification": "skjenker", "status": "training", "group_id": STJERNE, "takes_trainees": False, "training_target": 3},
+            ]
+        )
+    )
     await w.complete(SIGRID, BRANN, 20261)  # valid through autumn 2027
     await w.complete(SANDER, BRANN, 20242)  # ran out after spring 2026
     await w.complete(TORA, BRANN, 20262)
@@ -769,6 +780,7 @@ async def test_deleting_a_volunteer_removes_their_shift_rows(world: World) -> No
     await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "kan")
     await session.execute(insert(course_session_signups).values(session_id=world.sessions["brann-20nov"], volunteer_id=SANDER))
 
+    await session.execute(delete(volunteer_qualifications))
     await session.execute(
         insert(volunteer_qualifications).values(
             [
@@ -823,6 +835,7 @@ async def test_qualification_reads_return_rows_per_person_and_per_group(world: W
     from app.domain.shifts.models import QualificationRecord
     from app.domain.shifts.repository import ShiftsRepository
 
+    await world.session.execute(delete(volunteer_qualifications))
     await world.session.execute(
         insert(volunteer_qualifications).values(
             [
@@ -880,3 +893,114 @@ async def test_qualification_settings_default_when_a_group_has_no_row(world: Wor
         HALVTIMEN: QualificationSettings(training_shifts_needed=5, sibling_skiftleder_allowed=True),
         KULTUR: QualificationSettings(),
     }
+
+
+# ---------------------------------------------------------------- eligibility from qualifications
+
+
+async def test_claim_needs_the_qualification_not_the_verv(world: World) -> None:
+    slot_id = world.slots[("thu", "skjenker")]  # not open for samfunnettjeneste
+    # Sigrid has verv Skiftleder; the skjenker row is what counts.
+    await world.session.execute(
+        delete(volunteer_qualifications).where(
+            volunteer_qualifications.c.volunteer_id == SIGRID,
+            volunteer_qualifications.c.qualification == "skjenker",
+        )
+    )
+    listing = await world.service.list_open(SIGRID, scope="own", days=40)
+    assert place(listing, world.shift_ids["thu"], "skjenker") is None
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skjenker"):
+        await world.service.claim(SIGRID, slot_id, ClaimPlaceRequest())
+
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            volunteer_id=SIGRID, qualification="skjenker", status="approved", group_id=STJERNE, takes_trainees=False
+        )
+    )
+    await world.service.claim(SIGRID, slot_id, ClaimPlaceRequest())
+    assert ("skjenker", SIGRID, False) in await world.assignments("thu")
+
+
+async def test_trainee_is_refused_crew_places_and_gets_the_training_place(world: World) -> None:
+    training = await world.service.get_place(TORA, world.slots[("tue", "opplaering")])
+    assert training.place.can_claim
+    with pytest.raises(ShiftPlacementError, match="bruk opplæringsplassen"):
+        await world.service.claim(TORA, world.slots[("thu", "skjenker")], ClaimPlaceRequest())
+
+
+async def test_opplaering_needs_a_training_row_and_is_not_opened_by_kan_ikke(world: World) -> None:
+    slot_id = world.slots[("tue", "opplaering")]
+    # Sander is a member with an approved row, not in training: no opplaering place.
+    with pytest.raises(ShiftPlacementError, match="i opplæring i gruppen"):
+        await world.service.claim(SANDER, slot_id, ClaimPlaceRequest())
+    with pytest.raises(ShiftPlacementError, match="i opplæring i gruppen"):
+        await world.service.claim(OLA, slot_id, ClaimPlaceRequest())  # samfunnettjeneste
+    listing = await world.service.list_open(SANDER, scope="own", days=40)
+    assert place(listing, world.shift_ids["tue"], "opplaering") is None
+
+    # A "kan ikke" on the opplaering place does not open it to anyone else.
+    await world.place("tue", "opplaering", TORA)
+    await world.session.execute(update(shift_assignments).values(cannot_attend=True))
+    listing = await world.service.list_open(OLA, scope="all", days=40)
+    assert place(listing, world.shift_ids["tue"], "opplaering") is None
+    listing = await world.service.list_open(SANDER, scope="own", days=40)
+    assert place(listing, world.shift_ids["tue"], "opplaering") is None
+
+
+async def test_kan_ikke_opens_a_skjenker_place_but_not_a_skiftleder_place(world: World) -> None:
+    await world.place("thu", "skjenker", SIGRID)
+    await world.place("thu", "skiftleder", SANDER)
+    await world.session.execute(update(shift_assignments).values(cannot_attend=True))
+    # Ola is samfunnettjeneste with no rows: the sick person's skjenker place opens to everyone.
+    listing = await world.service.list_open(OLA, scope="all", days=40)
+    assert place(listing, world.shift_ids["thu"], "skjenker") is not None
+    assert place(listing, world.shift_ids["thu"], "skiftleder") is None
+
+
+async def test_app_evaluation_and_board_check_give_the_same_answer(world: World) -> None:
+    from app.domain.shifts.planning import open_for_everyone
+
+    # Remove the verv-based leftovers: a few people with different row sets.
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            volunteer_id=SANDER, qualification="kokk", status="training", group_id=STJERNE, takes_trainees=False
+        )
+    )
+    checked = 0
+    for volunteer_id in (SIGRID, SANDER, TORA, OLA, NOBODY):
+        person = await world.service._person_or_none(volunteer_id)
+        for shift_name in ("tue", "thu", "fri"):
+            record = await world.service.repository.get_shift(world.shift_ids[shift_name])
+            for slot in record.slots:
+                expected = person.eligibility.problem(slot.kind, record.group_id, open_for_everyone(slot))
+                try:
+                    await world.service.shifts._check(record, slot, volunteer_id)
+                except ShiftPlacementError as error:
+                    message = str(error)
+                else:
+                    message = None
+                if expected is None:
+                    assert message is None or not message.startswith(("Kun for", "I opplæring")), message
+                else:
+                    assert message == expected + ".", (volunteer_id, shift_name, slot.kind)
+                checked += 1
+    assert checked > 30
+
+
+async def test_the_app_reads_qualifications_once_per_request_not_per_slot(world: World) -> None:
+    repository = world.service.repository
+    reads = []
+    original = repository.list_qualifications
+
+    async def counting(volunteer_ids):
+        reads.append(list(volunteer_ids))
+        return await original(volunteer_ids)
+
+    repository.list_qualifications = counting  # type: ignore[method-assign]
+    listing = await world.service.list_open(SANDER, scope="own", days=40)
+    assert listing.shifts  # several shifts and places were evaluated
+    assert reads == [[SANDER]]
+
+    reads.clear()
+    await world.service.claim(SIGRID, world.slots[("thu", "skjenker")], ClaimPlaceRequest())
+    assert reads == [[SIGRID]]  # the board check reuses the built context
