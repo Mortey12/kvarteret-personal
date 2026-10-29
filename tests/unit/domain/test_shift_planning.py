@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+import pytest
+
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
 from app.domain.shifts.planning import (
     build_shift_view,
     format_day,
     format_week,
     group_into_days,
+    NO_RULES,
     monday_of,
     open_places,
     training_places_used,
@@ -101,35 +104,172 @@ def test_week_helpers() -> None:
     assert format_day(date(2026, 10, 27)) == "Tirsdag 27. oktober"
 
 
-def test_only_skiftledere_take_skiftleder_places() -> None:
-    from app.domain.shifts.planning import placement_problem
-
-    assert placement_problem("skiftleder", 1, False, {1: {"Skiftleder"}}) is None
-    assert placement_problem("skiftleder", 1, False, {1: {"Skjenker"}}) == "Kun for skiftledere i gruppen"
-    assert placement_problem("skiftleder", 1, False, {2: {"Skiftleder"}}) is not None
-
-
-def test_trainees_use_the_training_place() -> None:
-    from app.domain.shifts.planning import placement_problem
-
-    assert placement_problem("opplaering", 1, False, {1: {"Opplæring"}}) is None
-    assert placement_problem("skjenker", 1, True, {1: {"Opplæring"}}) == "I opplæring: bruk opplæringsplassen"
+# Tree: 1 Skjenke -> 7 Stjerne, 8 Grondahls, 9 Halvtimen, 10 Kjokken; 20 is outside Skiftlista.
+PARENTS = {1: None, 7: 1, 8: 1, 9: 1, 10: 1, 20: None, 21: 20}
+PARTICIPATING = frozenset({1, 7, 8, 9, 10})
+NOT_MEMBER = "Kun for medlemmer av gruppa"
+TRAINEE = "I opplæring: bruk opplæringsplassen"
+APPROVED_SKIFTLEDER = "Kun for godkjente skiftledere"
 
 
-def test_crew_places_are_for_skjenke_unless_open_for_samf() -> None:
-    from app.domain.shifts.planning import placement_problem
+def _problem(kind, group, members, rows=(), *, open_for_samf=False, switch=False):
+    from app.domain.shifts.planning import group_rules, person_eligibility, placement_problem
 
-    assert placement_problem("skjenker", 1, False, {2: {"Skjenker"}}) is None
-    assert placement_problem("skjenker", 1, False, {}) == "Kun for medlemmer av gruppa"
-    assert placement_problem("skjenker", 1, True, {}) is None
-    assert placement_problem("kokk", 1, True, {1: {"Skjenker"}}) == "Kun for kokker"
+    person = person_eligibility(members, rows, PARTICIPATING, PARENTS)
+    rules = group_rules(PARTICIPATING, PARENTS, {group: switch})
+    return placement_problem(kind, group, open_for_samf, person, rules.get(group, NO_RULES))
 
 
-def test_allowed_tokens_match_the_rules() -> None:
-    from app.domain.shifts.planning import allowed_tokens
+CASES = [
+    # (id, kind, shift group, members, rows, open, switch, expected)
+    ("own group skjenker", "skjenker", 7, [7], [("skjenker", "approved", 7)], False, False, None),
+    ("sibling bar skjenker", "skjenker", 8, [7], [("skjenker", "approved", 7)], False, False, None),
+    ("halvtimen skjenker (20+ is the caller's)", "skjenker", 9, [7], [("skjenker", "approved", 7)], False, False, None),
+    ("member without a row", "skjenker", 7, [7], [], False, False, "Kun for godkjente skjenkere"),
+    ("non-participating group", "skjenker", 21, [7], [("skjenker", "approved", 7)], False, False, NOT_MEMBER),
+    ("member of non-participating only", "skjenker", 7, [21], [("skjenker", "approved", 7)], False, False, NOT_MEMBER),
+    ("bartender with skjenker row", "bartender", 7, [7], [("skjenker", "approved", 7)], False, False, None),
+    ("bartender without row", "bartender", 7, [7], [], False, False, "Kun for godkjente skjenkere"),
+    ("skiftleder own group", "skiftleder", 7, [7], [("skiftleder", "approved", 7)], False, False, None),
+    ("skiftleder other bar, switch off", "skiftleder", 8, [7], [("skiftleder", "approved", 7)], False, False, APPROVED_SKIFTLEDER),
+    ("skiftleder other bar, switch on", "skiftleder", 8, [7], [("skiftleder", "approved", 7)], False, True, None),
+    ("skiftleder row for shift group, member of sibling only", "skiftleder", 8, [7], [("skiftleder", "approved", 8)], False, False, None),
+    ("kokk in the kitchen", "kokk", 10, [10], [("kokk", "approved", 10)], False, False, None),
+    ("kokk row in the kitchen held by a bar member", "kokk", 10, [7], [("kokk", "approved", 10)], False, False, None),
+    ("kokk row in a bar does not work in the kitchen", "kokk", 10, [7], [("kokk", "approved", 7)], False, True, "Kun for godkjente kokker"),
+    ("garderobe in area", "garderobe", 7, [7], [], False, False, None),
+    ("garderobe out of area", "garderobe", 21, [7], [], False, False, NOT_MEMBER),
+    ("garderobe open for samf", "garderobe", 21, [7], [], True, False, None),
+    ("open skjenker for everyone", "skjenker", 7, [], [], True, False, None),
+    ("open skjenker for outsider group member", "skjenker", 7, [21], [], True, False, None),
+    ("skiftleder never open", "skiftleder", 7, [], [], True, False, NOT_MEMBER),
+    ("kokk never open", "kokk", 10, [7], [], True, False, "Kun for godkjente kokker"),
+    ("opened skjenker for member without a row", "skjenker", 7, [7], [], True, False, None),
+    ("training row for crew place", "skjenker", 7, [7], [("skjenker", "training", 7)], False, False, TRAINEE),
+    ("training row for open crew place", "skjenker", 7, [7], [("skjenker", "training", 7)], True, False, TRAINEE),
+    ("training row in another bar does not count here", "skjenker", 8, [7], [("skjenker", "training", 7)], False, False, "Kun for godkjente skjenkere"),
+    ("kokk trainee refused crew place", "kokk", 10, [10], [("kokk", "training", 10)], False, False, TRAINEE),
+    ("approved wins over training", "skjenker", 7, [7], [("skjenker", "training", 7), ("skjenker", "approved", 7)], False, False, None),
+    ("training row but no longer a member", "skjenker", 7, [], [("skjenker", "training", 7)], False, False, NOT_MEMBER),
+    ("former member with rows, no membership", "skjenker", 7, [], [("skjenker", "approved", 7)], False, False, NOT_MEMBER),
+    ("registered only in the parent group", "skjenker", 7, [1], [("skjenker", "approved", 7)], False, False, None),
+    ("parent only, no row", "skjenker", 7, [1], [], False, False, "Kun for godkjente skjenkere"),
+    ("opplaering needs a training row", "opplaering", 7, [7], [("skjenker", "training", 7)], False, False, None),
+    ("opplaering without a row", "opplaering", 7, [7], [("skjenker", "approved", 7)], False, False, "Kun for de som er i opplæring i gruppen"),
+    ("opplaering training row but not a member", "opplaering", 7, [], [("skjenker", "training", 7)], False, False, "Kun for de som er i opplæring i gruppen"),
+    ("opplaering never open for samf", "opplaering", 7, [], [], True, False, "Kun for de som er i opplæring i gruppen"),
+    ("approved skjenker row on the parent counts nowhere", "skjenker", 7, [7], [("skjenker", "approved", 1)], False, False, "Kun for godkjente skjenkere"),
+    ("approved skjenker row on the parent, parent-only member", "skjenker", 7, [1], [("skjenker", "approved", 1)], False, False, "Kun for godkjente skjenkere"),
+    ("switch on, skiftleder row on the parent", "skiftleder", 8, [7], [("skiftleder", "approved", 1)], False, True, APPROVED_SKIFTLEDER),
+    ("switch on, skiftleder row outside Skiftlista", "skiftleder", 8, [7], [("skiftleder", "approved", 21)], False, True, APPROVED_SKIFTLEDER),
+    ("skiftleder trainee on a skiftleder place", "skiftleder", 7, [7], [("skiftleder", "training", 7)], False, False, APPROVED_SKIFTLEDER),
+    ("opplaering with a skiftleder training row", "opplaering", 7, [7], [("skiftleder", "training", 7)], False, False, None),
+    ("opplaering with a kokk training row", "opplaering", 10, [10], [("kokk", "training", 10)], False, False, None),
+    (
+        "approved in a sibling plus training here still takes opplaering",
+        "opplaering", 7, [7], [("skjenker", "approved", 8), ("skjenker", "training", 7)], False, False, None,
+    ),
+    (
+        "approved in a sibling plus training here: crew place is open to them (approved counts)",
+        "skjenker", 7, [7], [("skjenker", "approved", 8), ("skjenker", "training", 7)], False, False, None,
+    ),
+    ("opplaering opened by kan ikke, member without a training row", "opplaering", 7, [7], [("skjenker", "approved", 7)], True, False, "Kun for de som er i opplæring i gruppen"),
+    ("halvtimen as home group, own skjenker", "skjenker", 9, [9], [("skjenker", "approved", 9)], False, False, None),
+    ("halvtimen as home group, sibling skjenker", "skjenker", 7, [9], [("skjenker", "approved", 9)], False, False, None),
+    ("halvtimen as home group, skiftleder in a sibling, switch off", "skiftleder", 7, [9], [("skiftleder", "approved", 9)], False, False, APPROVED_SKIFTLEDER),
+    ("halvtimen as home group, skiftleder in a sibling, switch on", "skiftleder", 7, [9], [("skiftleder", "approved", 9)], False, True, None),
+    ("unknown kind in the area", "frivillig", 7, [7], [], False, False, None),
+    ("unknown kind out of the area", "frivillig", 21, [7], [], False, False, NOT_MEMBER),
+    ("unknown kind opened for everyone", "frivillig", 21, [], [], True, False, None),
+]
 
-    tokens = allowed_tokens({1: {"Skiftleder"}}, [1, 2])
-    assert "1:skiftleder:0" in tokens
-    assert "2:skiftleder:0" not in tokens
-    assert "2:skjenker:0" in tokens
-    assert "1:kokk:1" not in tokens
+
+@pytest.mark.parametrize(
+    ("kind", "group", "members", "rows", "open_for_samf", "switch", "expected"),
+    [case[1:] for case in CASES],
+    ids=[case[0] for case in CASES],
+)
+def test_placement_problem_case_table(kind, group, members, rows, open_for_samf, switch, expected) -> None:
+    rows = [(q, status, g) for q, status, g in rows]
+    assert _problem(kind, group, members, rows, open_for_samf=open_for_samf, switch=switch) == expected
+
+
+def test_area_is_members_siblings_and_direct_children() -> None:
+    from app.domain.shifts.permissions import person_area
+
+    assert person_area([7], PARTICIPATING, PARENTS) == {7, 8, 9, 10}
+    assert person_area([1], PARTICIPATING, PARENTS) == {1, 7, 8, 9, 10}
+    assert person_area([21], PARTICIPATING, PARENTS) == frozenset()
+    assert person_area([], PARTICIPATING, PARENTS) == frozenset()
+
+
+def test_area_covers_direct_children_only_not_deeper_levels() -> None:
+    from app.domain.shifts.permissions import person_area
+
+    # 30 (root) -> 1 (Skjenke) -> 7, 8 (bars)
+    parents = {30: None, 1: 30, 7: 1, 8: 1}
+    participating = frozenset({30, 1, 7, 8})
+
+    assert person_area([30], participating, parents) == {30, 1}
+    assert person_area([1], participating, parents) == {1, 7, 8}
+    assert person_area([7], participating, parents) == {7, 8}
+
+
+def test_halvtimen_age_is_checked_by_the_caller_after_the_rule() -> None:
+    from app.domain.shifts.planning import age_problem
+
+    assert _problem("skjenker", 9, [7], [("skjenker", "approved", 7)]) is None
+    assert age_problem("Halvtimen", date(2007, 1, 1), date(2026, 11, 2)) == "Halvtimen krever 20 år"
+
+
+def _matrix_people():
+    from app.domain.shifts.planning import person_eligibility
+
+    row_sets = [
+        [],
+        [("skjenker", "approved", 7)],
+        [("skjenker", "training", 7)],
+        [("skiftleder", "approved", 7)],
+        [("kokk", "approved", 10)],
+        [("skjenker", "training", 7), ("skjenker", "approved", 7)],
+    ]
+    for members in ([], [7], [1], [10], [21]):
+        for rows in row_sets:
+            yield person_eligibility(members, rows, PARTICIPATING, PARENTS)
+
+
+def test_allowed_tokens_agree_with_placement_problem_across_the_matrix() -> None:
+    from app.domain.shifts.planning import SLOT_KINDS, allowed_tokens, group_rules, placement_problem
+
+    groups = sorted(PARTICIPATING) + [21]
+    for switch in (False, True):
+        rules = group_rules(PARTICIPATING, PARENTS, dict.fromkeys(PARTICIPATING, switch))
+        for person in _matrix_people():
+            tokens = set(allowed_tokens(person, groups, rules))
+            for group in groups:
+                for kind in SLOT_KINDS:
+                    for open_for_samf in (False, True):
+                        ok = placement_problem(kind, group, open_for_samf, person, rules.get(group, NO_RULES)) is None
+                        assert (f"{group}:{kind}:{int(open_for_samf)}" in tokens) == ok
+
+
+def test_switch_on_in_the_row_bar_only_is_refused_in_the_receiving_bar() -> None:
+    from app.domain.shifts.planning import group_rules, person_eligibility, placement_problem
+
+    person = person_eligibility([7], [("skiftleder", "approved", 7)], PARTICIPATING, PARENTS)
+    rules = group_rules(PARTICIPATING, PARENTS, {7: True, 8: False})
+    assert placement_problem("skiftleder", 8, False, person, rules[8]) == APPROVED_SKIFTLEDER
+    rules = group_rules(PARTICIPATING, PARENTS, {7: False, 8: True})
+    assert placement_problem("skiftleder", 8, False, person, rules[8]) is None
+
+
+def test_a_member_of_a_group_below_a_bar_does_not_get_the_bar_itself() -> None:
+    from app.domain.shifts.planning import group_rules, person_eligibility, placement_problem
+
+    parents = {**PARENTS, 30: 8}  # 30 sits below Grondahls
+    participating = PARTICIPATING | {30}
+    person = person_eligibility([30], [("skjenker", "approved", 30)], participating, parents)
+    rules = group_rules(participating, parents, {})
+    assert placement_problem("skjenker", 30, False, person, rules[30]) is None
+    assert placement_problem("skjenker", 8, False, person, rules[8]) == NOT_MEMBER
+    assert placement_problem("skjenker", 7, False, person, rules[7]) == NOT_MEMBER

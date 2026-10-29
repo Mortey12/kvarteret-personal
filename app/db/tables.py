@@ -60,6 +60,7 @@ from app.domain.shifts.tables import (
     shift_week_status,
     shift_wishes,
     shifts,
+    volunteer_qualifications,
 )
 from app.domain.spotify.tables import integration_tokens
 from app.domain.volunteer_applications.tables import (
@@ -118,6 +119,7 @@ __all__ = [
     "shift_week_status",
     "shift_wishes",
     "shifts",
+    "volunteer_qualifications",
     "storage_metadata",
     "storage_objects",
     "user_accounts",

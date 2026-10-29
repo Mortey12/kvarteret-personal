@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
+from uuid import UUID
 
 
 @dataclass(slots=True)
@@ -109,6 +110,28 @@ class MemberRole:
     group_id: int
     group_name: str
     role_name: str | None
+
+
+@dataclass(slots=True)
+class QualificationRecord:
+    """One row of ``volunteer_qualifications``."""
+
+    volunteer_id: int
+    qualification: str
+    status: str
+    group_id: int
+    training_target: int | None
+    takes_trainees: bool
+    approved_by: UUID | None
+    approved_at: datetime | None
+
+
+@dataclass(slots=True)
+class QualificationSettings:
+    """A group's training and sibling-skiftleder settings."""
+
+    training_shifts_needed: int = 3
+    sibling_skiftleder_allowed: bool = False
 
 
 @dataclass(slots=True)

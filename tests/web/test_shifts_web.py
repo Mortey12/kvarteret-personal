@@ -13,6 +13,8 @@ from app.domain.shifts.models import (
     PlacementResult,
     PoolPerson,
     MemberRole,
+    QualificationRecord,
+    QualificationSettings,
     ShiftGroupOption,
     ShiftRecord,
     ShiftWishes,
@@ -143,7 +145,7 @@ class FakeShiftsService:
         self._check(scope)
         self.calls.append(("assign", slot_id, volunteer_id))
         if slot_id == 1:
-            raise ShiftPlacementError("Kun for skiftledere i gruppen.")
+            raise ShiftPlacementError("Kun for godkjente skiftledere.")
         return PlacementResult("Sander Skjenker er satt opp som skjenker.")
 
     async def move(self, *, assignment_id: int, slot_id: int, scope: GroupScope) -> PlacementResult:
@@ -346,7 +348,7 @@ def test_shift_actions_save_and_report_rules() -> None:
     assert ok.status_code == 200
     assert ok.json() == {"message": "Sander Skjenker er satt opp som skjenker."}
     assert refused.status_code == 400
-    assert refused.json()["detail"] == "Kun for skiftledere i gruppen."
+    assert refused.json()["detail"] == "Kun for godkjente skiftledere."
     assert moved.json() == {"message": "Flyttet."}
     assert removed.json() == {"message": "Tatt av."}
     assert ("move", 1, 2) in service.calls and ("remove", 1) in service.calls
@@ -599,6 +601,19 @@ class _PoolRepository:
 
     async def list_shift_members(self, semester, group_ids):
         return [MemberRole(3, "Sander Skjenker", 7, "Stjerne", "Skjenker")]
+
+    async def list_member_group_ids(self, volunteer_id, semester):
+        return [7] if volunteer_id == 3 else []
+
+    async def list_qualifications(self, volunteer_ids):
+        return [
+            QualificationRecord(3, "skjenker", "approved", 7, None, False, None, None)
+            for volunteer_id in volunteer_ids
+            if volunteer_id == 3
+        ]
+
+    async def get_qualification_settings(self, group_ids):
+        return {group_id: QualificationSettings() for group_id in group_ids}
 
     async def get_slot_shift_id(self, slot_id):
         return 1 if slot_id == 11 else None

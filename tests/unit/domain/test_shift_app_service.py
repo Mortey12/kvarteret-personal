@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import BigInteger, Integer, insert, select, update
+from sqlalchemy import BigInteger, Integer, delete, insert, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.metadata import public_metadata
@@ -38,6 +38,7 @@ from app.domain.shifts.tables import (
     shift_templates,
     shift_wishes,
     shifts,
+    volunteer_qualifications,
 )
 from app.domain.volunteer_applications.tables import volunteer_application_invites
 from app.domain.volunteers.repository import VolunteersRepository
@@ -86,6 +87,7 @@ TABLES = [
     shift_week_status,
     shift_availability_rules,
     shift_wishes,
+    volunteer_qualifications,
     volunteer_cards,
     volunteer_next_of_kin,
     volunteer_photos,
@@ -291,6 +293,17 @@ async def _build(session) -> World:
                 .returning(course_sessions.c.id)
             )
         ).scalar_one()
+    # Eligibility comes from qualification rows, not verv.
+    await session.execute(
+        insert(volunteer_qualifications).values(
+            [
+                {"volunteer_id": SIGRID, "qualification": "skiftleder", "status": "approved", "group_id": STJERNE, "takes_trainees": True},
+                {"volunteer_id": SIGRID, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": SANDER, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": TORA, "qualification": "skjenker", "status": "training", "group_id": STJERNE, "takes_trainees": False, "training_target": 3},
+            ]
+        )
+    )
     await w.complete(SIGRID, BRANN, 20261)  # valid through autumn 2027
     await w.complete(SANDER, BRANN, 20242)  # ran out after spring 2026
     await w.complete(TORA, BRANN, 20262)
@@ -767,13 +780,31 @@ async def test_deleting_a_volunteer_removes_their_shift_rows(world: World) -> No
     await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "kan")
     await session.execute(insert(course_session_signups).values(session_id=world.sessions["brann-20nov"], volunteer_id=SANDER))
 
+    await session.execute(delete(volunteer_qualifications))
+    await session.execute(
+        insert(volunteer_qualifications).values(
+            [
+                {"volunteer_id": SANDER, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": SANDER, "qualification": "kokk", "status": "training", "group_id": STJERNE, "takes_trainees": False},
+                {"volunteer_id": SIGRID, "qualification": "skiftleder", "status": "approved", "group_id": STJERNE, "takes_trainees": True},
+            ]
+        )
+    )
+
     await VolunteersRepository().delete_volunteer(SANDER)
 
-    for table in (shift_assignments, shift_wishes, shift_availability_rules, course_session_signups):
+    for table in (
+        shift_assignments,
+        shift_wishes,
+        shift_availability_rules,
+        course_session_signups,
+        volunteer_qualifications,
+    ):
         rows = (await session.execute(select(table.c.volunteer_id))).scalars().all()
         assert SANDER not in rows
     # Other people and the shifts themselves are untouched.
     assert await world.assignments("tue") == [("skiftleder", SIGRID, False)]
+    assert (await session.execute(select(volunteer_qualifications.c.volunteer_id))).scalars().all() == [SIGRID]
     assert (await session.execute(select(shifts.c.id).where(shifts.c.id == world.shift_ids["tue"]))).scalar_one()
     assert SANDER not in (await session.execute(select(volunteer_records.c.id))).scalars().all()
 
@@ -797,3 +828,332 @@ async def test_leader_wish_queries_read_the_requested_people_and_shifts_only(wor
     assert await repository.list_rules_for([SEMESTER], [TORA]) == {(TORA, SEMESTER, 1): "kan"}
     assert await repository.list_rules_for([SEMESTER - 1], [SANDER]) == {}
     assert await repository.list_wishes_for([], [SANDER]) == {}
+
+
+@pytest.mark.asyncio
+async def test_qualification_reads_return_rows_per_person_and_per_group(world: World) -> None:
+    from app.domain.shifts.models import QualificationRecord
+    from app.domain.shifts.repository import ShiftsRepository
+
+    await world.session.execute(delete(volunteer_qualifications))
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            [
+                {"volunteer_id": SANDER, "qualification": "skjenker", "status": "approved", "group_id": STJERNE, "takes_trainees": False, "training_target": None},
+                {"volunteer_id": SIGRID, "qualification": "skiftleder", "status": "approved", "group_id": STJERNE, "takes_trainees": True, "training_target": None},
+                {"volunteer_id": TORA, "qualification": "skjenker", "status": "training", "group_id": HALVTIMEN, "takes_trainees": False, "training_target": 3},
+            ]
+        )
+    )
+    repository = ShiftsRepository()
+
+    assert await repository.list_qualifications([]) == []
+    sander = await repository.list_qualifications([SANDER])
+    assert sander == [
+        QualificationRecord(
+            volunteer_id=SANDER,
+            qualification="skjenker",
+            status="approved",
+            group_id=STJERNE,
+            training_target=None,
+            takes_trainees=False,
+            approved_by=None,
+            approved_at=None,
+        )
+    ]
+    both = await repository.list_qualifications([SIGRID, TORA])
+    assert [(row.volunteer_id, row.qualification, row.status) for row in both] == [
+        (SIGRID, "skiftleder", "approved"),
+        (TORA, "skjenker", "training"),
+    ]
+    assert both[0].takes_trainees is True
+    assert both[1].training_target == 3
+
+    in_halvtimen = await repository.list_group_qualifications([HALVTIMEN])
+    assert [row.volunteer_id for row in in_halvtimen] == [TORA]
+    assert await repository.list_group_qualifications([]) == []
+    assert await repository.list_group_qualifications([KULTUR]) == []
+
+
+@pytest.mark.asyncio
+async def test_qualification_settings_default_when_a_group_has_no_row(world: World) -> None:
+    from app.domain.shifts.models import QualificationSettings
+    from app.domain.shifts.repository import ShiftsRepository
+
+    await world.session.execute(
+        update(shift_group_settings)
+        .where(shift_group_settings.c.group_id == HALVTIMEN)
+        .values(training_shifts_needed=5, sibling_skiftleder_allowed=True)
+    )
+    repository = ShiftsRepository()
+
+    assert await repository.get_qualification_settings([]) == {}
+    assert await repository.get_qualification_settings([STJERNE, HALVTIMEN, KULTUR]) == {
+        STJERNE: QualificationSettings(training_shifts_needed=3, sibling_skiftleder_allowed=False),
+        HALVTIMEN: QualificationSettings(training_shifts_needed=5, sibling_skiftleder_allowed=True),
+        KULTUR: QualificationSettings(),
+    }
+
+
+# ---------------------------------------------------------------- eligibility from qualifications
+
+
+async def test_claim_needs_the_qualification_not_the_verv(world: World) -> None:
+    slot_id = world.slots[("thu", "skjenker")]  # not open for samfunnettjeneste
+    # Sigrid has verv Skiftleder; the skjenker row is what counts.
+    await world.session.execute(
+        delete(volunteer_qualifications).where(
+            volunteer_qualifications.c.volunteer_id == SIGRID,
+            volunteer_qualifications.c.qualification == "skjenker",
+        )
+    )
+    listing = await world.service.list_open(SIGRID, scope="own", days=40)
+    assert place(listing, world.shift_ids["thu"], "skjenker") is None
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skjenkere"):
+        await world.service.claim(SIGRID, slot_id, ClaimPlaceRequest())
+
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            volunteer_id=SIGRID, qualification="skjenker", status="approved", group_id=STJERNE, takes_trainees=False
+        )
+    )
+    await world.service.claim(SIGRID, slot_id, ClaimPlaceRequest())
+    assert ("skjenker", SIGRID, False) in await world.assignments("thu")
+
+
+async def test_trainee_is_refused_crew_places_and_gets_the_training_place(world: World) -> None:
+    training = await world.service.get_place(TORA, world.slots[("tue", "opplaering")])
+    assert training.place.can_claim
+    with pytest.raises(ShiftPlacementError, match="bruk opplæringsplassen"):
+        await world.service.claim(TORA, world.slots[("thu", "skjenker")], ClaimPlaceRequest())
+
+
+async def test_opplaering_needs_a_training_row_and_is_not_opened_by_kan_ikke(world: World) -> None:
+    slot_id = world.slots[("tue", "opplaering")]
+    # Sander is a member with an approved row, not in training: no opplaering place.
+    with pytest.raises(ShiftPlacementError, match="i opplæring i gruppen"):
+        await world.service.claim(SANDER, slot_id, ClaimPlaceRequest())
+    with pytest.raises(ShiftPlacementError, match="i opplæring i gruppen"):
+        await world.service.claim(OLA, slot_id, ClaimPlaceRequest())  # samfunnettjeneste
+    listing = await world.service.list_open(SANDER, scope="own", days=40)
+    assert place(listing, world.shift_ids["tue"], "opplaering") is None
+
+    # A "kan ikke" on the opplaering place does not open it to anyone else.
+    await world.place("tue", "opplaering", TORA)
+    await world.session.execute(update(shift_assignments).values(cannot_attend=True))
+    listing = await world.service.list_open(OLA, scope="all", days=40)
+    assert place(listing, world.shift_ids["tue"], "opplaering") is None
+    listing = await world.service.list_open(SANDER, scope="own", days=40)
+    assert place(listing, world.shift_ids["tue"], "opplaering") is None
+
+
+async def test_kan_ikke_opens_a_skjenker_place_but_not_a_skiftleder_place(world: World) -> None:
+    await world.place("thu", "skjenker", SIGRID)
+    await world.place("thu", "skiftleder", SANDER)
+    await world.session.execute(update(shift_assignments).values(cannot_attend=True))
+    # Ola is samfunnettjeneste with no rows: the sick person's skjenker place opens to everyone.
+    listing = await world.service.list_open(OLA, scope="all", days=40)
+    assert place(listing, world.shift_ids["thu"], "skjenker") is not None
+    assert place(listing, world.shift_ids["thu"], "skiftleder") is None
+
+
+async def test_app_evaluation_and_board_check_give_the_same_answer(world: World) -> None:
+    from app.domain.shifts.planning import open_for_everyone
+
+    # Give Sander a kokk training row too, so the five people have different row sets
+    # (their verv are not read).
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            volunteer_id=SANDER, qualification="kokk", status="training", group_id=STJERNE, takes_trainees=False
+        )
+    )
+    checked = 0
+    for volunteer_id in (SIGRID, SANDER, TORA, OLA, NOBODY):
+        person = await world.service._person_or_none(volunteer_id)
+        for shift_name in ("tue", "thu", "fri"):
+            record = await world.service.repository.get_shift(world.shift_ids[shift_name])
+            for slot in record.slots:
+                expected = person.eligibility.problem(slot.kind, record.group_id, open_for_everyone(slot))
+                try:
+                    await world.service.shifts._check(record, slot, volunteer_id)
+                except ShiftPlacementError as error:
+                    message = str(error)
+                else:
+                    message = None
+                if expected is None:
+                    assert message is None or not message.startswith(("Kun for", "I opplæring")), message
+                else:
+                    assert message == expected + ".", (volunteer_id, shift_name, slot.kind)
+                checked += 1
+    assert checked > 30
+
+
+async def test_the_app_reads_qualifications_once_per_request_not_per_slot(world: World) -> None:
+    repository = world.service.repository
+    reads = []
+    original = repository.list_qualifications
+
+    async def counting(volunteer_ids):
+        reads.append(list(volunteer_ids))
+        return await original(volunteer_ids)
+
+    repository.list_qualifications = counting  # type: ignore[method-assign]
+    listing = await world.service.list_open(SANDER, scope="own", days=40)
+    assert listing.shifts  # several shifts and places were evaluated
+    assert reads == [[SANDER]]
+
+    reads.clear()
+    await world.service.claim(SIGRID, world.slots[("thu", "skjenker")], ClaimPlaceRequest())
+    assert reads == [[SIGRID]]  # the board check reuses the built context
+
+
+# ---------------------------------------------------------------- parent-only members, visitors, clock
+
+PARENT, PARENT_ONLY = 4, 16
+
+
+async def _add_parent_group(world: World) -> None:
+    """Stjerne and Halvtimen below a new parent group, as siblings."""
+    session = world.session
+    await session.execute(
+        insert(groups).values(id=PARENT, slug="skjenke", name="Skjenke", is_active=True, active_through_semester=20992)
+    )
+    await session.execute(update(groups).where(groups.c.id.in_((STJERNE, HALVTIMEN))).values(parent_group_id=PARENT))
+
+
+async def test_a_member_of_the_parent_group_only_gets_every_bar_below(world: World) -> None:
+    await _add_parent_group(world)
+    session = world.session
+    await session.execute(
+        insert(volunteer_records).values(
+            id=PARENT_ONLY, first_name="Pia", last_name="Parent", birth_date=date(1998, 4, 4), gender="A",
+            created_at=world.clock.now,
+        )
+    )
+    await session.execute(insert(assignment_roles).values(id=9, group_id=PARENT, name="Medlem", penguin_points=1))
+    await session.execute(
+        insert(role_assignments).values(
+            volunteer_id=PARENT_ONLY, group_id=PARENT, role_id=9, semester=SEMESTER, contract_signed=True
+        )
+    )
+
+    config = await world.service.get_config(PARENT_ONLY)
+    assert config.audience == "skjenke"
+    # Every bar below is "own": one tab, and no "Andre" tab.
+    assert [(t.id, t.label, t.scope) for t in config.tabs] == [
+        ("wishes", "Ønsker", None),
+        ("open", "Mine grupper", "own"),
+        ("mine", "Mine", None),
+    ]
+    assert {g.group_id for g in config.groups} == {STJERNE, HALVTIMEN}
+    assert all(g.is_member and not g.in_training for g in config.groups)
+    assert all(g.quota_text == "Kontrakt: 1 skift i uka" for g in config.groups)
+    await world.service.get_wishes(PARENT_ONLY)  # wishes are allowed
+
+    listing = await world.service.list_open(PARENT_ONLY, scope="own", days=40)
+    skjenker = place(listing, world.shift_ids["tue"], "skjenker")  # open for samfunnettjeneste
+    assert skjenker is not None and not skjenker.counts_as_samfunnettjeneste
+    # No barkurs needed for a Skjenke member, only brannkurs.
+    assert [offer.course_key for offer in skjenker.needs_course_signup] == ["brann"]
+    # Without a qualification row the closed places stay closed.
+    assert place(listing, world.shift_ids["thu"], "skjenker") is None
+    assert place(listing, world.shift_ids["tue"], "skiftleder") is None
+    assert place(listing, world.shift_ids["fri"], "bartender") is not None
+
+    # A member of one bar does not get the sibling as a role.
+    sander = await world.service.get_config(SANDER)
+    assert {g.group_id: g.is_member for g in sander.groups} == {STJERNE: True, HALVTIMEN: False}
+
+
+GRANDPARENT, GRANDPARENT_ONLY = 5, 17
+
+
+async def test_a_member_of_a_grandparent_group_gets_no_bar_and_no_skjenke_audience(world: World) -> None:
+    await _add_parent_group(world)
+    session = world.session
+    await session.execute(
+        insert(groups).values(id=GRANDPARENT, slug="rot", name="Rot", is_active=True, active_through_semester=20992)
+    )
+    await session.execute(update(groups).where(groups.c.id == PARENT).values(parent_group_id=GRANDPARENT))
+    await session.execute(
+        insert(volunteer_records).values(
+            id=GRANDPARENT_ONLY, first_name="Gro", last_name="Grand", birth_date=date(1998, 4, 4), gender="A",
+            created_at=world.clock.now,
+        )
+    )
+    await session.execute(insert(assignment_roles).values(id=10, group_id=GRANDPARENT, name="Medlem", penguin_points=1))
+    await session.execute(
+        insert(role_assignments).values(
+            volunteer_id=GRANDPARENT_ONLY, group_id=GRANDPARENT, role_id=10, semester=SEMESTER, contract_signed=True
+        )
+    )
+
+    config = await world.service.get_config(GRANDPARENT_ONLY)
+    assert config.audience != "skjenke"
+    assert not any(g.is_member for g in config.groups)
+
+    # In the same three-level tree, a member of the direct parent still gets the bars below it.
+    await session.execute(
+        insert(volunteer_records).values(
+            id=PARENT_ONLY, first_name="Pia", last_name="Parent", birth_date=date(1998, 4, 4), gender="A",
+            created_at=world.clock.now,
+        )
+    )
+    await session.execute(insert(assignment_roles).values(id=9, group_id=PARENT, name="Medlem", penguin_points=1))
+    await session.execute(
+        insert(role_assignments).values(
+            volunteer_id=PARENT_ONLY, group_id=PARENT, role_id=9, semester=SEMESTER, contract_signed=True
+        )
+    )
+    direct = await world.service.get_config(PARENT_ONLY)
+    assert direct.audience == "skjenke"
+    assert {g.group_id for g in direct.groups if g.is_member} == {STJERNE, HALVTIMEN}
+
+
+async def test_a_visitor_on_a_skiftleder_place_is_not_told_they_are_a_skiftleder_of_that_bar(world: World) -> None:
+    await _add_parent_group(world)
+    await world.session.execute(
+        update(shift_group_settings).where(shift_group_settings.c.group_id == HALVTIMEN).values(
+            sibling_skiftleder_allowed=True
+        )
+    )
+    # Sigrid is skiftleder in Stjerne; the switch lets her take Halvtimen's skiftleder place.
+    detail = await world.service.get_place(SIGRID, world.slots[("fri", "skiftleder")])
+    texts = [r.text for r in detail.requirements]
+    assert "Godkjent skiftleder" in texts
+    assert not any(text.startswith("Skiftleder i") for text in texts)
+    assert detail.place.can_claim
+
+
+async def test_kokk_requirement_line_names_no_place(world: World) -> None:
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            volunteer_id=SANDER, qualification="kokk", status="approved", group_id=STJERNE, takes_trainees=False
+        )
+    )
+    slot_id = (
+        await world.session.execute(
+            insert(shift_slots)
+            .values(shift_id=world.shift_ids["thu"], kind="kokk", count=1, open_for_samf=False, sort_order=9)
+            .returning(shift_slots.c.id)
+        )
+    ).scalar_one()
+    detail = await world.service.get_place(SANDER, slot_id)
+    assert "Godkjent kokk" in [r.text for r in detail.requirements]
+
+
+async def test_the_semester_follows_the_services_own_clock(world: World) -> None:
+    # Sander is a member in autumn 2026 only. In January 2027 the semester is 20271.
+    assert (await world.service.shifts.eligibility_for(SANDER)).person.member_groups == {STJERNE}
+    world.clock.now = oslo(date(2027, 1, 15), 9)
+    assert (await world.service.shifts.eligibility_for(SANDER)).person.member_groups == frozenset()
+    assert (await world.service._person_or_none(SANDER)).roles_by_group == {}
+    assert (await world.service._person_or_none(SANDER)).semester == 20271
+    # A row for 20271 makes him a member again, in both the board service and the app.
+    await world.session.execute(
+        insert(role_assignments).values(
+            volunteer_id=SANDER, group_id=STJERNE, role_id=2, semester=20271, contract_signed=True
+        )
+    )
+    assert (await world.service.shifts.eligibility_for(SANDER)).person.member_groups == {STJERNE}
+    assert set((await world.service._person_or_none(SANDER)).roles_by_group) == {STJERNE}

@@ -21,6 +21,7 @@ from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.tables import (
     shift_assignments,
+    shift_availability_rules,
     shift_closed_periods,
     shift_group_settings,
     shift_slots,
@@ -29,6 +30,7 @@ from app.domain.shifts.tables import (
     shift_week_status,
     shift_wishes,
     shifts,
+    volunteer_qualifications,
 )
 from app.domain.volunteers.tables import volunteer_records
 
@@ -49,6 +51,8 @@ TABLES = [
     shift_slots,
     shift_assignments,
     shift_wishes,
+    shift_availability_rules,
+    volunteer_qualifications,
 ]
 NAMES = {
     SKJENKE: ("Skjenkegruppen", "skjenke-gruppen", None),
