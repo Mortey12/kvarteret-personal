@@ -8,16 +8,18 @@ the codebase again.
 
 Update by hand at the end of every session. Last updated 2026-10-29.
 
-- **State:** branch `skiftlista/skiftplan` at `fe4acbc`, pushed to the fork.
+- **State:** branch `skiftlista/skiftplan` at `cbaba3a`, pushed to the fork.
   5d step 1 at `ca64766`, step 2 at `e54cadb` and `94d5107` (eligibility from
   qualifications; seeds, semester clock, parent members, texts, tests), verv
-  copy script at `fe4acbc`. The hosted demo (skiftlista-demo.onrender.com) is
-  still at the merge of `961a0e4`: it has 5a (Ønsker line) and the cleanup,
-  not 5d. Migration A is schema only and has not run on Neon. The copy script
-  has only run in tests. Do not merge skiftplan into demo before following
-  "Demo update runbook".
-- **Next action:** (1) update the hosted demo following the section "Demo
-  update runbook"; (2) 4d-plus; (3) 5d step 3.
+  copy script at `fe4acbc`. The hosted demo (skiftlista-demo.onrender.com) was
+  updated on 2026-10-29: `skiftlista/demo` is at `4513caa` (a merge of
+  skiftplan at `cbaba3a`), pushed to the fork. On the demo database (Neon),
+  migration A ran (now at `20261101_1200`) and `seed_demo.py` wrote 73
+  qualification rows. A dry run of the copy script on the demo database worked
+  on Postgres (it would add 73 and wrote nothing). Rollback branch in Neon:
+  `before-skiftplan-2026-10-29`, expires 2026-11-05. Rule for later: a new
+  migration must run on Neon before the matching merge into demo.
+- **Next action:** (1) 4d-plus; (2) 5d step 3.
 - **Parked, waiting for etjenesten:** OTA publishing (blocks the store
   build); real verv names (block running the copy script on real data);
   Findings A, C and E and hosting limits (block the official pilot, not the
@@ -47,6 +49,8 @@ Update by hand at the end of every session. Last updated 2026-10-29.
   when a design decision is unclear. Not after every build step when the
   checks pass. Long prompts go in two halves; the first ends with "reply only
   READY". The `claude` launch command goes in its own command block.
+  Commands that change something go one per command block, because pasting
+  several lines sometimes drops the first letter of a line.
 
 ## Goal and hard constraints
 
@@ -249,7 +253,9 @@ other two seeds have no such checks, so never point them at a real database.
 
 Log in to the app with an email and a code. In development the code is saved
 under `.devdata/outbox/`; on a hosted demo there is no way to read it without
-email delivery (Resend) or a demo-login flag, which does not exist yet.
+email delivery (Resend) or the demo login, which lives on the
+`skiftlista/demo` branch (its `DEMO_APP_CODE` is the code for every
+`@example.dev` volunteer).
 Good volunteers to log in as:
 
 | Email | Why |
@@ -266,11 +272,129 @@ Leader side: log in to Personal as the dev admin and open `/shifts`. Halvtimen
 is switched on for the demo (it is not in the request list, but the "20+" block
 only shows when Halvtimen is visible in the app).
 
+### Demo login (hosted demo only)
+
+The hosted demo runs with `APP_ENV=production`, where there is no web login
+(no Supabase) and app codes cannot be emailed. A demo login replaces both
+(`app/auth/demo_login.py`, `app/auth/demo_guard.py`). **Never enable it on
+Kvarteret's real deployment.** It is off unless all three are set:
+
+| Variable | Value |
+| --- | --- |
+| `DEMO_LOGIN_ENABLED` | `true` |
+| `DEMO_ACCESS_CODE` | at least 12 characters (leader web login); the app refuses to start with a shorter or missing code |
+| `DEMO_APP_CODE` | exactly 6 digits (app login; the app's code box only takes 6 digits); the app refuses to start with a missing or non-6-digit code |
+
+When it is on:
+
+- **Startup check.** At startup (`app_lifespan`) the app counts volunteers
+  (`volunteer_records`) and user accounts (`user_accounts`) whose email is
+  missing or does not end in `@example.dev`, and refuses to start if there is
+  even one. The same check runs again before the first demo login in each
+  process, so a runtime that skips the startup hook still never accepts the
+  code against a database with real people.
+- **App login.** For an email ending in `@example.dev`, "send code" sends
+  nothing and the code is `DEMO_APP_CODE` (`DEMO_ACCESS_CODE` is refused there). The session is the volunteer's
+  own (real `person_id`, refresh token), so Skiftlista loads. A wrong code
+  falls through to the normal check and is refused; the normal attempt limits
+  apply. Any other email works exactly as before.
+- **Leader login.** The login page shows "Demo-leder": `DEMO_ACCESS_CODE` logs
+  in `demo.leder@example.dev` as Admin (`POST /login/demo`, CSRF and the normal
+  login rate limits, constant-time code check), then opens `/shifts`. The
+  account must exist and be Admin; `seed_demo.py` creates it. With demo login
+  off, `/login/demo` answers 404.
+- Every page shows a "Demo, falske data" banner.
+- Each demo login is logged as `auth.demo_login.succeeded` with the account
+  name before `@example.dev` (the log pipeline redacts whole emails) and the
+  kind (`app` or `leader`), never the code. A failed startup check logs
+  `auth.demo_login.refused`.
+
+Log in to the app with an email and a code: locally the code is saved under
+`.devdata/outbox/`; on the hosted demo use `DEMO_APP_CODE`.
+Good volunteers to log in as:
+
+| Email | Why |
+| --- | --- |
+| `demo.stjerne@example.dev` | Stjerne member with valid brann- and barkurs: own-group tab, "Andre" (Grøndahls), claims a place |
+| `demo.mangler-kurs@example.dev` | Stjerne, brannkurs ran out and no barkurs: the app offers a course sign-up with the claim |
+| `demo.under20@example.dev` (also `-b`, `-c`) | Halvtimen, 19 or 18: Halvtimen places are blocked ("20+"); the leader board refuses them too |
+| `demo.kan-ikke@example.dev` | Grøndahls, has a "kan ikke" in the coming two weeks (Mine, and marked red on the board) |
+| `demo.bytte@example.dev` | Stjerne, has a swap request in the coming two weeks |
+| `demo.skiftleder@example.dev` | Stjerne skiftleder: skiftleder places |
+| `demo.samf@example.dev`, `demo.samf-b@example.dev` | Verv in Lydgruppen / Eksponeringsetaten only: samfunnettjeneste, sees places open for samf in Stjerne and Grøndahls |
+
+Leader side: locally, log in to Personal as the dev admin and open `/shifts`; on
+the hosted demo use "Demo-leder" on the login page. Halvtimen
+is switched on for the demo (it is not in the request list, but the "20+" block
+only shows when Halvtimen is visible in the app).
+
+### Hosting the demo on Render
+
+`render.yaml` (Blueprint) describes one free web service, `skiftlista-demo`, in
+Frankfurt, native Python runtime, branch `skiftlista/demo`. It never runs
+migrations or seeds: migrate and seed the demo database by hand first (above).
+
+The build installs uv and bun (Render's Python runtime has no bun), runs
+`uv sync --frozen` (uvicorn is a dev dependency, so dev is included), `bun
+install` and `bun run build:css`. Only the CSS is built: the i18n catalogs,
+compiled emails and `vercel-observability.js` are committed. The service starts
+with `.venv/bin/uvicorn app.main:create_app --factory --host 0.0.0.0 --port
+$PORT` (uv itself is gone after the build) and is checked on `/health`.
+
+In Render's dashboard:
+
+1. New → Blueprint, connect the `kvarteret-personal` repo, pick branch
+   `skiftlista/demo`. Render reads `render.yaml`.
+2. Fill in the variables marked `sync: false` (table below) and create the
+   service. `APP_PUBLIC_BASE_URL` is the service URL, which is
+   `https://skiftlista-demo.onrender.com` unless the name is taken; check it on
+   the service page and fix the variable if it differs (this redeploys).
+3. Wait for the deploy to go live, open the URL and use "Demo-leder" on the
+   login page. If the startup check finds a real person, the deploy fails;
+   read the log for `auth.demo_login.refused`.
+4. Point the app's Personal URL at the Render URL for the demo build.
+
+Free plan: the service sleeps after 15 minutes without traffic and the first
+request then takes up to about a minute, so open it shortly before the meeting.
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | secret: the demo database, `postgresql+asyncpg://…?ssl=require` |
+| `APP_SECRET_KEY` | secret: at least 32 characters |
+| `PERSONAL_SIGNING_SECRET` | secret: at least 32 characters (unused on the demo, but required in production) |
+| `DEMO_ACCESS_CODE` | secret: at least 12 characters |
+| `DEMO_APP_CODE` | secret: exactly 6 digits |
+| `APP_PUBLIC_BASE_URL` | typed in: the Render URL, `https://…onrender.com`, no trailing slash |
+| `APP_ENV` | `production` |
+| `DEMO_LOGIN_ENABLED` | `true` |
+| `EMAIL_DISPATCH_ENABLED` | `false` (so no `CRON_SECRET` is needed) |
+| `LEGACY_ADMIN_LOGIN_ENABLED` | `false` |
+| `POSTHOG_ENABLED` | `false` (nothing is sent to PostHog) |
+| `PYTHON_VERSION` | `3.13.14` |
+| `UV_PYTHON_DOWNLOADS` | `never` (use Render's Python, which is kept after the build) |
+| `FORWARDED_ALLOW_IPS` | `*` (uvicorn trusts Render's `X-Forwarded-Proto`, so URLs and cookies are https) |
+
+Without Azure, Supabase, Resend and the Vercel crons the app still starts.
+What does not work: photos (none are shown, uploads fail), every email
+(Resend has no key; app codes are only for `@example.dev` via the demo code),
+password login and password reset (no Supabase), feedback to Linear, the agent
+chat, Spotify "now playing". The session cookie is host-only on
+`onrender.com` (the `.samfunnetibergen.no` domain is only used on that domain).
+
+`POSTHOG_ENABLED=false` keeps the demo out of Kvarteret's PostHog project
+entirely: no OTLP logs or traces (and no per-request flush), no exception
+issues, no feature-flag lookups (Spotify "now playing" and the pooler trial
+stay off) and no agent-chat events. It defaults to `true`, so Kvarteret's real
+deployment is unchanged; there, an unreachable `POSTHOG_HOST` makes every
+request hang, because each request flushes telemetry before it answers.
+
 ## Demo update runbook
 
-Decided 2026-10-29. How to bring the hosted demo from the merge of `961a0e4`
-to the skiftplan branch. Migration A is schema only, so the old demo code keeps
-working on the new schema until the merge is deployed.
+Done once, on 2026-10-29 (the demo went from the merge of `961a0e4` to
+`4513caa`, a merge of skiftplan at `cbaba3a`). Keep it for the next update.
+Migration A is schema only, so the old demo code keeps working on the new
+schema until the merge is deployed. A future migration must run on Neon before
+the matching merge.
 
 1. Check the demo database revision: `uv run alembic current` with
    `DATABASE_URL` set to the Neon direct endpoint (`ssl=require`). Expected
@@ -281,8 +405,9 @@ working on the new schema until the merge is deployed.
 4. Optional Postgres test of the copy script: run it as a dry run only (no
    `--apply`) against the demo database. It writes nothing.
 5. Merge `skiftlista/skiftplan` into `skiftlista/demo` locally and resolve the
-   two conflicts (see H1 under "Migration A and step 2 review"). Run the
-   checks. Commit. Do not push yet.
+   conflicts (see H1 under "Migration A and step 2 review"; the merge also
+   conflicted in `docs/skiftlista/HANDOFF.md`, resolve it by taking the
+   skiftplan side). Run the checks. Commit. Do not push yet.
 6. From the merged checkout: `DEMO_SEED_CONFIRM=<exact host in DATABASE_URL>
    uv run python scripts/dev/seed_demo.py`. Required: it writes the
    qualification rows; without it the demo people have no bar places.
@@ -295,6 +420,23 @@ working on the new schema until the merge is deployed.
    "Demo for a meeting" table.
 10. Rollback: use the Neon branch and revert the demo merge. Avoid
     `alembic downgrade` (it drops the qualification rows).
+
+What we learned on 2026-10-29:
+
+- Run the code checks in a terminal that does not have the Neon `DATABASE_URL`
+  set, and the seed in the one that has it.
+- Keep the Neon address in a private file (`chmod 600`) and delete it
+  afterwards.
+- The app in Expo needs `.env.local` pointing at
+  `https://skiftlista-demo.onrender.com` (both
+  `EXPO_PUBLIC_KVARTERET_PERSONAL_API_BASE_URL` and
+  `EXPO_PUBLIC_INTERNKORT_BASE_URL`), then restart with
+  `npx expo start --go --tunnel --clear`. Never `eas update` or `eas build`.
+- On 2026-10-29 the local `.env.local` in `kvarteret-internbevis` was switched
+  to the Render demo; the local (LAN) version is backed up at
+  `~/internbevis-env.local.lan-backup`. Before local development, restore it
+  with `cp ~/internbevis-env.local.lan-backup .env.local` (in
+  `kvarteret-internbevis`) and restart Expo.
 
 ## Decisions already made (do not re-ask)
 
@@ -1145,7 +1287,8 @@ Known gaps, deliberately left to later steps:
           approved; skiftleder and kokk rows have `takes_trainees` on).
           `approved_by` is null; `approved_at` is the seed time on approved
           rows and null on training rows. `seed_demo.py` also writes rows for
-          an existing database. Not yet run on Postgres.
+          an existing database. Run on the demo database (Postgres) on 2026-10-29: it
+        wrote 73 qualification rows.
      4d-plus (between step 2 and step 3; decided 2026-10-29, see 4d). "+" and
         "−" per role on each shift on the board. "−" only removes empty places.
         Scope-checked, CSRF, logged, with tests. Done before step 3 because
@@ -1205,6 +1348,10 @@ Known gaps, deliberately left to later steps:
    - `suggest()` can later reorder this list.
    - Open question for the bar leaders: should clicking a free place narrow
      the list to that place's kind?
+   - The volunteer list on the board sits in a short scroll box at the top and
+     does not follow when scrolling down, so dragging to later days is
+     awkward. Make the sidebar sticky (it follows at screen height) when 5a2
+     rebuilds it.
    - **Parked:** board warning on placed people who no longer pass
      `placement_problem` (for example after a bar switch). Cheap to add using
      the pool data; parked until 5a2 (decided 2026-10-29). The existing "more
