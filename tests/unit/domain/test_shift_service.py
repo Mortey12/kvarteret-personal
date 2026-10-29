@@ -235,7 +235,7 @@ async def test_assign_skiftleder() -> None:
 @pytest.mark.asyncio
 async def test_skjenker_cannot_take_skiftleder_place() -> None:
     repo = FakeRepository()
-    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftleder"):
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftledere"):
         await ShiftsService(repo).assign(slot_id=10, volunteer_id=101, scope=SCOPE)
     assert repo.added == []
 

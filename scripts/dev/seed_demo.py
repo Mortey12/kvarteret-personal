@@ -4,7 +4,8 @@ Adds to a database that ``seed_synthetic`` and ``seed_shifts`` have already fill
 about 100 volunteers in total, Halvtimen members under 20, barkurs completions and a few
 expired brannkurs, weekday answers and shift wishes, a "kan ikke" and a swap request in
 the coming two weeks, Grøndahls and Halvtimen switched on in the app (with their weeks
-published), and a few people with verv outside the Skjenke groups.
+published), qualification rows for the Skjenke members, and a few people with verv outside
+the Skjenke groups (no rows: they only see places open for samfunnettjeneste).
 
 Safe to run twice: everything that exists is skipped. Deterministic.
 
@@ -61,6 +62,7 @@ from app.domain.shifts.app_rules import (
     week_start,
 )
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
+from seed_shifts import add_qualifications
 from seed_synthetic import FIRST_NAMES, LAST_NAMES
 
 OSLO = ZoneInfo("Europe/Oslo")
@@ -584,6 +586,12 @@ async def seed_into(session, *, now: datetime) -> dict[str, int]:
 
     summary = {"people": await add_people(session, now=now, semester=semester)}
     members = await _members(session, semester)
+    group_ids = await _group_ids(session)
+    summary["qualification_rows"] = await add_qualifications(
+        session,
+        [(vid, group_ids[group], group, role) for vid, group, role in members],
+        now=now,
+    )
     await add_courses(session, now=now, semester=semester, members=members)
     summary["availability_rows"] = await add_availability(session, semester=semester, members=members)
     await switch_groups_on(session, today=today)

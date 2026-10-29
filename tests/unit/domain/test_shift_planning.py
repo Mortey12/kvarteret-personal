@@ -109,7 +109,7 @@ PARENTS = {1: None, 7: 1, 8: 1, 9: 1, 10: 1, 20: None, 21: 20}
 PARTICIPATING = frozenset({1, 7, 8, 9, 10})
 NOT_MEMBER = "Kun for medlemmer av gruppa"
 TRAINEE = "I opplæring: bruk opplæringsplassen"
-APPROVED_SKIFTLEDER = "Kun for godkjente skiftleder"
+APPROVED_SKIFTLEDER = "Kun for godkjente skiftledere"
 
 
 def _problem(kind, group, members, rows=(), *, open_for_samf=False, switch=False):
@@ -125,39 +125,62 @@ CASES = [
     ("own group skjenker", "skjenker", 7, [7], [("skjenker", "approved", 7)], False, False, None),
     ("sibling bar skjenker", "skjenker", 8, [7], [("skjenker", "approved", 7)], False, False, None),
     ("halvtimen skjenker (20+ is the caller's)", "skjenker", 9, [7], [("skjenker", "approved", 7)], False, False, None),
-    ("member without a row", "skjenker", 7, [7], [], False, False, "Kun for godkjente skjenker"),
+    ("member without a row", "skjenker", 7, [7], [], False, False, "Kun for godkjente skjenkere"),
     ("non-participating group", "skjenker", 21, [7], [("skjenker", "approved", 7)], False, False, NOT_MEMBER),
     ("member of non-participating only", "skjenker", 7, [21], [("skjenker", "approved", 7)], False, False, NOT_MEMBER),
     ("bartender with skjenker row", "bartender", 7, [7], [("skjenker", "approved", 7)], False, False, None),
-    ("bartender without row", "bartender", 7, [7], [], False, False, "Kun for godkjente skjenker"),
+    ("bartender without row", "bartender", 7, [7], [], False, False, "Kun for godkjente skjenkere"),
     ("skiftleder own group", "skiftleder", 7, [7], [("skiftleder", "approved", 7)], False, False, None),
     ("skiftleder other bar, switch off", "skiftleder", 8, [7], [("skiftleder", "approved", 7)], False, False, APPROVED_SKIFTLEDER),
     ("skiftleder other bar, switch on", "skiftleder", 8, [7], [("skiftleder", "approved", 7)], False, True, None),
     ("skiftleder row for shift group, member of sibling only", "skiftleder", 8, [7], [("skiftleder", "approved", 8)], False, False, None),
     ("kokk in the kitchen", "kokk", 10, [10], [("kokk", "approved", 10)], False, False, None),
     ("kokk row in the kitchen held by a bar member", "kokk", 10, [7], [("kokk", "approved", 10)], False, False, None),
-    ("kokk row in a bar does not work in the kitchen", "kokk", 10, [7], [("kokk", "approved", 7)], False, True, "Kun for godkjente kokk"),
+    ("kokk row in a bar does not work in the kitchen", "kokk", 10, [7], [("kokk", "approved", 7)], False, True, "Kun for godkjente kokker"),
     ("garderobe in area", "garderobe", 7, [7], [], False, False, None),
     ("garderobe out of area", "garderobe", 21, [7], [], False, False, NOT_MEMBER),
     ("garderobe open for samf", "garderobe", 21, [7], [], True, False, None),
     ("open skjenker for everyone", "skjenker", 7, [], [], True, False, None),
     ("open skjenker for outsider group member", "skjenker", 7, [21], [], True, False, None),
     ("skiftleder never open", "skiftleder", 7, [], [], True, False, NOT_MEMBER),
-    ("kokk never open", "kokk", 10, [7], [], True, False, "Kun for godkjente kokk"),
+    ("kokk never open", "kokk", 10, [7], [], True, False, "Kun for godkjente kokker"),
     ("opened skjenker for member without a row", "skjenker", 7, [7], [], True, False, None),
     ("training row for crew place", "skjenker", 7, [7], [("skjenker", "training", 7)], False, False, TRAINEE),
     ("training row for open crew place", "skjenker", 7, [7], [("skjenker", "training", 7)], True, False, TRAINEE),
-    ("training row in another bar does not count here", "skjenker", 8, [7], [("skjenker", "training", 7)], False, False, "Kun for godkjente skjenker"),
+    ("training row in another bar does not count here", "skjenker", 8, [7], [("skjenker", "training", 7)], False, False, "Kun for godkjente skjenkere"),
     ("kokk trainee refused crew place", "kokk", 10, [10], [("kokk", "training", 10)], False, False, TRAINEE),
     ("approved wins over training", "skjenker", 7, [7], [("skjenker", "training", 7), ("skjenker", "approved", 7)], False, False, None),
     ("training row but no longer a member", "skjenker", 7, [], [("skjenker", "training", 7)], False, False, NOT_MEMBER),
     ("former member with rows, no membership", "skjenker", 7, [], [("skjenker", "approved", 7)], False, False, NOT_MEMBER),
     ("registered only in the parent group", "skjenker", 7, [1], [("skjenker", "approved", 7)], False, False, None),
-    ("parent only, no row", "skjenker", 7, [1], [], False, False, "Kun for godkjente skjenker"),
+    ("parent only, no row", "skjenker", 7, [1], [], False, False, "Kun for godkjente skjenkere"),
     ("opplaering needs a training row", "opplaering", 7, [7], [("skjenker", "training", 7)], False, False, None),
     ("opplaering without a row", "opplaering", 7, [7], [("skjenker", "approved", 7)], False, False, "Kun for de som er i opplæring i gruppen"),
     ("opplaering training row but not a member", "opplaering", 7, [], [("skjenker", "training", 7)], False, False, "Kun for de som er i opplæring i gruppen"),
     ("opplaering never open for samf", "opplaering", 7, [], [], True, False, "Kun for de som er i opplæring i gruppen"),
+    ("approved skjenker row on the parent counts nowhere", "skjenker", 7, [7], [("skjenker", "approved", 1)], False, False, "Kun for godkjente skjenkere"),
+    ("approved skjenker row on the parent, parent-only member", "skjenker", 7, [1], [("skjenker", "approved", 1)], False, False, "Kun for godkjente skjenkere"),
+    ("switch on, skiftleder row on the parent", "skiftleder", 8, [7], [("skiftleder", "approved", 1)], False, True, APPROVED_SKIFTLEDER),
+    ("switch on, skiftleder row outside Skiftlista", "skiftleder", 8, [7], [("skiftleder", "approved", 21)], False, True, APPROVED_SKIFTLEDER),
+    ("skiftleder trainee on a skiftleder place", "skiftleder", 7, [7], [("skiftleder", "training", 7)], False, False, APPROVED_SKIFTLEDER),
+    ("opplaering with a skiftleder training row", "opplaering", 7, [7], [("skiftleder", "training", 7)], False, False, None),
+    ("opplaering with a kokk training row", "opplaering", 10, [10], [("kokk", "training", 10)], False, False, None),
+    (
+        "approved in a sibling plus training here still takes opplaering",
+        "opplaering", 7, [7], [("skjenker", "approved", 8), ("skjenker", "training", 7)], False, False, None,
+    ),
+    (
+        "approved in a sibling plus training here: crew place is open to them (approved counts)",
+        "skjenker", 7, [7], [("skjenker", "approved", 8), ("skjenker", "training", 7)], False, False, None,
+    ),
+    ("opplaering opened by kan ikke, member without a training row", "opplaering", 7, [7], [("skjenker", "approved", 7)], True, False, "Kun for de som er i opplæring i gruppen"),
+    ("halvtimen as home group, own skjenker", "skjenker", 9, [9], [("skjenker", "approved", 9)], False, False, None),
+    ("halvtimen as home group, sibling skjenker", "skjenker", 7, [9], [("skjenker", "approved", 9)], False, False, None),
+    ("halvtimen as home group, skiftleder in a sibling, switch off", "skiftleder", 7, [9], [("skiftleder", "approved", 9)], False, False, APPROVED_SKIFTLEDER),
+    ("halvtimen as home group, skiftleder in a sibling, switch on", "skiftleder", 7, [9], [("skiftleder", "approved", 9)], False, True, None),
+    ("unknown kind in the area", "frivillig", 7, [7], [], False, False, None),
+    ("unknown kind out of the area", "frivillig", 21, [7], [], False, False, NOT_MEMBER),
+    ("unknown kind opened for everyone", "frivillig", 21, [], [], True, False, None),
 ]
 
 
@@ -216,3 +239,25 @@ def test_allowed_tokens_agree_with_placement_problem_across_the_matrix() -> None
                     for open_for_samf in (False, True):
                         ok = placement_problem(kind, group, open_for_samf, person, rules.get(group, NO_RULES)) is None
                         assert (f"{group}:{kind}:{int(open_for_samf)}" in tokens) == ok
+
+
+def test_switch_on_in_the_row_bar_only_is_refused_in_the_receiving_bar() -> None:
+    from app.domain.shifts.planning import group_rules, person_eligibility, placement_problem
+
+    person = person_eligibility([7], [("skiftleder", "approved", 7)], PARTICIPATING, PARENTS)
+    rules = group_rules(PARTICIPATING, PARENTS, {7: True, 8: False})
+    assert placement_problem("skiftleder", 8, False, person, rules[8]) == APPROVED_SKIFTLEDER
+    rules = group_rules(PARTICIPATING, PARENTS, {7: False, 8: True})
+    assert placement_problem("skiftleder", 8, False, person, rules[8]) is None
+
+
+def test_a_member_of_a_group_below_a_bar_does_not_get_the_bar_itself() -> None:
+    from app.domain.shifts.planning import group_rules, person_eligibility, placement_problem
+
+    parents = {**PARENTS, 30: 8}  # 30 sits below Grondahls
+    participating = PARTICIPATING | {30}
+    person = person_eligibility([30], [("skjenker", "approved", 30)], participating, parents)
+    rules = group_rules(participating, parents, {})
+    assert placement_problem("skjenker", 30, False, person, rules[30]) is None
+    assert placement_problem("skjenker", 8, False, person, rules[8]) == NOT_MEMBER
+    assert placement_problem("skjenker", 7, False, person, rules[7]) == NOT_MEMBER

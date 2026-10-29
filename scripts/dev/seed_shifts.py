@@ -1,7 +1,7 @@
 """Synthetic Skiftlista data for the local development database.
 
 Adds Skjenke's subgroups (Stjerne, Kjøkken, Grøndahls, Halvtimen) under
-Skjenkegruppen, their verv, made-up members for this semester, the H26
+Skjenkegruppen, their verv, made-up members for this semester (with qualification rows), the H26
 shift templates and shifts from this week to the end of the semester (none
 from 19 December), partly filled. This and next month's weeks are published;
 later weeks stay open for wishes.
@@ -46,6 +46,7 @@ from app.db.tables import (
     shift_templates,
     shift_week_status,
     shifts,
+    volunteer_qualifications,
     volunteer_records,
 )
 from app.domain.shifts.app_rules import STATUS_PUBLISHED, add_months, wish_window_end
@@ -79,6 +80,7 @@ SUBGROUPS: list[tuple[str, str, dict[str, int]]] = [
         {"Skiftleder": 3, "Skjenker": 5, "Opplæring": 1, "Gruppeleder": 1},
     ),
 ]
+KITCHEN = "Kjøkken"
 POINTS = {"Skjenker": 2, "Kokk": 2, "Skiftleder": 4, "Opplæring": 1, "Gruppeleder": 6}
 
 
@@ -145,6 +147,64 @@ def _span(day: date, start: time, end: time) -> tuple[datetime, datetime]:
     end_day = day + timedelta(days=1) if end <= start else day
     ends_at = datetime.combine(end_day, end, tzinfo=OSLO)
     return starts_at.astimezone(UTC), ends_at.astimezone(UTC)
+
+
+def qualifications_for(group: str, role: str) -> list[tuple[str, str, bool]]:
+    """(qualification, status, takes_trainees) rows a fake person gets from group and verv."""
+    if role == "Skiftleder":
+        return [("skiftleder", "approved", True), ("skjenker", "approved", False)]
+    if role == "Kokk":
+        return [("kokk", "approved", True)]
+    if role == "Opplæring":
+        return [("kokk" if group == KITCHEN else "skjenker", "training", False)]
+    if group != KITCHEN:
+        return [("skjenker", "approved", False)]
+    return []
+
+
+async def add_qualifications(
+    session, people: list[tuple[int, int, str, str]], *, now: datetime
+) -> int:
+    """Qualification rows for (volunteer id, group id, group name, verv). Safe to run twice.
+
+    Written directly (not through the migrations). ``approved_by`` stays null and
+    ``approved_at`` is the seed time. One row per volunteer, qualification and
+    group; an approved row wins over a training row.
+    """
+    wanted: dict[tuple[int, str, int], tuple[str, bool]] = {}
+    for volunteer_id, group_id, group_name, role in people:
+        for qualification, status, takes_trainees in qualifications_for(group_name, role):
+            key = (volunteer_id, qualification, group_id)
+            if key not in wanted or status == "approved":
+                wanted[key] = (status, takes_trainees)
+    existing = {
+        (volunteer_id, qualification, group_id)
+        for volunteer_id, qualification, group_id in (
+            await session.execute(
+                select(
+                    volunteer_qualifications.c.volunteer_id,
+                    volunteer_qualifications.c.qualification,
+                    volunteer_qualifications.c.group_id,
+                )
+            )
+        ).all()
+    }
+    rows = [
+        {
+            "volunteer_id": volunteer_id,
+            "qualification": qualification,
+            "status": status,
+            "group_id": group_id,
+            "takes_trainees": takes_trainees,
+            "approved_at": now if status == "approved" else None,
+            "created_at": now,
+        }
+        for (volunteer_id, qualification, group_id), (status, takes_trainees) in sorted(wanted.items())
+        if (volunteer_id, qualification, group_id) not in existing
+    ]
+    if rows:
+        await session.execute(insert(volunteer_qualifications), rows)
+    return len(rows)
 
 
 async def seed_shifts(database_url: str) -> None:
@@ -229,6 +289,17 @@ async def seed_shifts(database_url: str) -> None:
                             )
                         )
                         members[name][role_name].append(volunteer_id)
+
+            await add_qualifications(
+                session,
+                [
+                    (volunteer_id, group_ids[name], name, role_name)
+                    for name, by_role in members.items()
+                    for role_name, people in by_role.items()
+                    for volunteer_id in people
+                ],
+                now=now,
+            )
 
             # Templates.
             template_ids: dict[tuple[str, str, int], int] = {}

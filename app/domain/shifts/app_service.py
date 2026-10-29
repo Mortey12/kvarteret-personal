@@ -85,7 +85,7 @@ from app.domain.shifts.app_rules import (
 )
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
-from app.domain.shifts.permissions import participating_groups
+from app.domain.shifts.permissions import participating_groups, with_subgroups
 from app.domain.shifts.planning import (
     MONTHS_NO,
     EligibilityContext,
@@ -237,7 +237,7 @@ class ShiftsAppService:
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self.repository = repository
-        self.shifts = shifts_service or ShiftsService(repository)
+        self.shifts = shifts_service or ShiftsService(repository, now)
         self._now = now
 
     # ------------------------------------------------------------ config
@@ -652,17 +652,21 @@ class ShiftsAppService:
         role_rows = await self.repository.list_person_roles(volunteer_id, semester)
         group_options = await self.repository.list_shift_groups()
         group_names = {option.group_id: option.name for option in group_options}
-        roles_by_group: dict[int, set[str]] = {}
-        for group_id, role_name in role_rows:
-            if group_id in group_names:
-                roles = roles_by_group.setdefault(group_id, set())
-                if role_name:
-                    roles.add(role_name)
         settings = await self.repository.list_group_settings()
         parents = await self.repository.list_group_parents()
         participating = participating_groups(
             await self.repository.list_direct_participating_group_ids(), parents
         )
+        # A role in a participating group counts in every group with templates at
+        # or below it (a parent-only member gets each bar below). Siblings stay out.
+        roles_by_group: dict[int, set[str]] = {}
+        for group_id, role_name in role_rows:
+            if group_id not in participating:
+                continue
+            for target in with_subgroups([group_id], parents) & group_names.keys():
+                roles = roles_by_group.setdefault(target, set())
+                if role_name:
+                    roles.add(role_name)
         qualification_rows = [
             (record.qualification, record.status, record.group_id)
             for record in await self.repository.list_qualifications([volunteer_id])
@@ -950,9 +954,9 @@ class ShiftsAppService:
             return result
 
         if slot.kind == "skiftleder":
-            result.requirements.append(Requirement(text=f"Skiftleder i {record.group_name}", state="ok"))
+            result.requirements.append(Requirement(text="Godkjent skiftleder", state="ok"))
         elif slot.kind == "kokk":
-            result.requirements.append(Requirement(text="Kokk på kjøkkenet", state="ok"))
+            result.requirements.append(Requirement(text="Godkjent kokk", state="ok"))
 
         minimum = VENUE_MIN_AGE.get(record.venue)
         if minimum is not None:

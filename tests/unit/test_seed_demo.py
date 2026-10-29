@@ -21,6 +21,7 @@ from app.domain.shifts.tables import (
     shift_week_status,
     shift_wishes,
     shifts,
+    volunteer_qualifications,
 )
 from app.domain.volunteers.tables import volunteer_records
 from app.shared.semester import get_current_semester_code
@@ -48,6 +49,7 @@ TABLES = [
     shift_week_status,
     shift_availability_rules,
     shift_wishes,
+    volunteer_qualifications,
 ]
 CHECKS = pytest.mark.asyncio
 
@@ -337,5 +339,75 @@ async def test_it_adds_the_demo_data_and_is_safe_to_run_twice(session) -> None:
 
     # Running it again changes nothing.
     again = await seed_into(session, now=now)
-    assert again == {"people": 0, "availability_rows": 0, "wishes": 0, "status_marks": 0}
+    assert again == {
+        "people": 0,
+        "qualification_rows": 0,
+        "availability_rows": 0,
+        "wishes": 0,
+        "status_marks": 0,
+    }
     assert await _counts(session) == after_first
+
+
+async def _rows_of(db, email: str) -> set[tuple[str, str, str, bool]]:
+    """(qualification, status, group name, takes_trainees) for one person."""
+    rows = (
+        await db.execute(
+            select(
+                volunteer_qualifications.c.qualification,
+                volunteer_qualifications.c.status,
+                groups.c.name,
+                volunteer_qualifications.c.takes_trainees,
+            )
+            .select_from(
+                volunteer_qualifications.join(
+                    volunteer_records, volunteer_records.c.id == volunteer_qualifications.c.volunteer_id
+                ).join(groups, groups.c.id == volunteer_qualifications.c.group_id)
+            )
+            .where(volunteer_records.c.email == email)
+        )
+    ).all()
+    return {tuple(row) for row in rows}
+
+
+@CHECKS
+async def test_the_demo_logins_get_the_qualification_rows_the_handoff_describes(session) -> None:
+    now = datetime.now(UTC)
+    await _base(session, now)
+    await seed_into(session, now=now)
+
+    for email, group in (
+        ("demo.stjerne@example.dev", "Stjerne"),
+        ("demo.mangler-kurs@example.dev", "Stjerne"),
+        ("demo.bytte@example.dev", "Stjerne"),
+        ("demo.kan-ikke@example.dev", "Grøndahls"),
+        ("demo.under20@example.dev", "Halvtimen"),
+        ("demo.under20-b@example.dev", "Halvtimen"),
+        ("demo.under20-c@example.dev", "Halvtimen"),
+    ):
+        assert await _rows_of(session, email) == {("skjenker", "approved", group, False)}, email
+    assert await _rows_of(session, "demo.skiftleder@example.dev") == {
+        ("skiftleder", "approved", "Stjerne", True),
+        ("skjenker", "approved", "Stjerne", False),
+    }
+    assert await _rows_of(session, "demo.kokk@example.dev") == {("kokk", "approved", "Kjøkken", True)}
+    assert await _rows_of(session, "demo.opplaering@example.dev") == {("skjenker", "training", "Stjerne", False)}
+    # Outside the Skjenke groups: no rows, they only see places open for samf.
+    assert await _rows_of(session, "demo.samf@example.dev") == set()
+    assert await _rows_of(session, "demo.samf-b@example.dev") == set()
+
+    # Seed time on approved rows, nobody as approver, and no duplicates after a second run.
+    before = await session.scalar(select(func.count()).select_from(volunteer_qualifications))
+    assert await session.scalar(
+        select(func.count()).select_from(volunteer_qualifications).where(
+            volunteer_qualifications.c.status == "approved",
+            volunteer_qualifications.c.approved_at.is_(None),
+        )
+    ) == 0
+    assert await session.scalar(
+        select(func.count()).select_from(volunteer_qualifications).where(
+            volunteer_qualifications.c.approved_by.is_not(None)
+        )
+    ) == 0
+    await seed_into(session, now=now)
+    assert await session.scalar(select(func.count()).select_from(volunteer_qualifications)) == before

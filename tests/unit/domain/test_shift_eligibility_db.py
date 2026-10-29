@@ -28,7 +28,7 @@ from app.domain.shifts.tables import (
 )
 from app.domain.volunteers.tables import volunteer_records
 from app.shared.semester import get_current_semester_code
-from tests.support.shift_groups import GRONDAHLS, KJOKKEN, SKJENKE, STJERNE
+from tests.support.shift_groups import GRONDAHLS, HALVTIMEN, KJOKKEN, SKJENKE, STJERNE
 
 STINE, GRO, SKJENKELEDER, KAI = 1, 2, 3, 4
 
@@ -148,7 +148,7 @@ async def test_sibling_skiftleder_needs_the_receiving_bars_switch(session) -> No
     service = ShiftsService(ShiftsRepository())
     leader = await _scope(session, UserRole.GROUP_ADMIN, GRONDAHLS)
 
-    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftleder"):
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftledere"):
         await service.assign(slot_id=slots["skiftleder"], volunteer_id=STINE, scope=leader)
 
     await session.execute(
@@ -166,7 +166,7 @@ async def test_kokk_row_in_a_bar_does_not_work_in_the_kitchen_and_verv_is_ignore
     slots = await _shift(session, KJOKKEN, ("kokk",))
     service = ShiftsService(ShiftsRepository())
     admin = await _scope(session, UserRole.ADMIN)
-    with pytest.raises(ShiftPlacementError, match="Kun for godkjente kokk"):
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente kokker"):
         await service.assign(slot_id=slots["kokk"], volunteer_id=STINE, scope=admin)
 
 
@@ -211,3 +211,62 @@ async def test_switch_default_is_off_without_a_settings_row(session) -> None:
     settings = await ShiftsRepository().get_qualification_settings([GRONDAHLS, STJERNE])
     assert not settings[GRONDAHLS].sibling_skiftleder_allowed
     assert not settings[STJERNE].sibling_skiftleder_allowed
+
+
+@pytest.mark.asyncio
+async def test_switch_on_in_the_row_bar_only_does_not_help_in_another_bar(session) -> None:
+    await _person(session, STINE, "Stine", STJERNE)
+    await _qualify(session, STINE, "skiftleder", "approved", STJERNE)
+    await session.execute(
+        update(shift_group_settings).where(shift_group_settings.c.group_id == STJERNE).values(
+            sibling_skiftleder_allowed=True
+        )
+    )
+    slots = await _shift(session, GRONDAHLS, ("skiftleder",))
+    service = ShiftsService(ShiftsRepository())
+    leader = await _scope(session, UserRole.GROUP_ADMIN, GRONDAHLS)
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftledere"):
+        await service.assign(slot_id=slots["skiftleder"], volunteer_id=STINE, scope=leader)
+
+
+@pytest.mark.asyncio
+async def test_switch_on_but_the_skiftleder_row_is_not_in_a_sibling_is_refused(session) -> None:
+    await _person(session, STINE, "Stine", STJERNE)
+    await _qualify(session, STINE, "skiftleder", "approved", SKJENKE)  # the parent is no sibling
+    await session.execute(
+        insert(shift_group_settings).values(
+            group_id=GRONDAHLS, app_enabled=False, samf_enabled=False, sibling_skiftleder_allowed=True
+        )
+    )
+    slots = await _shift(session, GRONDAHLS, ("skiftleder",))
+    service = ShiftsService(ShiftsRepository())
+    leader = await _scope(session, UserRole.GROUP_ADMIN, GRONDAHLS)
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftledere"):
+        await service.assign(slot_id=slots["skiftleder"], volunteer_id=STINE, scope=leader)
+
+
+@pytest.mark.asyncio
+async def test_parent_row_counts_nowhere_and_a_skiftleder_trainee_is_refused(session) -> None:
+    await _person(session, STINE, "Stine", STJERNE)
+    await _person(session, GRO, "Gro", STJERNE)
+    await _qualify(session, STINE, "skjenker", "approved", SKJENKE)  # a row on the parent
+    await _qualify(session, GRO, "skiftleder", "training", STJERNE)
+    slots = await _shift(session, STJERNE, ("skjenker", "skiftleder", "opplaering"))
+    service = ShiftsService(ShiftsRepository())
+    admin = await _scope(session, UserRole.ADMIN)
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skjenkere"):
+        await service.assign(slot_id=slots["skjenker"], volunteer_id=STINE, scope=admin)
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skiftledere"):
+        await service.assign(slot_id=slots["skiftleder"], volunteer_id=GRO, scope=admin)
+    # A skiftleder training row is enough for the opplaering place.
+    await service.assign(slot_id=slots["opplaering"], volunteer_id=GRO, scope=admin)
+
+
+@pytest.mark.asyncio
+async def test_halvtimen_member_places_in_a_sibling_bar_by_skjenker_row(session) -> None:
+    await _person(session, KAI, "Kai", HALVTIMEN)
+    await _qualify(session, KAI, "skjenker", "approved", HALVTIMEN)
+    slots = await _shift(session, STJERNE, ("skjenker",))
+    service = ShiftsService(ShiftsRepository())
+    admin = await _scope(session, UserRole.ADMIN)
+    await service.assign(slot_id=slots["skjenker"], volunteer_id=KAI, scope=admin)

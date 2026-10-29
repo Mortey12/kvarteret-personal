@@ -909,7 +909,7 @@ async def test_claim_needs_the_qualification_not_the_verv(world: World) -> None:
     )
     listing = await world.service.list_open(SIGRID, scope="own", days=40)
     assert place(listing, world.shift_ids["thu"], "skjenker") is None
-    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skjenker"):
+    with pytest.raises(ShiftPlacementError, match="Kun for godkjente skjenkere"):
         await world.service.claim(SIGRID, slot_id, ClaimPlaceRequest())
 
     await world.session.execute(
@@ -960,7 +960,8 @@ async def test_kan_ikke_opens_a_skjenker_place_but_not_a_skiftleder_place(world:
 async def test_app_evaluation_and_board_check_give_the_same_answer(world: World) -> None:
     from app.domain.shifts.planning import open_for_everyone
 
-    # Remove the verv-based leftovers: a few people with different row sets.
+    # Give Sander a kokk training row too, so the five people have different row sets
+    # (their verv are not read).
     await world.session.execute(
         insert(volunteer_qualifications).values(
             volunteer_id=SANDER, qualification="kokk", status="training", group_id=STJERNE, takes_trainees=False
@@ -1004,3 +1005,110 @@ async def test_the_app_reads_qualifications_once_per_request_not_per_slot(world:
     reads.clear()
     await world.service.claim(SIGRID, world.slots[("thu", "skjenker")], ClaimPlaceRequest())
     assert reads == [[SIGRID]]  # the board check reuses the built context
+
+
+# ---------------------------------------------------------------- parent-only members, visitors, clock
+
+PARENT, PARENT_ONLY = 4, 16
+
+
+async def _add_parent_group(world: World) -> None:
+    """Stjerne and Halvtimen below a new parent group, as siblings."""
+    session = world.session
+    await session.execute(
+        insert(groups).values(id=PARENT, slug="skjenke", name="Skjenke", is_active=True, active_through_semester=20992)
+    )
+    await session.execute(update(groups).where(groups.c.id.in_((STJERNE, HALVTIMEN))).values(parent_group_id=PARENT))
+
+
+async def test_a_member_of_the_parent_group_only_gets_every_bar_below(world: World) -> None:
+    await _add_parent_group(world)
+    session = world.session
+    await session.execute(
+        insert(volunteer_records).values(
+            id=PARENT_ONLY, first_name="Pia", last_name="Parent", birth_date=date(1998, 4, 4), gender="A",
+            created_at=world.clock.now,
+        )
+    )
+    await session.execute(insert(assignment_roles).values(id=9, group_id=PARENT, name="Medlem", penguin_points=1))
+    await session.execute(
+        insert(role_assignments).values(
+            volunteer_id=PARENT_ONLY, group_id=PARENT, role_id=9, semester=SEMESTER, contract_signed=True
+        )
+    )
+
+    config = await world.service.get_config(PARENT_ONLY)
+    assert config.audience == "skjenke"
+    # Every bar below is "own": one tab, and no "Andre" tab.
+    assert [(t.id, t.label, t.scope) for t in config.tabs] == [
+        ("wishes", "Ønsker", None),
+        ("open", "Mine grupper", "own"),
+        ("mine", "Mine", None),
+    ]
+    assert {g.group_id for g in config.groups} == {STJERNE, HALVTIMEN}
+    assert all(g.is_member and not g.in_training for g in config.groups)
+    assert all(g.quota_text == "Kontrakt: 1 skift i uka" for g in config.groups)
+    await world.service.get_wishes(PARENT_ONLY)  # wishes are allowed
+
+    listing = await world.service.list_open(PARENT_ONLY, scope="own", days=40)
+    skjenker = place(listing, world.shift_ids["tue"], "skjenker")  # open for samfunnettjeneste
+    assert skjenker is not None and not skjenker.counts_as_samfunnettjeneste
+    # No barkurs needed for a Skjenke member, only brannkurs.
+    assert [offer.course_key for offer in skjenker.needs_course_signup] == ["brann"]
+    # Without a qualification row the closed places stay closed.
+    assert place(listing, world.shift_ids["thu"], "skjenker") is None
+    assert place(listing, world.shift_ids["tue"], "skiftleder") is None
+    assert place(listing, world.shift_ids["fri"], "bartender") is not None
+
+    # A member of one bar does not get the sibling as a role.
+    sander = await world.service.get_config(SANDER)
+    assert {g.group_id: g.is_member for g in sander.groups} == {STJERNE: True, HALVTIMEN: False}
+
+
+async def test_a_visitor_on_a_skiftleder_place_is_not_told_they_are_a_skiftleder_of_that_bar(world: World) -> None:
+    await _add_parent_group(world)
+    await world.session.execute(
+        update(shift_group_settings).where(shift_group_settings.c.group_id == HALVTIMEN).values(
+            sibling_skiftleder_allowed=True
+        )
+    )
+    # Sigrid is skiftleder in Stjerne; the switch lets her take Halvtimen's skiftleder place.
+    detail = await world.service.get_place(SIGRID, world.slots[("fri", "skiftleder")])
+    texts = [r.text for r in detail.requirements]
+    assert "Godkjent skiftleder" in texts
+    assert not any(text.startswith("Skiftleder i") for text in texts)
+    assert detail.place.can_claim
+
+
+async def test_kokk_requirement_line_names_no_place(world: World) -> None:
+    await world.session.execute(
+        insert(volunteer_qualifications).values(
+            volunteer_id=SANDER, qualification="kokk", status="approved", group_id=STJERNE, takes_trainees=False
+        )
+    )
+    slot_id = (
+        await world.session.execute(
+            insert(shift_slots)
+            .values(shift_id=world.shift_ids["thu"], kind="kokk", count=1, open_for_samf=False, sort_order=9)
+            .returning(shift_slots.c.id)
+        )
+    ).scalar_one()
+    detail = await world.service.get_place(SANDER, slot_id)
+    assert "Godkjent kokk" in [r.text for r in detail.requirements]
+
+
+async def test_the_semester_follows_the_services_own_clock(world: World) -> None:
+    # Sander is a member in autumn 2026 only. In January 2027 the semester is 20271.
+    assert (await world.service.shifts.eligibility_for(SANDER)).person.member_groups == {STJERNE}
+    world.clock.now = oslo(date(2027, 1, 15), 9)
+    assert (await world.service.shifts.eligibility_for(SANDER)).person.member_groups == frozenset()
+    assert (await world.service._person_or_none(SANDER)).roles_by_group == {}
+    assert (await world.service._person_or_none(SANDER)).semester == 20271
+    # A row for 20271 makes him a member again, in both the board service and the app.
+    await world.session.execute(
+        insert(role_assignments).values(
+            volunteer_id=SANDER, group_id=STJERNE, role_id=2, semester=20271, contract_signed=True
+        )
+    )
+    assert (await world.service.shifts.eligibility_for(SANDER)).person.member_groups == {STJERNE}
+    assert set((await world.service._person_or_none(SANDER)).roles_by_group) == {STJERNE}

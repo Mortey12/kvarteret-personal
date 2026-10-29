@@ -313,6 +313,11 @@ NEEDS: dict[str, str | None] = {
 TRAINEE_CREW_PROBLEM = "I opplæring: bruk opplæringsplassen"
 TRAINING_PLACE_PROBLEM = "Kun for de som er i opplæring i gruppen"
 NOT_IN_AREA_PROBLEM = "Kun for medlemmer av gruppa"
+APPROVED_ONLY_PROBLEM = {
+    "skiftleder": "Kun for godkjente skiftledere",
+    "skjenker": "Kun for godkjente skjenkere",
+    "kokk": "Kun for godkjente kokker",
+}
 
 # (qualification, status, group id): one row of ``volunteer_qualifications``.
 QualificationRow = tuple[str, str, int]
@@ -450,7 +455,7 @@ def placement_problem(
         return None
     if not in_area or need is None:
         return NOT_IN_AREA_PROBLEM
-    return f"Kun for godkjente {need}"
+    return APPROVED_ONLY_PROBLEM[need]
 
 
 def age_on(birth_date: date, day: date) -> int:

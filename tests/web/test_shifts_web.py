@@ -145,7 +145,7 @@ class FakeShiftsService:
         self._check(scope)
         self.calls.append(("assign", slot_id, volunteer_id))
         if slot_id == 1:
-            raise ShiftPlacementError("Kun for godkjente skiftleder.")
+            raise ShiftPlacementError("Kun for godkjente skiftledere.")
         return PlacementResult("Sander Skjenker er satt opp som skjenker.")
 
     async def move(self, *, assignment_id: int, slot_id: int, scope: GroupScope) -> PlacementResult:
@@ -348,7 +348,7 @@ def test_shift_actions_save_and_report_rules() -> None:
     assert ok.status_code == 200
     assert ok.json() == {"message": "Sander Skjenker er satt opp som skjenker."}
     assert refused.status_code == 400
-    assert refused.json()["detail"] == "Kun for godkjente skiftleder."
+    assert refused.json()["detail"] == "Kun for godkjente skiftledere."
     assert moved.json() == {"message": "Flyttet."}
     assert removed.json() == {"message": "Tatt av."}
     assert ("move", 1, 2) in service.calls and ("remove", 1) in service.calls

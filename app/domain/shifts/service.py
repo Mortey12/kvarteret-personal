@@ -265,7 +265,7 @@ class ShiftsService:
         selected_group_id: int | None,
         week_counts: dict[int, int],
     ) -> list[PoolPerson]:
-        semester = get_current_semester_code()
+        semester = get_current_semester_code(self._now())
         participating, parents, rules = await self._eligibility_rules()
         members = await self.repository.list_shift_members(semester, pool_ids)
         shown = [
@@ -307,7 +307,7 @@ class ShiftsService:
         """One person's eligibility: their membership, qualification rows and the group rules."""
         participating, parents, rules = await self._eligibility_rules()
         groups = await self.repository.list_member_group_ids(
-            volunteer_id, get_current_semester_code()
+            volunteer_id, get_current_semester_code(self._now())
         )
         rows = _qualification_rows(await self.repository.list_qualifications([volunteer_id]))
         return EligibilityContext(
@@ -325,7 +325,7 @@ class ShiftsService:
         if not records or not pool_ids:
             return
         members: dict[int, str] = {}
-        for member in await self.repository.list_shift_members(get_current_semester_code(), pool_ids):
+        for member in await self.repository.list_shift_members(get_current_semester_code(self._now()), pool_ids):
             members.setdefault(member.volunteer_id, member.name)
         if not members:
             return
@@ -469,7 +469,7 @@ class ShiftsService:
 
     async def _require_in_pool(self, volunteer_id: int, scope: GroupScope) -> None:
         members = await self.repository.list_shift_members(
-            get_current_semester_code(), await self._pool_group_ids(scope)
+            get_current_semester_code(self._now()), await self._pool_group_ids(scope)
         )
         if all(member.volunteer_id != volunteer_id for member in members):
             raise ShiftPlacementError(NOT_IN_POOL)
