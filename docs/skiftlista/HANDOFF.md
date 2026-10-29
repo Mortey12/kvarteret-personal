@@ -245,6 +245,16 @@ only shows when Halvtimen is visible in the app).
     leader, the personalansvarlig, or anyone an Admin assigns), the Skjenke
     Gruppeadmin (Skjenkeleder), and Admin, as in the rights decision below.
   - The volunteer sees "x av 3" and "venter på godkjenning" in the app.
+  - **Open, to discuss with the bar leaders** (not decided, nothing to build):
+    many people switch bars, also part way through training. Morten's
+    leaning: training shifts for skjenker count across the Skjenke bars, the
+    person shows a mark "opplæring i annen bar: N skift", and the new bar's
+    leader decides whether to start training. The count comes from the
+    assignments (`training_for`), not from the row. Skiftleder and kokk stay
+    per bar. **Until decided, the existing rule stays:** training is valid
+    only in the row's own group. Note also that when a member is moved to
+    another bar, an old training row becomes inert, because it needs
+    membership of its group.
 - Skiftleder training: the trainee is the skiftleder on the shift, with an
   experienced skiftleder who "tar opplæring" present. The kitchen has no
   skiftledere; a new chef works with a kokk who "tar opplæring".
@@ -417,6 +427,11 @@ only shows when Halvtimen is visible in the app).
     Hovedstyret has decided should have samfunnettjeneste places; samf
     managers create those event shifts. A group's own events are its own work
     and never count, even if they have shifts.
+  - **Event bars are not skjenke** (decided): Speilsalen, Eldorado (the bar
+    for Tivoli) and Teglverket (two bars in one room) are staffed by the group
+    that runs the event (committee, BORG or DORG) with its own people, and the
+    barkurs lets those people stand in the bar. Skiftlista does not plan them.
+    The skjenker qualification rules do not change.
   - **Group types:** an explicit group type (komité, BORG =
     brukerorganisasjon, DORG = driftsorganisasjon, other). Not
     `discount_tier`, but it may pre-fill the type. Internbevis tiers are
@@ -951,7 +966,8 @@ Known gaps, deliberately left to later steps:
      Admin only, logged.
    - 7e. Overview page for managers and viewers; separate rules and exceptions
      page; "Legg til arrangementsskift" for approved events; open places.
-   - 7f. Group leader card ("Meld på medlem", "Når vi ikke kan").
+   - 7f. Group leader card ("Meld på medlem", "Når vi ikke kan"). Idea, a
+     note only: the card could also show which members have a valid barkurs.
    - 7g. Editable shift descriptions (`/shifts/settings` card) and
      per-event-shift meeting point; end-of-semester report.
    - 7h. "Send påminnelse" (templates and cron route, step 8).
@@ -1017,6 +1033,24 @@ Known gaps, deliberately left to later steps:
   (title, room, start/end, status)? How is access authenticated and who issues
   a read-only key? Rate limits? Can we match on `booking_request_id`? Goal:
   events from Crescat as drafts for samfunnettjeneste event shifts.
+- Open question, not decided, nothing to build: can a barkurs holder be
+  skiftleder in the smaller bars (the event bars are not planned in
+  Skiftlista, see the samfunnettjeneste decision)? Barkurs expires (4
+  semesters), a qualification does not, so keep them separate.
+- Open question: who edits group membership when someone switches bar, and
+  does removing a membership end the verv too? Morten's guess: someone with
+  the admin right removes the old group and adds the new one. Not confirmed
+  for the real Personal. Read-only check of this repo (2026-10-29): a
+  membership is a `role_assignments` row (volunteer, group, verv, semester),
+  so membership and verv are one row and removing it ends both for that
+  semester. Add, edit and delete (`/groups/{id}/role-assignments`,
+  `/volunteers/{id}/role-assignments`, `.../{assignment_id}`) require
+  `require_management_user`, which is the Admin or Gruppeadmin role and
+  nothing more: no check of which group, so a Gruppeadmin can edit
+  membership in any group. Removing a row does not touch `shift_assignments`,
+  so the person stays on future shifts (and, once 5d is built, a training
+  row stays but is inert). Ask etjenesten or Morten whether that is the
+  intended practice at Samfunnet.
 - Stjerne has no weekend shifts, so check that templates and the generator
   match that when the first templates are entered. Weekend days are a per-bar
   setting (Grøndahls: Friday and Saturday).
