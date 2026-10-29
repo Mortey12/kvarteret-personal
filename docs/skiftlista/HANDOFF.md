@@ -400,7 +400,9 @@ only shows when Halvtimen is visible in the app).
   "Qualifications"); leader rights are explicit Admin assignments and never
   derived from verv.
 - Build order: 4b, then 4c (privacy settings), then 4d (edit one shift on the
-  board; editing a whole series is dropped), then 5 onward.
+  board; editing a whole series is dropped), then 5 onward. Exception
+  (2026-10-29): the "+" and "−" per role from 4d are built as "4d-plus"
+  between 5d step 2 and step 3.
 - **Samfunnettjeneste** (decided in a design session from Samfunnet's
   spreadsheet and a read-only code review; **not built yet**, steps 7a–7h).
   It is not a role or a qualification; it is done by people in many groups.
@@ -635,7 +637,10 @@ Known gaps, deliberately left to later steps:
    top-up job that would generate the next 12 weeks. Still to do:
    - "+" and "−" per role on each shift on the board ("−" only removes empty
      places). This is the quick part of 4d and gives "i tillegg" without the
-     training flag.
+     training flag. **Moved up (decided by Morten 2026-10-29):** built as
+     "4d-plus" after 5d step 2 and before 5d step 3, not with the rest of 4d.
+     Step 3 removes the opplaering place, and "i tillegg" then means adding a
+     normal place, so leaders need the "+" first.
    - A unique index so two generator runs cannot both create the same shift.
      It uses the same key as the generator: (template, Oslo date of the
      start), which on Postgres is an expression index on
@@ -668,7 +673,7 @@ Known gaps, deliberately left to later steps:
    app shows progress in Mine ("Helgeskift 1 av 4") and `suggest()` favours
    people who are behind. Option B (two halves per semester) later, per bar.
 5d. **Qualifications, training and approval** (see decisions; design done
-   in a read-only pass on 2026-10-29, not built). Do the training
+   in a read-only pass on 2026-10-29; step 1 is done, the rest is not built). Do the training
    simplification in the same step.
    - **"Leader" in 5d** always means anyone who is Gruppeadmin of that bar
      (the leader, the personalansvarlig, or anyone an Admin assigns), plus the
@@ -765,7 +770,7 @@ Known gaps, deliberately left to later steps:
      on a shift with a trainee
      and nobody else present with an approved skiftleder qualification (kokk
      in the kitchen) that tar opplæring. "I tillegg" means adding a place
-     (the 4d "+").
+     (the "+" built as 4d-plus before step 3).
    - **Migration** (three revisions, Postgres only, in this order).
      **A, additive (step 1):** create the table and columns
      (`volunteer_qualifications`, `shift_assignments.training_for`,
@@ -831,8 +836,8 @@ Known gaps, deliberately left to later steps:
         `tests/unit/test_shift_qualifications_migration.py`, the extended
         delete test and two repository tests in
         `tests/unit/domain/test_shift_app_service.py`, and
-        `tests/e2e/test_shift_qualifications_migration.py` (written, not yet
-        run). Decided while building: migration matching ignores case and
+        `tests/e2e/test_shift_qualifications_migration.py` (run by Morten on a
+        throwaway Postgres database on 2026-10-29, passed). Decided while building: migration matching ignores case and
         surrounding spaces; every verv name that is not Skiftleder, Kokk or
         Opplæring is printed as unrecognised with a count (so ordinary names
         like Skjenker show up too); a training row gets target 3 (the column
@@ -842,11 +847,7 @@ Known gaps, deliberately left to later steps:
         `approved_by`; the check list prints volunteer ids only, no names;
         nothing reads the new rows or columns yet, so eligibility is still
         from verv. Still to do for the switch: the `/shifts/settings` control
-        and `save_group_settings` (step 2 and 4). Original plan: Tests: the mapping function (verv older than the previous
-        semester is ignored), Postgres e2e upgrade on a seeded database, and
-        extend `test_deleting_a_volunteer_removes_their_shift_rows`
-        (`tests/unit/domain/test_shift_app_service.py`) so it also checks
-        that the person's qualification rows are gone.
+        and `save_group_settings` (step 2 and 4).
      2. Eligibility from qualifications in `planning.py`, `service.py`,
         `app_service.py` and `allowed_tokens`; `opplaering` still works but
         needs a training row. Tests: a case table for `placement_problem`
@@ -855,7 +856,11 @@ Known gaps, deliberately left to later steps:
         in its own group, training only in its own group, open for samf),
         board assign by a sibling bar's leader and app claim with and without
         the qualification.
-     3. Training simplification: remove `opplaering`, the shared room and
+     4d-plus (between step 2 and step 3; decided 2026-10-29, see 4d). "+" and
+        "−" per role on each shift on the board. "−" only removes empty places.
+        Scope-checked, CSRF, logged, with tests. Done before step 3 because
+        "i tillegg" then means adding a normal place.
+     3. Training simplification (depends on 4d-plus being done): remove `opplaering`, the shared room and
         `training_replaces_slot` from code, templates, generator and form; set
         `training_for` on assign, claim and move; dashed outline and counter
         on the board; the opplaering move (own revision, see Migration); migration B
@@ -893,6 +898,7 @@ Known gaps, deliberately left to later steps:
    built). Clicking a shift selects it, and the volunteer sidebar becomes that
    shift's list:
    - A search field at the top that searches the whole pool by name.
+   - "Vis alle" in the sidebar returns to the full pool list.
    - Then the shift's own bar's people in groups Vil, Kan hvis nødvendig, Ikke
      satt, Kan ikke (the last folded).
    - Then a separate, folded "Andre barer" section with the same groups.
