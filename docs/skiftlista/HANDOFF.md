@@ -1236,6 +1236,27 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
   while the person can no longer see or change them in the app. Still open:
   the cross-bar skjenker training count (Morten's leaning, see "Training and
   approval") and the question below.
+- **Board placement of the Skjenkeleder** (open, not decided, nothing to build
+  (2026-10-29)): under the decided area widening, someone registered only in
+  Skjenkegruppen (for example the Skjenkeleder) can take bar places
+  themselves in the app. A bar leader's pool, however, is their own bar plus
+  its participating sibling bars, not the parent group. So on the board only
+  the Skjenke Gruppeadmin or an Admin can probably place such a person (not
+  verified in code). Question: is that acceptable, or should the pool also
+  include members of the parent group? Check this in the read-only review of
+  migration A and step 2 before changing anything.
+- **Board members and places they have no qualification for** (open, not
+  decided, nothing to build (2026-10-29)): idea from Morten: should board
+  members be able to claim places they have no qualification for? Notes: the
+  widening already gives parent-group members the bars in their area, and they
+  still need an approved skjenker row, which "Godkjenn direkte" can grant.
+  Skiftleder and kokk places need a qualification on purpose. Places open for
+  samfunnettjeneste are already open to board members. A rule like "board
+  members may claim anything" would bypass the qualification rule and would
+  need a way to know who counts as board; verv is free text and rights are
+  never derived from verv, so a named permission would fit better but is new
+  building. Suggested: check first whether "Godkjenn direkte" covers it in
+  practice, and decide after the pilot.
 - Open question: who edits group membership when someone switches bar, and
   does removing a membership end the verv too? Morten's guess: someone with
   the admin right removes the old group and adds the new one. Not confirmed
