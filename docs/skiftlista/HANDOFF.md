@@ -97,7 +97,8 @@ Also fixed: dev seed produced semester code `20253` (now
   is open for samfunnettjeneste. Otherwise refused with "Kun for medlemmer av
   gruppa". It does not look at the Skjenke group.
 - Opplæring **takes a regular crew place** by default
-  (`training_replaces_slot`); per shift it can be "i tillegg".
+  (`training_replaces_slot`); per shift it can be "i tillegg". (To be removed:
+  see "Training simplification".)
 - Closed shift, same person twice on a shift, full place: refused.
 - More than one shift in a week: allowed with a warning.
 - Halvtimen: under 20 is refused, also on the leader board (unknown birth
@@ -360,8 +361,111 @@ only shows when Halvtimen is visible in the app).
   derived from verv.
 - Build order: 4b, then 4c (privacy settings), then 4d (edit one shift on the
   board; editing a whole series is dropped), then 5 onward.
-- Samfunnettjeneste is not a role or a qualification; it is done by people in
-  many groups. Open: Morten will describe how it works.
+- **Samfunnettjeneste** (decided in a design session from Samfunnet's
+  spreadsheet and a read-only code review; **not built yet**, steps 7a–7h).
+  It is not a role or a qualification; it is done by people in many groups.
+  Terms: "samfunnettjeneste managers" hold the MANAGE right, "samfunnettjeneste
+  viewers" hold the VIEW right (see Rights below). These are rights, not a
+  title: Internansvarlig is only an example of who might hold one, and
+  Nestleder, Skjenkeleder, Hovedstyret members or a stand-in can too, several
+  at once. Never treat any of this as a system role.
+  - **What it is:** extra help so the house works. Places come from two
+    sources only: (a) bars and the kitchen open places on their own shifts
+    when they are short, and (b) events for the whole organisation that
+    Hovedstyret has decided should have samfunnettjeneste places; samf
+    managers create those event shifts. A group's own events are its own work
+    and never count, even if they have shifts.
+  - **Group types:** an explicit group type (komité, BORG =
+    brukerorganisasjon, DORG = driftsorganisasjon, other). Not
+    `discount_tier`, but it may pre-fill the type: tier "arg" is the old name
+    for internal groups (komité), "borg" is BORG, "dorg" is DORG. Check this
+    against real data first: `groups.discount_tier` is an Integer column in
+    the code today, so the mapping may not hold. Standards: committees 1 shift
+    per active member, DORG 1 per active member, BORG a fixed number of shifts
+    as an organisation (from its agreement).
+  - **Duty settings (samf managers only):** per type a standard (per active
+    member, a fixed number, or none, with a number); per group an override
+    with its own counting period and a required reason, logged with who and
+    when. Changing a standard asks for confirmation, names the overridden
+    groups that will not change, and offers "save for groups following
+    standard" or "save for all and remove exceptions".
+  - **Exempt groups:** a per-group setting "Medlemmene er fritatt" on every
+    group, off by default, on for Skjenke and its subgroups. Only samf
+    managers or Admin change it, with a required reason, logged with who and
+    when; the group list shows a "fritatt" tag. The exemption follows the
+    person: an exempt person is not asked for samfunnettjeneste and is not
+    counted in any other group's target (a Stjerne member who is also in Fest
+    does not count in Fest's active members). This replaces the hard-coded
+    `is_skjenke_member` check in `counts_as_samf` (`app_rules.py`,
+    `app_service.py`).
+  - **People in several groups:** "Ett skift holder" (default), "Velg
+    gruppe" or "Hovedgruppe", plus a maximum number of shifts asked of one
+    person per semester (default 1). A shift never counts for both a committee
+    and a BORG/DORG; a person in both chooses which when taking the shift
+    (fixed rule, no setting).
+  - **Overview page in Personal** for samf managers and viewers (viewers see
+    no buttons that change anything): totals (done of target, weeks left); a
+    one-line rules summary with an "Endre" link (managers only);
+    "Trenger oppmerksomhet", shown only when something waits (groups behind
+    pace, empty places in the next 7 days, "kan ikke", a start-of-semester
+    reminder to check rules and carried-over exceptions); all groups sorted by
+    who is most behind, with done and planned shown separately and "overstyrt"
+    and "fritatt" tags; open samfunnettjeneste places with "Legg til
+    arrangementsskift" (managers only, for events Hovedstyret has approved).
+    Rules and exceptions live on a separate page behind the link. Bars still
+    open their own places.
+  - **Group leaders (komité, BORG, DORG):** a read-only card with their duty
+    and progress and who has not done a shift; "Meld på medlem" (sign up their
+    own member, for people without a smartphone or without the app working);
+    and busy periods ("Når vi ikke kan"), which replace the spreadsheet's
+    "Utilgjengelig" and are information only for bar leaders and samf managers
+    and viewers. A group leader cannot change their own duty. An organisation
+    leader sees only shifts that counted for their organisation, not their
+    members' other shifts.
+  - **Attribution is stored:** each samf assignment records which group it
+    counted for (e.g. `shift_assignments.counted_for_group_id`). Today samf is
+    derived on the fly (`counts_as_samf`), so past counts change if someone
+    joins Skjenke mid-semester. Auto-filled when the person is in one group;
+    asked in the app claim when in several; leader placement also sets it.
+  - **No-show:** after a shift the leader can mark "møtte ikke" and record who
+    replaced them. The replacement gets the shift; the no-show counts for
+    neither samf nor training. Smallest model: `no_show_at` and
+    `replaced_by_assignment_id` on `shift_assignments`.
+  - **Reminders ("Send påminnelse"):** go to the group's leader. If the
+    group's duty is per active member, they also go to members who have not
+    done a shift. Uses the existing email outbox; needs new templates and a
+    cron route (step 8).
+  - **Descriptions:** shift descriptions become editable in Personal (a table
+    by group and kind, with a default and the built-in text as fallback; a
+    card in `/shifts/settings`). Event shifts may need their own meeting point
+    per shift. Group leaders keep their membership lists current, as today.
+  - **End-of-semester report** per committee and organisation, downloadable
+    or printable, mainly for BORG agreements. Samf managers and viewers can
+    see it.
+  - **Future idea, not now:** exempting a single person (for example on
+    leave) would use the same pattern but touches personal circumstances, so
+    the privacy person must be asked first.
+- **Rights for samfunnettjeneste** (decided, **not built yet**): a new
+  explicit named permission across all groups (a small permission table plus a
+  dependency); not Admin, and not Gruppeadmin on the root group. It is granted
+  to people, not tied to a title, and several people can hold it at once. Two
+  levels: MANAGE (rules and exceptions, overrides, exemptions, event shifts,
+  reminders, everything on the overview) and VIEW (overview and progress only,
+  nothing that changes data; for example for Hovedstyret). Only an Admin
+  grants or removes it, and every change is logged with who and when. Bar role
+  mailboxes (grondahls@ etc.) are not logins; the people holding those roles
+  get rights individually.
+- **Training simplification** (decided, **not built yet**, done together with
+  5d, before the store release). Drop the `opplaering` slot kind and
+  `training_replaces_slot`. Main place types are Skiftleder and Skjenker
+  (Kokk in the kitchen). A person in training takes a normal place and is
+  shown with a dashed outline and a counter ("opplæring 2/3"), stored per
+  assignment so old counts stay correct. "In addition" is done by adding a
+  place. A shift with someone in training must also have someone who tar
+  opplæring, otherwise the board warns. This replaces the `opplaering` and
+  `training_replaces_slot` rules in "Rules implemented" and the training
+  lines in the decisions above. The app is not in the store yet, so its use of
+  kind `opplaering` can change before release.
 - Names: Samfunnet is the organisation, Kvarteret is the house, etjenesten is
   Samfunnet's IT group, and Samfunnet pays for hosting.
 - Ownership is role based (Skjenkeleder, HS leder/driftsansvarlig); role
@@ -440,8 +544,8 @@ Known gaps, deliberately left to later steps:
    Ledige / Mine / Ønsker, detail with requirements, course sign-up + claim
    in one step, behind a server-side per-group switch. They use the
    generated client; `GET /config` decides tabs and labels.
-3. **Group-scoped permissions**: done, except the HS samfunnettjeneste role
-   and the maintenance role. Admin manages every group. Gruppeadmin manages
+3. **Group-scoped permissions**: done, except the samfunnettjeneste right
+   (step 7d) and the maintenance role. Admin manages every group. Gruppeadmin manages
    the groups in their group-admin assignment (`group_admin_memberships`)
    and all subgroups (`groups.parent_group_id`, any depth); others are
    refused. `app/domain/shifts/permissions.py` (pure `manageable_groups`,
@@ -487,6 +591,9 @@ Known gaps, deliberately left to later steps:
    skift" / "Åpne skift" are done. The per-group app switches and meeting
    point are done (step 4a). Dropped: editing a whole series, and the daily
    top-up job that would generate the next 12 weeks. Still to do:
+   - "+" and "−" per role on each shift on the board ("−" only removes empty
+     places). This is the quick part of 4d and gives "i tillegg" without the
+     training flag.
    - A unique index so two generator runs cannot both create the same shift.
      It uses the same key as the generator: (template, Oslo date of the
      start), which on Postgres is an expression index on
@@ -536,6 +643,38 @@ Known gaps, deliberately left to later steps:
    Skiftleder trainee = skiftleder on the shift with a skiftleder who tar
    opplæring present; kitchen trainee works with a kokk who tar opplæring.
    This also replaces the planned per-person setting in step 9.
+   Do the training simplification here too (see the decision). Affected files
+   (from a grep for `opplaering` and `training_replaces_slot`; the earlier
+   read-only review's own list was not available when this was written, so
+   compare with it): `app/domain/shifts/` `planning.py`, `app_rules.py`,
+   `service.py`, `app_service.py`, `repository.py`, `generator.py`,
+   `models.py`, `tables.py`, `template_input.py`;
+   `app/templates/pages/shifts/shift_templates.html` (and the board template
+   if it shows the kind); `migrations/versions/20261027_1200_shift_planning.py`
+   (leave as history, add a new migration); `scripts/dev/seed_shifts.py`,
+   `scripts/dev/seed_demo.py`; tests `test_shift_planning.py`,
+   `test_shift_service.py`, `test_shift_app_service.py`,
+   `test_shift_app_rules.py`, `test_shift_setup_service.py`,
+   `tests/web/test_shifts_web.py`, `tests/unit/test_seed_demo.py`,
+   `tests/support/shift_groups.py`; in `kvarteret-internbevis`
+   `src/features/shifts/ui/components/MyShiftsList.tsx` and its test, and the
+   regenerated client (`npm run api:generate:personal`) plus `openapi.json`.
+   Proposed data migration steps (check against the review):
+   1. Add the per-assignment training counter (number and target) to
+      `shift_assignments`.
+   2. For each assignment in an `opplaering` slot, set the counter from the
+      completed training shifts counted so far, and move it to a normal place
+      on the same shift (skjenker; kokk in the kitchen; skiftleder trainees
+      need a manual check, since the old data does not say which place they
+      train for).
+   3. Where the shift had `training_replaces_slot` off ("i tillegg"), raise
+      that place's count by the number moved; where it was on, the place
+      already had room.
+   4. Do the same for `shift_template_slots` of kind `opplaering`, then delete
+      all `opplaering` slots and drop `training_replaces_slot` from
+      `shift_templates` and `shifts`.
+   5. Remove `opplaering` from `SLOT_KINDS` and the room and eligibility rules,
+      then update the app and regenerate the client.
 5e. **Wish calendar in the app** (JS only, can ship by OTA): month calendar
    with one coloured dot per shift, select dates or weekday letters, pick all
    / dagskift / kveldsskift, then vil / kan hvis nødvendig / kan ikke. Check
@@ -553,10 +692,37 @@ Known gaps, deliberately left to later steps:
    stored by the app.
 6. **Courses**: leader screens for `course_sessions` (date, place, capacity,
    cancel) and the sign-up lists. Sign-up and expiry are in the app API.
-7. **Samfunnettjeneste**: events, places open for samf, progress per group.
+7. **Samfunnettjeneste** (design in the decisions above). Order: first 5d
+   qualifications plus the training simplification, then 7a–7c (group types,
+   exemptions, attribution plus no-show), then 7d–7e (rights and overview
+   pages), then 7h and step 8 (email reminders). Not tied to the pilot.
+   - 7a. Group type on groups (komité / BORG / DORG / other, pre-filled from
+     `discount_tier` after checking real data); duty settings tables: standard
+     per type, override per group with reason, counting period and log.
+   - 7b. "Medlemmene er fritatt" per group (on for Skjenke and subgroups) with
+     reason and log; replace `is_skjenke_member` in `counts_as_samf`; exempt
+     people are left out of every group's target.
+   - 7c. `counted_for_group_id` on `shift_assignments` (auto, chosen in the app
+     claim when in several groups, set by leader placement); multi-group
+     options ("Ett skift holder" / "Velg gruppe" / "Hovedgruppe", max per
+     person); no-show (`no_show_at`, `replaced_by_assignment_id`). The app
+     claim change must go in the store release if it needs a new screen.
+   - 7d. Samfunnettjeneste permission (MANAGE / VIEW), granted and removed by
+     Admin only, logged.
+   - 7e. Overview page for managers and viewers; separate rules and exceptions
+     page; "Legg til arrangementsskift" for approved events; open places.
+   - 7f. Group leader card ("Meld på medlem", "Når vi ikke kan").
+   - 7g. Editable shift descriptions (`/shifts/settings` card) and
+     per-event-shift meeting point; end-of-semester report.
+   - 7h. "Send påminnelse" (templates and cron route, step 8).
+   - Crescat events as drafts for event shifts: depends on etjenesten's
+     answers (see "Not code").
 8. **Swaps and sick days** with email to the right leaders, show
    `status_message` to them (not to skiftleder), delete it after the shift.
-   Also the reminder button for volunteers who have not sent in wishes (5b).
+   Also the reminder button for volunteers who have not sent in wishes (5b),
+   and the samfunnettjeneste reminders (7h): to the group's leader, and for
+   per-member duties also to members who have not done a shift. Needs new
+   email templates and a cron route.
 9. Small: keyboard alternative to drag and drop ("Legg til" on each place),
    semester-end data cleanup. (The per-person "tar ikke opplæring" is gone;
    see 5d.)
@@ -589,6 +755,10 @@ Known gaps, deliberately left to later steps:
   for reminders, "kan ikke" and swaps; app polling and the `/open` endpoint
   (it evaluates 92 days per call); Vercel plan limits. Expected to be small.
   Samfunnet pays for hosting.
+- Questions for etjenesten about Crescat: is there a read API for events
+  (title, room, start/end, status)? How is access authenticated and who issues
+  a read-only key? Rate limits? Can we match on `booking_request_id`? Goal:
+  events from Crescat as drafts for samfunnettjeneste event shifts.
 - Stjerne has no weekend shifts, so check that templates and the generator
   match that when the first templates are entered. Weekend days are a per-bar
   setting (Grøndahls: Friday and Saturday).
