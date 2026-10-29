@@ -37,6 +37,11 @@
           <input type="checkbox" name="courses_enabled" value="true" {% if item.courses_enabled %}checked{% endif %}>
           Sjekk brann- og barkurs i appen før noen tar en plass (slå på når gruppa har satt opp kursene)
         </label>
+        {% if item.courses_enabled and item.missing_courses %}
+          <p class="border-2 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-stone-900" data-missing-courses role="alert">
+            Fant ikke kurset {{ item.missing_courses | join(" og ") }} i kurslista. Kurssjekken hoppes over for dette kurset til det finnes et kurs med akkurat dette navnet (for brannkurs går også «Brannvernkurs»).
+          </p>
+        {% endif %}
         <label class="grid gap-1">
           <span class="text-sm text-stone-500">Oppmøtested (vises på skiftet i appen)</span>
           <input class="app-input" maxlength="200" name="meeting_point" type="text" value="{{ item.meeting_point }}" placeholder="For eksempel: Møt skiftleder 30 minutter før">

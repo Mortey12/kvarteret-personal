@@ -6,7 +6,13 @@ from typing import Protocol
 from uuid import UUID
 
 from app.auth.roles import UserRole
-from app.domain.shifts.app_rules import PERIOD_STATUSES, effective_week_status
+from app.domain.shifts.app_rules import (
+    COURSE_RULES,
+    PERIOD_STATUSES,
+    effective_answer,
+    effective_week_status,
+    semester_of,
+)
 from app.domain.shifts.errors import (
     ShiftForbiddenError,
     ShiftNotFoundError,
@@ -18,6 +24,7 @@ from app.domain.shifts.models import (
     PlacementResult,
     PoolPerson,
     ShiftRecord,
+    ShiftWishes,
     SlotRecord,
     WeekBanner,
     WeekPlan,
@@ -161,17 +168,20 @@ class ShiftsService:
             for person in slot.people
             if person.swap_requested
         )
+        pool_ids = [] if scope.is_empty else await self._pool_group_ids(scope)
         pool = (
             []
             if scope.is_empty
             else await self._pool(
                 [option.group_id for option in all_groups],
                 [option.group_id for option in group_options],
-                await self._pool_group_ids(scope),
+                pool_ids,
                 group_id,
                 week_counts,
             )
         )
+        if not scope.is_empty:
+            await self._attach_wishes(records, days, pool_ids)
         shown = [o for o in group_options if group_id is None or o.group_id == group_id]
         statuses, banners = await self._week_statuses(week_start, group_options, shown)
         return WeekPlan(
@@ -268,6 +278,43 @@ class ShiftsService:
                 )
             )
         return pool
+
+    async def _attach_wishes(
+        self, records: list[ShiftRecord], days: list, pool_ids: list[int]
+    ) -> None:
+        """What the leader's pool answered per shift. Two queries for the whole week.
+
+        Only people in ``pool_ids`` are read, so a leader never gets names or
+        answers for anyone outside their scope.
+        """
+        if not records or not pool_ids:
+            return
+        members: dict[int, str] = {}
+        for member in await self.repository.list_shift_members(get_current_semester_code(), pool_ids):
+            members.setdefault(member.volunteer_id, member.name)
+        if not members:
+            return
+        volunteer_ids = sorted(members)
+        local_start = {record.shift_id: record.starts_at.astimezone(OSLO) for record in records}
+        wishes = await self.repository.list_wishes_for(sorted(local_start), volunteer_ids)
+        rules = await self.repository.list_rules_for(
+            sorted({semester_of(record.starts_at) for record in records}), volunteer_ids
+        )
+        records_by_id = {record.shift_id: record for record in records}
+        for day in days:
+            for venue in day.venues:
+                for shift in venue.shifts:
+                    record = records_by_id[shift.shift_id]
+                    weekday = local_start[shift.shift_id].weekday()
+                    semester = semester_of(record.starts_at)
+                    summary = ShiftWishes()
+                    for volunteer_id, name in members.items():
+                        answer = effective_answer(
+                            wishes.get((shift.shift_id, volunteer_id)),
+                            rules.get((volunteer_id, semester, weekday)),
+                        )
+                        getattr(summary, answer if answer in ("vil", "kan", "nei") else "ikke_satt").append(name)
+                    shift.wishes = summary
 
     async def _attach_warnings(
         self, records: list[ShiftRecord], week_counts: dict[int, int]
@@ -499,6 +546,16 @@ class ShiftsService:
         roots = {gid for gid in tree if parents.get(gid) not in tree}
         own = set(await self.repository.list_direct_participating_group_ids())
         rows = await self.repository.list_groups_with_settings()
+        missing_courses: list[str] = []
+        if any(row["courses_enabled"] for row in rows if row["id"] in own and scope.allows(row["id"])):
+            found = await self.repository.find_courses(
+                [name for rule in COURSE_RULES.values() for name in rule.names_in_personal]
+            )
+            missing_courses = [
+                rule.name
+                for rule in COURSE_RULES.values()
+                if not any(name.lower() in found for name in rule.names_in_personal)
+            ]
         return [
             GroupSettingsView(
                 group_id=row["id"],
@@ -508,6 +565,7 @@ class ShiftsService:
                 samf_enabled=bool(row["samf_enabled"]),
                 meeting_point=row["meeting_point"] or "",
                 courses_enabled=bool(row["courses_enabled"]),
+                missing_courses=missing_courses if row["courses_enabled"] else [],
             )
             for row in rows
             if row["id"] in own and scope.allows(row["id"])

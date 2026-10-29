@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from app.domain.shifts.app_rules import (
     cannot_attend_window_open,
     course_valid_in,
+    effective_answer,
     effective_week_status,
     last_valid_semester,
     quota_for,
@@ -170,3 +171,10 @@ def test_week_contract_warning_follows_the_leader_board_rule() -> None:
     )
     pensioner = quota_for({"Pensjonist"})
     assert "Pensjonistavtalen din er 1 skift i måneden." in week_contract_warning(2, 49, pensioner)
+
+
+def test_effective_answer_wish_beats_rule_and_rule_fills_in() -> None:
+    assert effective_answer("nei", "vil") == "nei"
+    assert effective_answer("vil", None) == "vil"
+    assert effective_answer(None, "kan") == "kan"
+    assert effective_answer(None, None) is None

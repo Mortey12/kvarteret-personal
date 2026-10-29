@@ -60,6 +60,11 @@ class FakeRepository:
         self.week_rows: dict[tuple[int, date], str] = {}
         self.events: list[tuple] = []
         self.settings: dict[int, dict] = {}
+        self.course_names: list[str] = []
+        self.wishes: dict[tuple[int, int], str] = {}
+        self.rules: dict[tuple[int, int, int], str] = {}
+        self.restrict_members_to_groups = False
+        self.wish_queries = 0
 
     async def get_slot_shift_id(self, slot_id: int) -> int | None:
         return 1 if slot_id in (10, 11, 12) else None
@@ -80,7 +85,17 @@ class FakeRepository:
         return [ShiftGroupOption(7, "Stjerne")]
 
     async def list_shift_members(self, semester: int, group_ids: list[int]) -> list[MemberRole]:
+        if self.restrict_members_to_groups:
+            return [m for m in self.members if m.group_id in group_ids]
         return self.members
+
+    async def list_wishes_for(self, shift_ids, volunteer_ids) -> dict:
+        self.wish_queries += 1
+        return {k: v for k, v in self.wishes.items() if k[0] in shift_ids and k[1] in volunteer_ids}
+
+    async def list_rules_for(self, semesters, volunteer_ids) -> dict:
+        self.wish_queries += 1
+        return {k: v for k, v in self.rules.items() if k[1] in semesters and k[0] in volunteer_ids}
 
     async def count_shifts_by_volunteer(self, starts_from, starts_before) -> dict[int, int]:
         return self.week_counts
@@ -137,6 +152,10 @@ class FakeRepository:
                 (20, "Kultur", None),
             )
         ]
+
+    async def find_courses(self, names: list[str]) -> dict[str, int]:
+        wanted = {n.lower() for n in names}
+        return {name.lower(): i for i, name in enumerate(self.course_names, start=1) if name.lower() in wanted}
 
     async def save_group_settings(
         self, group_id, *, app_enabled, samf_enabled, meeting_point, courses_enabled
@@ -525,6 +544,24 @@ async def test_banner_for_an_unpublished_week_and_none_once_published() -> None:
 
 
 @pytest.mark.asyncio
+async def test_settings_warn_when_a_required_course_is_missing() -> None:
+    repo = FakeRepository()
+    service = ShiftsService(repo)
+    repo.settings[7] = {"courses_enabled": True}
+    repo.settings[8] = {"courses_enabled": False}
+
+    both_missing = {g.name: g.missing_courses for g in await service.list_group_settings(ALL_GROUPS)}
+    assert both_missing == {"Stjerne": ["Brannkurs", "Barkurs"], "Grøndahls": []}
+
+    repo.course_names = ["Brannvernkurs"]
+    one_missing = {g.name: g.missing_courses for g in await service.list_group_settings(ALL_GROUPS)}
+    assert one_missing["Stjerne"] == ["Barkurs"]
+
+    repo.course_names = ["Brannkurs", "Barkurs"]
+    assert all(g.missing_courses == [] for g in await service.list_group_settings(ALL_GROUPS))
+
+
+@pytest.mark.asyncio
 async def test_group_settings_are_saved_and_scoped() -> None:
     repo = FakeRepository()
     service = ShiftsService(repo)
@@ -647,3 +684,66 @@ async def test_assign_refuses_people_outside_the_pool_before_any_other_check() -
     # Even a slot the leader may not touch gives the neutral answer first.
     with pytest.raises(ShiftPlacementError, match="Fann ikke personen"):
         await service.assign(slot_id=11, volunteer_id=555, scope=GroupScope(frozenset({8})))
+
+
+def _wish_repo() -> FakeRepository:
+    """Shift 1 is Monday 2 November 2026 (autumn 2026, weekday 0)."""
+    repo = FakeRepository()
+    repo.members.extend(
+        [
+            MemberRole(103, "Vera Vil", 7, "Stjerne", "Skjenker"),
+            MemberRole(104, "Nora Nei", 7, "Stjerne", "Skjenker"),
+        ]
+    )
+    repo.wishes = {(1, 100): "vil", (1, 104): "nei"}
+    repo.rules = {
+        (101, 20262, 0): "kan",
+        (103, 20262, 0): "vil",
+        (100, 20262, 0): "nei",  # the shift wish beats this
+        (102, 20261, 0): "vil",  # another semester does not count
+        (103, 20262, 3): "nei",  # another weekday does not count
+    }
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_board_shows_wish_counts_and_names_per_shift() -> None:
+    repo = _wish_repo()
+    plan = await ShiftsService(repo).get_week_plan(date(2026, 11, 2), scope=SCOPE)
+    wishes = plan.days[0].venues[0].shifts[0].wishes
+    assert wishes is not None
+    # Wish beats rule (100), rule is used without a wish (101, 103), the rest is not set (102).
+    assert wishes.vil == ["Sigrid Skiftleder", "Vera Vil"]
+    assert wishes.kan == ["Sander Skjenker"]
+    assert wishes.nei == ["Nora Nei"]
+    assert wishes.ikke_satt == ["Tora Trainee"]
+    # One query per table for the whole week, not one per shift.
+    assert repo.wish_queries == 2
+
+
+@pytest.mark.asyncio
+async def test_wish_names_are_limited_to_the_leaders_pool() -> None:
+    repo = _wish_repo()
+    repo.restrict_members_to_groups = True
+    repo.members.append(MemberRole(120, "Kari Kultur", 20, "Kultur", "Medlem"))
+    repo.wishes[(1, 120)] = "vil"
+    plan = await ShiftsService(repo).get_week_plan(date(2026, 11, 2), scope=STJERNE_ONLY)
+    wishes = plan.days[0].venues[0].shifts[0].wishes
+    everyone = [name for names in (wishes.vil, wishes.kan, wishes.nei, wishes.ikke_satt) for name in names]
+    assert "Kari Kultur" not in everyone
+    assert len(everyone) == 5
+
+
+@pytest.mark.asyncio
+async def test_leader_outside_the_scope_gets_no_wishes() -> None:
+    repo = _wish_repo()
+    for scope in (NO_GROUPS, GroupScope(frozenset({20}))):
+        plan = await ShiftsService(repo).get_week_plan(date(2026, 11, 2), scope=scope)
+        assert plan.days == []
+    assert repo.wish_queries == 0
+    repo.admin_group_ids = [20]
+    service = ShiftsService(repo)
+    plan = await service.get_week_plan(
+        date(2026, 11, 2), scope=await service.manageable_scope(UserRole.GROUP_ADMIN, uuid4())
+    )
+    assert plan.days == [] and repo.wish_queries == 0

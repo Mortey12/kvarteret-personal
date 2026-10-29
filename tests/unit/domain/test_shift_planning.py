@@ -120,7 +120,7 @@ def test_crew_places_are_for_skjenke_unless_open_for_samf() -> None:
     from app.domain.shifts.planning import placement_problem
 
     assert placement_problem("skjenker", 1, False, {2: {"Skjenker"}}) is None
-    assert placement_problem("skjenker", 1, False, {}) == "Kun for Skjenke"
+    assert placement_problem("skjenker", 1, False, {}) == "Kun for medlemmer av gruppa"
     assert placement_problem("skjenker", 1, True, {}) is None
     assert placement_problem("kokk", 1, True, {1: {"Skjenker"}}) == "Kun for kokker"
 

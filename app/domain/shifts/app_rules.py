@@ -44,6 +44,13 @@ PERIOD_STATUSES: dict[str, tuple[str, str]] = {
 WISHES_ACCEPTED = frozenset({"open", "allocating"})
 
 
+def effective_answer(wish: str | None, rule: str | None) -> str | None:
+    """The answer that counts for one person and shift: the per-shift wish
+    beats the weekday rule; None means "ikke satt". The app and the leader
+    board both resolve through here."""
+    return wish or rule
+
+
 def week_start(day: date) -> date:
     """The Monday of the week."""
     return monday_of(day)
