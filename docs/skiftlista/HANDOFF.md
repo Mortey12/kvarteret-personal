@@ -4,6 +4,38 @@ Read this first. It says what exists, how to run it, what was decided, and
 what to build next, so a new session (human or AI) does not need to explore
 the codebase again.
 
+## Start here
+
+Update by hand at the end of every session. Last updated 2026-10-29.
+
+- **State:** branch `skiftlista/skiftplan`. 5d step 1 is done (`ca64766`),
+  followed by docs commits. Hosted demo (skiftlista-demo.onrender.com) is at
+  the merge of `961a0e4`: it has 5a (Ønsker line) and the cleanup, not 5d
+  step 1. Migration A is not on Neon. Do not merge skiftplan into demo before
+  running `alembic upgrade head` on Neon through the direct endpoint.
+- **Next action:** read-only Opus pass on `placement_problem`, including the
+  bar-switch question and a check of Finding E. Then: (2) 5d step 2 on
+  Sonnet, (3) read-only Opus review of migration A together with step 2,
+  (4) 4d-plus, then 5d step 3.
+- **Parked, waiting for etjenesten:** OTA publishing (blocks the store
+  build); real verv names (block running migration A on real data); Findings
+  A, C and E and hosting limits (block the official pilot, not the build);
+  Slack versus email (decides step 8 notifications); Crescat (event drafts).
+- **Can proceed without etjenesten:** all of 5d, 4d-plus, 5a2, 5b and the
+  server side of 4c, all against fake data.
+- **Rules for Claude Code prompts:** start with "Read
+  docs/skiftlista/HANDOFF.md fully"; say which files may change; no commit,
+  push, seed or migration run by Claude Code; never `ruff format`; never
+  `git add -A` or `git add .` (Morten adds files by name after
+  `git status --short`); never push to Kvarteret's repos or open PRs
+  (`origin` is the fork, pushes to upstream are blocked); never run
+  `eas update` or `eas build`; no real names in data or docs; no em dashes;
+  end with a plain report and the exact list of changed files. Commit
+  messages end with `Co-Authored-By: Claude <model> <noreply@anthropic.com>`
+  and `Claude-Session: <ID from /status>`. Test environment:
+  `export KVARERET_DISABLE_DOTENV=1 APP_ENV=test DATABASE_URL=sqlite+aiosqlite:////tmp/kvp-tests.db`,
+  then `uv run ruff check . && uv run lint-imports && uv run pytest && uv run python scripts/export_openapi.py --check`.
+
 ## Goal and hard constraints
 
 - Shift list for Skjenke (subgroups Stjerne, Kjøkken, Grøndahls, Halvtimen)
@@ -22,7 +54,7 @@ the codebase again.
   `Mortey12/Mortey12.github.io`, folder `skiftliste/`). `logic.js` holds the
   reference rules, including the allocation suggestion (`suggest()`) and the
   per-month warnings (`fordelingWarnings()`). Port from there.
-- Plan doc and setup guide: Morten's private Claude docs (ask her for access).
+- Plan doc and setup guide: Morten's private Claude docs (ask Morten for access).
 
 ## What is built (branch `skiftlista/skiftplan`)
 
@@ -998,6 +1030,13 @@ Known gaps, deliberately left to later steps:
   etjenesten, not fixed in this branch.
 - **Finding C:** the CSP allows `'unsafe-inline'` (app-wide). Reported to
   etjenesten, not fixed in this branch.
+- **Finding E (NOT VERIFIED):** found in a read-only pass, not confirmed. In
+  Personal's volunteer routes, adding, editing and deleting group membership
+  requires only Admin or Gruppeadmin and does not check which group, so a
+  Gruppeadmin may be able to edit membership in any group. Qualifications
+  depend on active membership, so this decides who can take places. Not
+  reported to etjenesten, not fixed in this branch. See also the open
+  question on switching bars below.
 - **Finding B:** `?notice=` and `?error=` text in URLs. Low priority.
 - Mobile login session handling was not reviewed.
 
@@ -1047,7 +1086,7 @@ Known gaps, deliberately left to later steps:
   `/volunteers/{id}/role-assignments`, `.../{assignment_id}`) require
   `require_management_user`, which is the Admin or Gruppeadmin role and
   nothing more: no check of which group, so a Gruppeadmin can edit
-  membership in any group. Removing a row does not touch `shift_assignments`,
+  membership in any group (not verified, see Finding E). Removing a row does not touch `shift_assignments`,
   so the person stays on future shifts (and, once 5d is built, a training
   row stays but is inert). Ask etjenesten or Morten whether that is the
   intended practice at Samfunnet.
