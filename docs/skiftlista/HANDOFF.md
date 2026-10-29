@@ -13,10 +13,10 @@ Update by hand at the end of every session. Last updated 2026-10-29.
   the merge of `961a0e4`: it has 5a (Ønsker line) and the cleanup, not 5d
   step 1. Migration A is not on Neon. Do not merge skiftplan into demo before
   running `alembic upgrade head` on Neon through the direct endpoint.
-- **Next action:** read-only Opus pass on `placement_problem`, including the
-  bar-switch question and a check of Finding E. Then: (2) 5d step 2 on
-  Sonnet, (3) read-only Opus review of migration A together with step 2,
-  (4) 4d-plus, then 5d step 3.
+- **Next action:** the read-only Opus pass on `placement_problem`, the
+  bar-switch question and Finding E is done (2026-10-29); its decisions are
+  written into this file. Now: (2) 5d step 2 on Sonnet, with the clarifications listed under build step 2, (3) read-only Opus
+  review of migration A together with step 2, (4) 4d-plus, then 5d step 3.
 - **Parked, waiting for etjenesten:** OTA publishing (blocks the store
   build); real verv names (block running migration A on real data); Findings
   A, C and E and hosting limits (block the official pilot, not the build);
@@ -136,8 +136,10 @@ Also fixed: dev seed produced semester code `20253` (now
 - Halvtimen: under 20 is refused, also on the leader board (unknown birth
   date: a warning for leaders, refused in the app).
 - "Kan ikke i dag": the person stays on, marked on the board; the place
-  counts as open and, unless it needs a qualification (today: a verv), is open
-  to everyone. Whoever
+  counts as open and, unless it is a skiftleder or kokk place (and an
+  opplaering place until step 3), is open to everyone. After 5d skjenker is a
+  qualification, but a sick person's skjenker place still opens to everyone,
+  as decided under "Sick on the day" (decided 2026-10-29). Whoever
   takes it (app or leader) takes the absent person off.
 - App only: brannkurs for everyone, barkurs for samfunnettjeneste in
   skjenker/bartender places, valid 4 semesters from `completed_semester`, or
@@ -304,8 +306,17 @@ only shows when Halvtimen is visible in the app).
   Kokk and Opplæring verv (this and the previous semester) need a one-time
   migration into qualifications **before the pilot**.
   - **Where qualifications are valid** (decided 2026-10-29; replaces "active
-    member of the shift's group" for crew places). The person must be an
-    active member this semester of a participating group. A skjenker
+    member of the shift's group" for crew places). The person must have the
+    shift's group in their **area** (decided 2026-10-29). A person's area is
+    (a) the participating groups they are an active member of this semester,
+    plus (b) the participating siblings of those groups (same parent, the same
+    rule as the leader pool), plus (c) the participating groups below those
+    member groups. Reason: the Skjenkeleder, and some board members, are
+    registered only in Skjenkegruppen and must still be able to take bar
+    places. Unchanged: kokk places still need an approved kokk row for the
+    kitchen group, so the widening gives nobody a kokk place; training still
+    needs membership of the row's own group; a skjenker qualification still
+    decides bar places; Halvtimen keeps its 20+ rule. A skjenker
     qualification works in that group and in its participating sibling
     groups (same parent, the same rule as the leader pool; no Skjenke slug).
     Halvtimen is included, and its 20+ rule stays. A skiftleder
@@ -728,20 +739,34 @@ Known gaps, deliberately left to later steps:
      derived from verv. This applies to approving, starting training,
      "Godkjenn direkte", flipping the sibling-skiftleder switch and placing
      people.
-   - **Where verv and `opplaering` live today.** Verv names `Skiftleder`,
-     `Opplæring`, `Kokk` are constants in `planning.py` (`placement_problem`,
-     `allowed_tokens`). Verv are read by `ShiftsRepository.list_shift_members`
-     (board pool and `_check` in `service.py`) and
-     `ShiftsAppRepository.list_person_roles` (`_person_or_none` in
-     `app_service.py`), and shown as `ShiftAppGroup.role` / `in_training`
-     (`_role_label`). `opplaering` is plain `Text` in `shift_slots.kind` and
+   - **Where verv and `opplaering` live today** (corrected 2026-10-29). Verv
+     names `Skiftleder`, `Opplæring`, `Kokk` are constants in `planning.py`.
+     `allowed_tokens` does not use the constants; it calls
+     `placement_problem`, which does. Verv names are also read in
+     `TRAINEE_ROLE` in `app_service.py` (drives `in_training`), the literals
+     in `_role_label`, `PENSIONER_ROLE` in `app_rules.py` (`quota_for`; this
+     stays on verv), and the seeds (`seed_shifts.py`, `seed_demo.py`). Verv are
+     read by `ShiftsRepository.list_shift_members`, which is used five times,
+     not two: the board pool eligibility in `_pool`, `_check`,
+     `_attach_wishes` and `_require_in_pool` in `service.py`, and the pool
+     itself. `ShiftsAppRepository.list_person_roles` is read by
+     `_person_or_none` in `app_service.py`, and shown as `ShiftAppGroup.role` /
+     `in_training` (`_role_label`). An app claim checks eligibility twice (the
+     app evaluation, then `ShiftsService._check`). "Shift groups" in the code
+     (`list_shift_groups`) means groups with templates, not participating
+     groups. `opplaering` is plain `Text` in `shift_slots.kind` and
      `shift_template_slots.kind` (no enum). It is used in `planning.py`
-     (shared room, tags, `blocked_by_training`), `service.py` (full message),
-     `app_service.py` (`_training_done`, training text, Mine tag),
-     `app_rules.py` (`SLOT_DESCRIPTIONS`, `TRAINING_SHIFTS_NEEDED`),
-     `shift_plan.html` ("Brukt til opplæring"), `shift_templates.html`
-     (checkbox), `generator.py`, `template_input.py`, `repository.py`,
-     `models.py`, seeds and tests. The app reads `MyShift.kind ===
+     (shared room, tags, `blocked_by_training`, the "Tar en vanlig plass" /
+     "I tillegg" tags and `_open_label`; `RESTRICTED_KINDS` also feeds
+     `counts_as_samf` and the app config `restricted` flag), `service.py`
+     (full message), `app_service.py` (`_training_done`, the Mine tag, and an
+     `_evaluate` branch for `opplaering` with the training text and an "Ingen
+     utlært" warning), `app_rules.py` (`SLOT_DESCRIPTIONS`,
+     `TRAINING_SHIFTS_NEEDED`), `shift_plan.html` ("Brukt til opplæring",
+     `training_places`, `blocked_by_training`), `shift_templates.html`
+     (checkbox), seeds and tests. `generator.py`, `template_input.py`,
+     `repository.py` and `models.py` carry `training_replaces_slot`, not the
+     kind `opplaering`. The app reads `MyShift.kind ===
      "opplaering"` (`MyShiftsList.tsx`) and `groups[].in_training`,
      `training_done`, `training_needed` (`getTrainingProgress` in
      `shiftsView.ts`). It does not read `groups[].role` or `slot_kinds`.
@@ -776,8 +801,10 @@ Known gaps, deliberately left to later steps:
    - **Eligibility** (decided, see "Where qualifications are valid").
      `placement_problem` stays pure. The caller passes the person's member
      groups (any verv this semester, participating groups only), their
-     `area` (those groups plus their participating siblings, the same
-     sibling rule as `pool_group_ids`), and their qualification rows as
+     `area` (decided 2026-10-29: those groups, plus their participating
+     siblings, the same sibling rule as `pool_group_ids`, plus the
+     participating groups below those member groups), and their qualification
+     rows as
      (qualification, status, group). It returns the problem plus
      `training_for`. Needed: skiftleder for skiftleder, kokk for kokk,
      skjenker for skjenker and bartender, nothing for garderobe.
@@ -793,7 +820,24 @@ Known gaps, deliberately left to later steps:
      if g in members and training(need, group=g): return ok, training_for=need
      if open_for_everyone and kind not in RESTRICTED_KINDS: return ok
      return "Kun for medlemmer av gruppa" if g not in area else "Kun for godkjente <need>"
+
+     # Step 2 additions (decided 2026-10-29), on top of the lines above:
+     # opplaering stays in RESTRICTED_KINDS until step 3. It needs g in members
+     #   and a training row for g; it is not open for samf, and "kan ikke" does
+     #   not open it to everyone. The "training(...)" line above applies only
+     #   to the opplaering kind in step 2.
+     # a person whose only row for need in g is a training row is refused crew
+     #   places there with "I opplæring: bruk opplæringsplassen" (step 2 only;
+     #   training_for is not written, step 3 stores it and lifts this refusal)
+     # skjenker and bartender: g in area and an approved skjenker row whose own
+     #   group is g or a participating sibling of g
+     # garderobe: g in area
+     # approved row and training row for the same qualification: approved wins
      ```
+     In the pseudocode, "members" and "member groups" mean participating
+     groups (a settings row or templates, plus ancestors, as in
+     `permissions.py`), not only groups with templates, which is what
+     `list_shift_groups` returns today.
      A skiftleder or kokk place uses `g in area`, not `g in members`, so
      "Godkjenn direkte" works for a skiftleder from a sibling bar who is not a
      member of the shift's group (the row is then for group `g`). The switch
@@ -804,7 +848,10 @@ Known gaps, deliberately left to later steps:
      person with a `training` row placed on a place that needs that
      qualification gets `training_for` set automatically (board and app;
      recomputed on move). Done = their assignments with that `training_for`
-     whose shift has ended, without "kan ikke". At `training_target` the
+     whose shift has ended, without "kan ikke". "Done" counts only
+     assignments on shifts of the row's own group, until the cross-bar
+     question is decided (decided 2026-10-29): counting across bars would
+     quietly decide that open question. At `training_target` the
      leader sees "Klar for godkjenning" with "Godkjenn" (status approved,
      approved by and when, the "tar opplæring" choice for skiftleder and
      kokk, and `training_for` cleared on their future shifts) or "Ett skift
@@ -903,6 +950,68 @@ Known gaps, deliberately left to later steps:
         in its own group, training only in its own group, open for samf),
         board assign by a sibling bar's leader and app claim with and without
         the qualification.
+        Step 2 clarifications (decided 2026-10-29):
+        - Opplæring in step 2 only: `opplaering` stays in `RESTRICTED_KINDS`
+          until step 3. An opplaering place needs membership of the shift's
+          group and a training row for that group. It is not open to
+          samfunnettjeneste, and a "kan ikke" does not open it to everyone.
+        - Step 2 only: a person whose only row for that qualification in the
+          shift's group is a training row is refused crew places there with
+          today's message ("I opplæring: bruk opplæringsplassen").
+          `training_for` is not written in step 2; step 3 stores it and lifts
+          this refusal.
+        - Skjenker and bartender places: valid when the shift's group is in
+          the person's area and the person has an approved skjenker row whose
+          own group is the shift's group or one of that group's participating
+          siblings.
+        - Garderobe: anyone with the shift's group in their area.
+        - A person with both an approved row and a training row: the approved
+          row wins, as migration A already assumes. Edge case, not built
+          around: a skiftleder approved in a sibling bar who is also training
+          as skiftleder in a bar with the switch on gets the approved path, so
+          that training never counts.
+        - Messages change from "Kun for skiftledere i gruppen" to "Kun for
+          godkjente skiftleder" (and the matching kokk and skjenker texts);
+          tests that match the old text must be updated.
+        - Query cost: build the eligibility context once per request (area,
+          qualification rows, the sibling switch). The board reads
+          qualifications once per page. The app reads them once per request,
+          never inside the per-slot evaluation (`/open` evaluates up to 92
+          days). The app claim currently checks eligibility twice (the app
+          evaluation, then `ShiftsService._check`); passing the built context
+          into `_check` is optional.
+        - Seeds are part of step 2: `seed_shifts.py` and `seed_demo.py` must
+          write `volunteer_qualifications` rows for the fake people (including
+          the demo logins listed in "Demo for a meeting"), because
+          `bootstrap.py` runs migrations before seeding, so migration A copies
+          nothing. Without this every dev and demo person loses all restricted
+          and bar places after step 2. Migration A must not be the source of
+          demo rows.
+        - Extra tests for step 2, in addition to the case table: bartender
+          with an approved skjenker row; garderobe in and out of area; an
+          opplaering place needs a training row; an open or "kan ikke"
+          opplaering place is not open to samfunnettjeneste; a trainee-only
+          person is refused crew places (step 2 rule); approved plus training
+          precedence; a skiftleder row for the shift's group held by a member
+          only of a sibling ("Godkjenn direkte" case); a sibling skiftleder
+          row with the switch on and off; a kokk row in the kitchen held by a
+          bar member; a former member with rows but no membership this
+          semester; a member of a non-participating group only; a person
+          registered only in the parent group (the area widening); a "kan
+          ikke" opened skjenker place for a member without a row;
+          `allowed_tokens` agrees with `placement_problem` across the matrix;
+          the app evaluation and `ShiftsService._check` agree on the same
+          inputs; query-count tests (one qualification read per board page,
+          none per slot in the app's open list).
+        - Tests that will break and must be updated:
+          `tests/unit/domain/test_shift_planning.py` (signature and verv
+          dicts), `tests/unit/domain/test_shift_service.py` (fake repository
+          has verv members and no qualification methods; a test matches the
+          old message), `tests/web/test_shifts_web.py` (fake
+          `list_shift_members`), `tests/unit/domain/test_shift_app_service.py`
+          (the test world seeds verv only), possibly
+          `tests/unit/domain/test_shift_app_rules.py`, and
+          `tests/unit/test_seed_demo.py` if the seeds change.
      4d-plus (between step 2 and step 3; decided 2026-10-29, see 4d). "+" and
         "−" per role on each shift on the board. "−" only removes empty places.
         Scope-checked, CSRF, logged, with tests. Done before step 3 because
@@ -961,6 +1070,10 @@ Known gaps, deliberately left to later steps:
    - `suggest()` can later reorder this list.
    - Open question for the bar leaders: should clicking a free place narrow
      the list to that place's kind?
+   - **Parked:** board warning on placed people who no longer pass
+     `placement_problem` (for example after a bar switch). Cheap to add using
+     the pool data; parked until 5a2 (decided 2026-10-29). The existing "more
+     than one shift in a week" warning only helps against double booking.
 5e. **Wish calendar in the app** (JS only, can ship by OTA): month calendar
    with one coloured dot per shift, select dates or weekday letters, pick all
    / dagskift / kveldsskift, then vil / kan hvis nødvendig / kan ikke. Check
@@ -1030,15 +1143,46 @@ Known gaps, deliberately left to later steps:
   etjenesten, not fixed in this branch.
 - **Finding C:** the CSP allows `'unsafe-inline'` (app-wide). Reported to
   etjenesten, not fixed in this branch.
-- **Finding E (NOT VERIFIED):** found in a read-only pass, not confirmed. In
-  Personal's volunteer routes, adding, editing and deleting group membership
-  requires only Admin or Gruppeadmin and does not check which group, so a
-  Gruppeadmin may be able to edit membership in any group. Qualifications
-  depend on active membership, so this decides who can take places. Not
-  reported to etjenesten, not fixed in this branch. See also the open
-  question on switching bars below.
+- **Finding E (verified by reading the code on 2026-10-29, not run):** in
+  Personal's volunteer and group routes, the paths below need only Admin or
+  Gruppeadmin and check nothing about which group, so any Gruppeadmin can
+  edit membership in any group. Qualifications and the pool depend on
+  membership, so this decides who can take places. Paths confirmed:
+  - add, edit and delete role assignments, on both the group page and the
+    volunteer page;
+  - group history delete (not in the earlier text);
+  - semester transfer (it also does not check that the verv belongs to the
+    group; not in the earlier text);
+  - volunteer delete: any Gruppeadmin can delete any volunteer with
+    memberships, shift rows and qualifications.
+  Application approval is partly covered: the group is limited to the
+  applicant's own choices, but the approver's group is not checked. Also, any
+  Gruppeadmin can re-parent or deactivate any group (PATCH and POST on
+  groups), and group scope follows the parent tree, so this widens their own
+  Skiftlista scope; and any Gruppeadmin can create, rename and delete verv in
+  any group. `group_admin_memberships` can be changed by Admin only, so it is
+  not affected. Impact: this does not block building step 2, but it must be
+  fixed or explicitly accepted before the pilot, because qualifications and
+  the pool depend on membership. Fix direction (prose only): check the
+  actor's group scope (their groups plus subgroups, the same rule as
+  `manageable_groups`) in each of these services; make re-parenting and
+  deactivating Admin only, or require both old and new parent to be in
+  scope. This is Personal-wide, so it belongs with etjenesten, not this fork.
+  Not reported to etjenesten, not fixed in this branch. See also the bar
+  switch notes under "Not code".
 - **Finding B:** `?notice=` and `?error=` text in URLs. Low priority.
 - Mobile login session handling was not reviewed.
+
+## Pre-existing issues, not step 2
+
+Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
+
+- The "Åpen for samf." tag shows on skiftleder and kokk places that have the
+  samf box ticked, although such places are not open.
+- `_training_done` in `app_service.py` does not exclude "kan ikke" and only
+  covers the current semester.
+- The board drag check (`allowed_tokens`) ignores the Halvtimen age rule, so
+  the server refuses after the drop.
 
 ## Not code, but on the critical path
 
@@ -1076,6 +1220,22 @@ Known gaps, deliberately left to later steps:
   skiftleder in the smaller bars (the event bars are not planned in
   Skiftlista, see the samfunnettjeneste decision)? Barkurs expires (4
   semesters), a qualification does not, so keep them separate.
+- **Bar switch** (decided 2026-10-29): nothing is built for people who switch
+  bars. Under 5d step 2 an old skiftleder row keeps counting in the bar the
+  person left (it is a sibling, so in the area) and does not count in the new
+  bar unless the new bar's switch is on or a leader uses "Godkjenn direkte".
+  The system cannot tell "moved away" from "approved directly as a visitor".
+  Practice: when someone switches bars, the leader checks
+  `/shifts/qualifications` and removes the old skiftleder row. Revisit after
+  the pilot. Skjenker rows keep working in all sibling bars; kokk stays in
+  the kitchen; an old training row becomes inert (training is valid only in
+  the row's own group). Known behaviour: nothing re-checks future shift
+  assignments after a membership change, and the board gives no warning (see
+  the parked warning under 5a2); weekday rules carry over to the new bar (they
+  have no group); old per-shift wishes stay visible to the old bar's leaders
+  while the person can no longer see or change them in the app. Still open:
+  the cross-bar skjenker training count (Morten's leaning, see "Training and
+  approval") and the question below.
 - Open question: who edits group membership when someone switches bar, and
   does removing a membership end the verv too? Morten's guess: someone with
   the admin right removes the old group and adds the new one. Not confirmed
@@ -1086,10 +1246,38 @@ Known gaps, deliberately left to later steps:
   `/volunteers/{id}/role-assignments`, `.../{assignment_id}`) require
   `require_management_user`, which is the Admin or Gruppeadmin role and
   nothing more: no check of which group, so a Gruppeadmin can edit
-  membership in any group (not verified, see Finding E). Removing a row does not touch `shift_assignments`,
+  membership in any group (verified by reading the code on 2026-10-29, see
+  Finding E). Removing a row does not touch `shift_assignments`,
   so the person stays on future shifts (and, once 5d is built, a training
   row stays but is inert). Ask etjenesten or Morten whether that is the
   intended practice at Samfunnet.
 - Stjerne has no weekend shifts, so check that templates and the generator
   match that when the first templates are entered. Weekend days are a per-bar
   setting (Grøndahls: Friday and Saturday).
+
+## Notes for etjenesten (not sent)
+
+Not sent. Morten will send a longer message later. Keep this list current.
+
+- Any Gruppeadmin can add, edit and delete group membership in any group;
+  nothing checks which group the person administers. Paths: add, edit and
+  delete role assignment on the group page and on the volunteer page, group
+  history delete, semester transfer.
+- Semester transfer also does not check that the verv belongs to the group.
+- Any Gruppeadmin can re-parent or deactivate any group. Group scope follows
+  the parent tree, so this widens their own scope.
+- Any Gruppeadmin can create, rename and delete verv in any group.
+- Any Gruppeadmin can delete any volunteer, including memberships, shift rows
+  and qualifications.
+- Application approval is limited to the applicant's own group choices, but
+  the approver's group is not checked.
+- `group_admin_memberships` can be changed by Admin only, so it is not
+  affected.
+- Found by reading the code on 2026-10-29; not tested by running it.
+- Fix direction: check the actor's group scope (their groups plus subgroups)
+  in each of these services; make re-parenting and deactivating Admin only, or
+  require both old and new parent in scope.
+- Why it matters for Skiftlista: qualifications and the leader pool depend on
+  active membership, so this must be fixed or accepted before the pilot.
+- Other questions for etjenesten are listed under "Not code, but on the
+  critical path" (verv names, Slack versus email, Crescat, OTA, hosting).
