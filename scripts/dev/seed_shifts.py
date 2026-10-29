@@ -151,15 +151,18 @@ def _span(day: date, start: time, end: time) -> tuple[datetime, datetime]:
 
 def qualifications_for(group: str, role: str) -> list[tuple[str, str, bool]]:
     """(qualification, status, takes_trainees) rows a fake person gets from group and verv."""
+    if group == KITCHEN:
+        # Kitchen members are never given skjenker; any verv but Opplæring gives kokk.
+        if role == "Opplæring":
+            return [("kokk", "training", False)]
+        return [("kokk", "approved", True)]
     if role == "Skiftleder":
         return [("skiftleder", "approved", True), ("skjenker", "approved", False)]
     if role == "Kokk":
         return [("kokk", "approved", True)]
     if role == "Opplæring":
-        return [("kokk" if group == KITCHEN else "skjenker", "training", False)]
-    if group != KITCHEN:
-        return [("skjenker", "approved", False)]
-    return []
+        return [("skjenker", "training", False)]
+    return [("skjenker", "approved", False)]
 
 
 async def add_qualifications(

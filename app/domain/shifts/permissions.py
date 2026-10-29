@@ -137,14 +137,18 @@ def person_area(
     """The groups whose places a person may take, qualifications permitting.
 
     The participating groups they are an active member of, plus the
-    participating siblings of those (the pool's sibling rule), plus the
-    participating groups below them.
+    participating siblings of those (the pool's sibling rule), plus their
+    participating direct children (not deeper levels).
     """
     members = frozenset(member_group_ids) & participating
     area = set(members)
     for group_id in members:
         area |= participating_siblings(group_id, participating, parent_by_group)
-    area |= with_subgroups(members, parent_by_group) & participating
+    area |= {
+        group_id
+        for group_id in participating
+        if parent_by_group.get(group_id) in members
+    }
     return frozenset(area)
 
 

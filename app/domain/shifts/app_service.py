@@ -85,7 +85,7 @@ from app.domain.shifts.app_rules import (
 )
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.models import AssignedPerson, ShiftRecord, SlotRecord
-from app.domain.shifts.permissions import participating_groups, with_subgroups
+from app.domain.shifts.permissions import participating_groups
 from app.domain.shifts.planning import (
     MONTHS_NO,
     EligibilityContext,
@@ -657,13 +657,15 @@ class ShiftsAppService:
         participating = participating_groups(
             await self.repository.list_direct_participating_group_ids(), parents
         )
-        # A role in a participating group counts in every group with templates at
-        # or below it (a parent-only member gets each bar below). Siblings stay out.
+        # A role in a participating group counts in the group itself and in its
+        # direct children with templates (a parent-only member gets each bar
+        # directly below). Deeper levels and siblings stay out.
         roles_by_group: dict[int, set[str]] = {}
         for group_id, role_name in role_rows:
             if group_id not in participating:
                 continue
-            for target in with_subgroups([group_id], parents) & group_names.keys():
+            children = {child for child, parent in parents.items() if parent == group_id}
+            for target in ({group_id} | children) & group_names.keys():
                 roles = roles_by_group.setdefault(target, set())
                 if role_name:
                     roles.add(role_name)

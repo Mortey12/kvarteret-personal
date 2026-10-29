@@ -1065,6 +1065,51 @@ async def test_a_member_of_the_parent_group_only_gets_every_bar_below(world: Wor
     assert {g.group_id: g.is_member for g in sander.groups} == {STJERNE: True, HALVTIMEN: False}
 
 
+GRANDPARENT, GRANDPARENT_ONLY = 5, 17
+
+
+async def test_a_member_of_a_grandparent_group_gets_no_bar_and_no_skjenke_audience(world: World) -> None:
+    await _add_parent_group(world)
+    session = world.session
+    await session.execute(
+        insert(groups).values(id=GRANDPARENT, slug="rot", name="Rot", is_active=True, active_through_semester=20992)
+    )
+    await session.execute(update(groups).where(groups.c.id == PARENT).values(parent_group_id=GRANDPARENT))
+    await session.execute(
+        insert(volunteer_records).values(
+            id=GRANDPARENT_ONLY, first_name="Gro", last_name="Grand", birth_date=date(1998, 4, 4), gender="A",
+            created_at=world.clock.now,
+        )
+    )
+    await session.execute(insert(assignment_roles).values(id=10, group_id=GRANDPARENT, name="Medlem", penguin_points=1))
+    await session.execute(
+        insert(role_assignments).values(
+            volunteer_id=GRANDPARENT_ONLY, group_id=GRANDPARENT, role_id=10, semester=SEMESTER, contract_signed=True
+        )
+    )
+
+    config = await world.service.get_config(GRANDPARENT_ONLY)
+    assert config.audience != "skjenke"
+    assert not any(g.is_member for g in config.groups)
+
+    # In the same three-level tree, a member of the direct parent still gets the bars below it.
+    await session.execute(
+        insert(volunteer_records).values(
+            id=PARENT_ONLY, first_name="Pia", last_name="Parent", birth_date=date(1998, 4, 4), gender="A",
+            created_at=world.clock.now,
+        )
+    )
+    await session.execute(insert(assignment_roles).values(id=9, group_id=PARENT, name="Medlem", penguin_points=1))
+    await session.execute(
+        insert(role_assignments).values(
+            volunteer_id=PARENT_ONLY, group_id=PARENT, role_id=9, semester=SEMESTER, contract_signed=True
+        )
+    )
+    direct = await world.service.get_config(PARENT_ONLY)
+    assert direct.audience == "skjenke"
+    assert {g.group_id for g in direct.groups if g.is_member} == {STJERNE, HALVTIMEN}
+
+
 async def test_a_visitor_on_a_skiftleder_place_is_not_told_they_are_a_skiftleder_of_that_bar(world: World) -> None:
     await _add_parent_group(world)
     await world.session.execute(

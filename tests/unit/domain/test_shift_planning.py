@@ -194,13 +194,25 @@ def test_placement_problem_case_table(kind, group, members, rows, open_for_samf,
     assert _problem(kind, group, members, rows, open_for_samf=open_for_samf, switch=switch) == expected
 
 
-def test_area_is_members_siblings_and_groups_below() -> None:
+def test_area_is_members_siblings_and_direct_children() -> None:
     from app.domain.shifts.permissions import person_area
 
     assert person_area([7], PARTICIPATING, PARENTS) == {7, 8, 9, 10}
     assert person_area([1], PARTICIPATING, PARENTS) == {1, 7, 8, 9, 10}
     assert person_area([21], PARTICIPATING, PARENTS) == frozenset()
     assert person_area([], PARTICIPATING, PARENTS) == frozenset()
+
+
+def test_area_covers_direct_children_only_not_deeper_levels() -> None:
+    from app.domain.shifts.permissions import person_area
+
+    # 30 (root) -> 1 (Skjenke) -> 7, 8 (bars)
+    parents = {30: None, 1: 30, 7: 1, 8: 1}
+    participating = frozenset({30, 1, 7, 8})
+
+    assert person_area([30], participating, parents) == {30, 1}
+    assert person_area([1], participating, parents) == {1, 7, 8}
+    assert person_area([7], participating, parents) == {7, 8}
 
 
 def test_halvtimen_age_is_checked_by_the_caller_after_the_rule() -> None:
