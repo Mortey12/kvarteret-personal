@@ -8,23 +8,25 @@ the codebase again.
 
 Update by hand at the end of every session. Last updated 2026-10-29.
 
-- **State:** branch `skiftlista/skiftplan` at `94d5107`, pushed to the fork.
-  5d step 1 at `ca64766`, step 2 Part 1 at `e54cadb` (eligibility from
-  qualifications), Part 2 at `94d5107` (seeds, semester clock, parent members,
-  texts, tests). Both parts passed ruff, lint-imports, pytest (1063 passed)
-  and the openapi check. The hosted demo (skiftlista-demo.onrender.com) is
+- **State:** branch `skiftlista/skiftplan` at `fe4acbc`, pushed to the fork.
+  5d step 1 at `ca64766`, step 2 at `e54cadb` and `94d5107` (eligibility from
+  qualifications; seeds, semester clock, parent members, texts, tests), verv
+  copy script at `fe4acbc`. The hosted demo (skiftlista-demo.onrender.com) is
   still at the merge of `961a0e4`: it has 5a (Ønsker line) and the cleanup,
-  not 5d. Migration A is not on Neon. Do not merge skiftplan into demo before
-  running `alembic upgrade head` on Neon through the direct endpoint.
-- **Next action:** (1) read-only Opus review of migration A together with all
-  of 5d step 2; it must also check the Part 2 items: the parent-member
-  expansion in the app, the seeds on Postgres and whether they look up a group
-  by the Skjenke slug or name, and a test line deleted with `sed -i` in
-  `tests/unit/domain/test_shift_app_service.py`. (2) 4d-plus. (3) 5d step 3.
+  not 5d. Migration A is schema only and has not run on Neon. The copy script
+  has only run in tests. Do not merge skiftplan into demo before following
+  "Demo update runbook".
+- **Next action:** (1) update the hosted demo following the section "Demo
+  update runbook"; (2) 4d-plus; (3) 5d step 3.
 - **Parked, waiting for etjenesten:** OTA publishing (blocks the store
-  build); real verv names (block running migration A on real data); Findings
-  A, C and E and hosting limits (block the official pilot, not the build);
-  Slack versus email (decides step 8 notifications); Crescat (event drafts).
+  build); real verv names (block running the copy script on real data);
+  Findings A, C and E and hosting limits (block the official pilot, not the
+  build); Slack versus email (decides step 8 notifications); Crescat (event
+  drafts).
+- **Parked, running the copy script on real data** needs, in this order:
+  templates or settings rows for the bars and the kitchen; the real verv names
+  from etjenesten; an answer from Samfunnet's privacy person; a read-only Opus
+  review of the script; a dry run first.
 - **Can proceed without etjenesten:** all of 5d, 4d-plus, 5a2, 5b and the
   server side of 4c, all against fake data.
 - **Rules for Claude Code prompts:** start with "Read
@@ -36,7 +38,8 @@ Update by hand at the end of every session. Last updated 2026-10-29.
   `eas update` or `eas build`; no real names in data or docs; no em dashes;
   end with a plain report and the exact list of changed files. Commit
   messages end with `Co-Authored-By: Claude <model> <noreply@anthropic.com>`
-  and `Claude-Session: <ID from /status>`. Test environment:
+  and `Claude-Session: <ID from /status>`. Claude Code ends every report with
+  `Claude-Session: <id>` (set in Morten's `~/.claude/CLAUDE.md`). Test environment:
   `export KVARERET_DISABLE_DOTENV=1 APP_ENV=test DATABASE_URL=sqlite+aiosqlite:////tmp/kvp-tests.db`,
   then `uv run ruff check . && uv run lint-imports && uv run pytest && uv run python scripts/export_openapi.py --check`.
   Opus reviews only where needed, to save credits: before something touches
@@ -121,8 +124,11 @@ Also fixed: dev seed produced semester code `20253` (now
   (`role_assignments` + `assignment_roles`, this semester) are still read for
   the app's audience, tabs, wishes, samf counting, `in_training` and the
   Pensjonist quota. Verv names used: `Skiftleder`, `Opplæring`, `Kokk`,
-  `Pensjonist`; migration A reads the first three once. Real qualifications
-  still need that migration before the pilot. Subgroups use
+  `Pensjonist`; the copy script reads the Skiftleder and Opplæring verv once
+  (kokk comes from kitchen membership; Pensjonist is read by the quota, not
+  the script). Real
+  qualifications still need that script to run before the pilot (migration A
+  is schema only). Subgroups use
   `groups.parent_group_id`. Course requirements per group already exist in
   `group_course_requirements`, but that table is display-only (courses
   module) and Skiftlista does not use it: the course checks use `COURSE_RULES`
@@ -135,13 +141,14 @@ Also fixed: dev seed produced semester code `20253` (now
 
 - **Eligibility** (5d step 2, built 2026-10-29; see "Qualifications"): comes
   from `volunteer_qualifications` rows and the person's area (member groups,
-  their participating siblings, and the participating groups below them), not
-  from verv. Restricted kinds are skiftleder, kokk and opplaering (opplaering
-  until step 3). Refusal texts are "Kun for medlemmer av gruppa", "Kun for
+  their participating siblings, and the participating direct children of a
+  member group; decided 2026-10-29), not from verv. Restricted kinds are
+  skiftleder, kokk and opplaering (opplaering until step 3). Refusal texts are
+  "Kun for medlemmer av gruppa", "Kun for
   godkjente skiftledere / skjenkere / kokker" and "I opplæring: bruk
   opplæringsplassen". Verv is still read for the app's audience, tabs, wishes
-  and samf counting (role rows in participating groups, expanded to template
-  groups at or below them), for `in_training` (`TRAINEE_ROLE`, until 5d step 6)
+  and samf counting (role rows in participating groups, expanded to their
+  participating direct children), for `in_training` (`TRAINEE_ROLE`, until 5d step 6)
   and for the Pensjonist quota.
 - Opplæring **takes a regular crew place** by default
   (`training_replaces_slot`); per shift it can be "i tillegg". (To be removed:
@@ -259,6 +266,36 @@ Leader side: log in to Personal as the dev admin and open `/shifts`. Halvtimen
 is switched on for the demo (it is not in the request list, but the "20+" block
 only shows when Halvtimen is visible in the app).
 
+## Demo update runbook
+
+Decided 2026-10-29. How to bring the hosted demo from the merge of `961a0e4`
+to the skiftplan branch. Migration A is schema only, so the old demo code keeps
+working on the new schema until the merge is deployed.
+
+1. Check the demo database revision: `uv run alembic current` with
+   `DATABASE_URL` set to the Neon direct endpoint (`ssl=require`). Expected
+   `20261031_1200` (not verified).
+2. Create a Neon branch of the demo database as the rollback; note its name.
+3. From the skiftplan checkout: `uv run alembic upgrade head` on the direct
+   endpoint. Schema only; the old demo code keeps working on the new schema.
+4. Optional Postgres test of the copy script: run it as a dry run only (no
+   `--apply`) against the demo database. It writes nothing.
+5. Merge `skiftlista/skiftplan` into `skiftlista/demo` locally and resolve the
+   two conflicts (see H1 under "Migration A and step 2 review"). Run the
+   checks. Commit. Do not push yet.
+6. From the merged checkout: `DEMO_SEED_CONFIRM=<exact host in DATABASE_URL>
+   uv run python scripts/dev/seed_demo.py`. Required: it writes the
+   qualification rows; without it the demo people have no bar places.
+7. Check: `SELECT qualification, status, count(*) FROM
+   volunteer_qualifications GROUP BY 1,2;` and that `shift_group_settings` has
+   no row for Skjenkegruppen.
+8. Push `skiftlista/demo` to the fork; Render deploys it (assumed
+   auto-deploy; Render never migrates).
+9. Check `/health`, the board as the demo leader, and the app logins in the
+   "Demo for a meeting" table.
+10. Rollback: use the Neon branch and revert the demo merge. Avoid
+    `alembic downgrade` (it drops the qualification rows).
+
 ## Decisions already made (do not re-ask)
 
 - Quota and requirements (from the demo meeting with the bar leaders, incl.
@@ -317,17 +354,19 @@ only shows when Halvtimen is visible in the app).
   Skjenkeleder, etc.); board members usually take shifts. Verv only says what
   job someone has this semester. Approval in 5d creates the qualification.
   Being in training is a training row a leader starts (not the Opplæring
-  verv, which the migration reads once). The old verv rule in `planning.py`
-  is replaced by this (step 2), and existing Skiftleder, Kokk and Opplæring
-  verv (this and the previous semester) need a one-time migration into
-  qualifications **before the pilot**.
+  verv, which the copy script reads once). The old verv rule in `planning.py`
+  is replaced by this (step 2), and existing verv need a one-time copy into
+  qualifications **before the pilot**, by
+  `scripts/shifts/copy_verv_to_qualifications.py` (see "Migration" under 5d;
+  decided 2026-10-29).
   - **Where qualifications are valid** (decided 2026-10-29; replaces "active
     member of the shift's group" for crew places). The person must have the
     shift's group in their **area** (decided 2026-10-29). A person's area is
     (a) the participating groups they are an active member of this semester,
     plus (b) the participating siblings of those groups (same parent, the same
-    rule as the leader pool), plus (c) the participating groups below those
-    member groups. Reason: the Skjenkeleder, and some board members, are
+    rule as the leader pool), plus (c) the participating direct children of
+    those member groups (decided 2026-10-29: a group above Skjenkegruppen
+    covers nothing). Reason: the Skjenkeleder, and some board members, are
     registered only in Skjenkegruppen and must still be able to take bar
     places. Unchanged: kokk places still need an approved kokk row for the
     kitchen group, so the widening gives nobody a kokk place; training still
@@ -361,8 +400,11 @@ only shows when Halvtimen is visible in the app).
   - **"Start opplæring"** is explicit (decided): the same people (Gruppeadmin
     of the bar, the Skjenke Gruppeadmin, Admin) start it, for one or several
     people at once. Nobody is in training automatically.
-  - **Migrated skiftledere and kokker** get "tar opplæring" on (decided);
-    leaders untick the exceptions.
+  - **"Tar opplæring" on copied rows** (decided 2026-10-29; replaces "Migrated
+    skiftledere and kokker get tar opplæring on"): on for a skiftleder or kokk
+    row if the role was held in the current or previous semester, off for
+    returning people; leaders adjust. The kitchen has no skiftleder; chefs
+    differ only by "tar opplæring" (willing to teach new chefs or not).
   - **The skiftleder seeing trainees in the app**: later (decided), not
     needed in the store build.
 - **Skjenkekurs is not a course.** Skjenke members are trained through
@@ -796,9 +838,9 @@ Known gaps, deliberately left to later steps:
      approved; decides who manages the row, and where a skiftleder or kokk
      row is valid), `training_target` (copied from the bar's setting when
      training starts; null for "Godkjenn direkte" and migrated rows),
-     `takes_trainees` ("tar opplæring", used for skiftleder and kokk; on for
-     migrated rows, chosen by the leader otherwise), `approved_by` (auth
-     user, null for migrated rows), `approved_at`, `created_at`; unique
+     `takes_trainees` ("tar opplæring", used for skiftleder and kokk; set by
+     the copy script for copied rows, see "Migration"; chosen by the leader
+     otherwise), `approved_by` (auth user, null for copied rows), `approved_at`, `created_at`; unique
      (volunteer, qualification, group), so a skiftleder in two bars has two
      rows. New columns: `shift_assignments.training_for` (null, or the
      qualification trained for on that shift; this is the per-assignment
@@ -823,7 +865,8 @@ Known gaps, deliberately left to later steps:
      groups (any verv this semester, participating groups only), their
      `area` (decided 2026-10-29: those groups, plus their participating
      siblings, the same sibling rule as `pool_group_ids`, plus the
-     participating groups below those member groups), and their qualification
+     participating direct children of those member groups, decided
+     2026-10-29), and their qualification
      rows as
      (qualification, status, group). It returns the problem plus
      `training_for`. Needed: skiftleder for skiftleder, kokk for kokk,
@@ -891,21 +934,40 @@ Known gaps, deliberately left to later steps:
      (`volunteer_qualifications`, `shift_assignments.training_for`,
      `shift_group_settings.training_shifts_needed` and
      `sibling_skiftleder_allowed`); give both `training_replaces_slot` columns
-     a server default so the new code can insert before B; copy verv from the
-     current and previous semester only (decided; returning people from older
-     semesters get "Godkjenn direkte" from a leader) in groups with templates
-     or a settings row:
-     Skiftleder to skiftleder (in that group) and skjenker approved, Kokk to
-     kokk approved (in that group), both with "tar opplæring" on so leaders
-     untick the exceptions; Opplæring to a training row in that group (kokk
-     in a group whose templates have kokk and no bar places, else skjenker);
-     any other verv or none to skjenker approved. A skjenker row is kept once
-     per person (first group wins); skiftleder and kokk rows are kept per
-     group. The verv names the migration reads (Skiftleder, Kokk, Opplæring)
-     live in one constant, and the migration prints every verv name it did
-     not recognise, so a run on real data shows misses instead of silently
-     giving people no qualification. A prints a check list (every Opplæring
-     person, Kjøkken members without Kokk, people in several groups).
+     a server default so the new code can insert before B. **Migration A is
+     schema only** (decided 2026-10-29; it no longer copies verv, because that
+     copy would have written nothing on real data). **The verv copy** is
+     `scripts/shifts/copy_verv_to_qualifications.py` (decided 2026-10-29),
+     run deliberately after the bars and the kitchen have templates or
+     settings rows. It is a dry run by default: it prints a summary, the
+     unrecognised verv names with counts, and check lists with volunteer ids
+     only. `--apply` writes in one transaction and needs `COPY_CONFIRM` equal
+     to the host in `DATABASE_URL`; running it again adds nothing. A bar is a
+     participating group with skjenker or bartender places in its templates;
+     the kitchen has kokk places and no bar places; inactive groups are
+     ignored. Rules, from all semesters:
+     - skjenker approved for anyone who ever held a role in a bar with a verv
+       other than Opplæring (or none), as one row on the bar of their most
+       recent such semester, never on a parent group;
+     - skiftleder approved per bar for anyone who ever held the Skiftleder
+       verv there;
+     - kokk approved in the kitchen for anyone who was ever a kitchen member
+       with a verv other than Opplæring;
+     - training rows only from an Opplæring verv in the current semester
+       (kokk in the kitchen, skjenker in a bar), dropped when the person is
+       already approved;
+     - roles in groups that are not bars or the kitchen give nothing;
+     - "tar opplæring" on skiftleder and kokk rows: on if the role was held in
+       the current or previous semester, off for returning people; leaders
+       adjust (this replaces "Migrated skiftledere and kokker get tar
+       opplæring on").
+
+     Check lists: training rows, returning people with skiftleder or kokk
+     rows, people in several bars (current semester), and people whose only
+     current role is in a non-bar ancestor and who got no row (they need
+     "Godkjenn direkte"). The recognised verv names live in one constant. The
+     kitchen has no skiftleder; chefs differ only by "tar opplæring" (willing
+     to teach new chefs or not).
      **The opplaering move (step 3), its own revision** that runs together
      with the code that stops using `opplaering`: move each assignment in an
      `opplaering` slot to the shift's crew place (kokk in the kitchen; create
@@ -915,10 +977,12 @@ Known gaps, deliberately left to later steps:
      it off; delete all `opplaering` slots. **B (after step 3 is live):**
      drop both `training_replaces_slot` columns. Run on Neon through the direct
      endpoint, after taking a Neon branch as the rollback. Tests build SQLite
-     from `tables.py` with `create_all`, never from migrations, so keep the
-     verv mapping a small pure function in the migration file with a unit
-     test, and test the upgrade on Postgres e2e. Downgrade is schema only and
-     lossy (no `opplaering` slots come back).
+     from `tables.py` with `create_all`, never from migrations, so test the
+     upgrades on Postgres e2e. The verv mapping now lives in the copy script,
+     which has its own tests (the Postgres e2e tests for the script have not
+     been run yet). The downgrade of the opplaering move revision (step 3) is
+     schema only and lossy (no `opplaering` slots come back); downgrading A
+     also drops the qualification rows.
    - **App API.** Shapes stay, values change: `slot_kinds` drops
      `opplaering`; `groups[].in_training`, `training_done`, `training_needed`
      come from the qualification rows; new optional `groups[].training_text`
@@ -935,33 +999,43 @@ Known gaps, deliberately left to later steps:
      build.
    - **Build steps** (each with its own tests; update seeds and tests where a
      step breaks them):
-     1. **Done (2026-10-29).** Tables, migration A (additive changes and the
-        verv copy only), repository reads, and the volunteer delete cleanup.
+     1. **Done (2026-10-29).** Tables, migration A (schema only), repository
+        reads, and the volunteer delete cleanup. Migration A first also copied
+        verv; that copy moved to the separate script
+        `scripts/shifts/copy_verv_to_qualifications.py` at `fe4acbc`.
         Built in `app/domain/shifts/tables.py` (`volunteer_qualifications`,
         `shift_assignments.training_for`, `training_shifts_needed`,
         `sibling_skiftleder_allowed`, server defaults on both
         `training_replaces_slot` columns), `app/db/tables.py`,
         `migrations/versions/20261101_1200_shift_qualifications.py`
-        (`map_verv`, `RECOGNISED_VERV`, the printout),
+        (schema only: the table, the columns and the server defaults),
         `app/domain/shifts/models.py` (`QualificationRecord`,
         `QualificationSettings`), `app/domain/shifts/repository.py`
         (`list_qualifications`, `list_group_qualifications`,
         `get_qualification_settings`) and
-        `app/domain/volunteers/repository.py` (delete cleanup). Tests:
-        `tests/unit/test_shift_qualifications_migration.py`, the extended
-        delete test and two repository tests in
-        `tests/unit/domain/test_shift_app_service.py`, and
-        `tests/e2e/test_shift_qualifications_migration.py` (run by Morten on a
-        throwaway Postgres database on 2026-10-29, passed). Decided while building: migration matching ignores case and
-        surrounding spaces; every verv name that is not Skiftleder, Kokk or
-        Opplæring is printed as unrecognised with a count (so ordinary names
-        like Skjenker show up too); a training row gets target 3 (the column
-        default); a training row is dropped when the person is already
-        approved for that qualification (skjenker: anywhere, kokk: in that
-        group); approved rows get `approved_at` = migration time and no
-        `approved_by`; the check list prints volunteer ids only, no names;
-        at that time nothing read the new rows or columns (step 2 now reads
-        them for eligibility). The switch is read for eligibility since step 2.
+        `app/domain/volunteers/repository.py` (delete cleanup). Tests: the
+        extended delete test and two repository tests in
+        `tests/unit/domain/test_shift_app_service.py`, and the schema-only
+        `tests/e2e/test_shift_qualifications_migration.py` (it checks that the
+        upgrade creates the schema and copies nothing; it has not been re-run
+        since the change). The old
+        `tests/unit/test_shift_qualifications_migration.py` is deleted.
+        The verv copy: the mapping is the pure function `map_verv` in
+        `scripts/shifts/copy_verv_to_qualifications.py`, as are the recognised
+        verv names (`RECOGNISED_VERV`: Skiftleder and Opplæring; Kokk is not
+        listed, since kitchen membership gives kokk) and the printout
+        (`format_report`: summary, unrecognised verv names with counts, and
+        check lists with volunteer ids only, no names). Matching ignores case
+        and surrounding spaces; every other verv name is printed as
+        unrecognised. A training row gets the group's `training_shifts_needed`
+        as target (3 when it has no settings row) and is dropped when the
+        person is already approved for that qualification; approved rows get
+        `approved_at` = run time and no `approved_by`. Tests:
+        `tests/unit/test_copy_verv_to_qualifications.py` (pure mapping and
+        refusal rules) and `tests/e2e/test_copy_verv_to_qualifications.py`
+        (Postgres: dry run, apply, second apply adds nothing, apply refused
+        without confirmation; not run yet). Step 2 now reads the new rows and
+        columns for eligibility. The switch is read for eligibility since step 2.
         Still to do: the `/shifts/settings` control and `save_group_settings`,
         built with 5d step 4. Until then the switch can only be changed in the
         database.
@@ -990,7 +1064,7 @@ Known gaps, deliberately left to later steps:
           siblings.
         - Garderobe: anyone with the shift's group in their area.
         - A person with both an approved row and a training row: the approved
-          row wins, as migration A already assumes. Edge case, not built
+          row wins, as the copy script assumes. Edge case, not built
           around: a skiftleder approved in a sibling bar who is also training
           as skiftleder in a bar with the switch on gets the approved path, so
           that training never counts.
@@ -1008,10 +1082,10 @@ Known gaps, deliberately left to later steps:
         - Seeds are part of step 2: `seed_shifts.py` and `seed_demo.py` must
           write `volunteer_qualifications` rows for the fake people (including
           the demo logins listed in "Demo for a meeting"), because
-          `bootstrap.py` runs migrations before seeding, so migration A copies
-          nothing. Without this every dev and demo person loses all restricted
-          and bar places after step 2. Migration A must not be the source of
-          demo rows.
+          `bootstrap.py` runs migrations before seeding, so nothing is copied
+          (migration A is now schema only). Without this every dev and demo
+          person loses all restricted and bar places after step 2. Neither
+          migration A nor the copy script is the source of demo rows.
         - Extra tests for step 2, in addition to the case table: bartender
           with an approved skjenker row; garderobe in and out of area; an
           opplaering place needs a training row; an open or "kan ikke"
@@ -1051,8 +1125,10 @@ Known gaps, deliberately left to later steps:
         - A skjenker trainee is still refused open or "kan ikke" places in
           their own group. Step 3 lifts this.
         - Parent-only members: in the app, a role row in a participating group
-          counts as membership of every group with templates at or below it;
-          siblings are excluded. Result: Skjenke audience, the bars below in
+          counts as membership of its participating direct children (decided
+          2026-10-29; first built as every group with templates at or below
+          it); siblings are excluded, and a group above Skjenkegruppen covers
+          nothing. Result: Skjenke audience, the bars below in
           their own tab, wishes, weekly rule, not counted as
           samfunnettjeneste, no barkurs. Accepted side effects: a Pensjonist
           or Opplæring verv on the parent applies to every bar below
@@ -1232,6 +1308,30 @@ Known gaps, deliberately left to later steps:
 - **Finding B:** `?notice=` and `?error=` text in URLs. Low priority.
 - Mobile login session handling was not reviewed.
 
+### Migration A and step 2 review (2026-10-29)
+
+A read-only Opus review of migration A and step 2. Results:
+
+- **B1:** the copy in migration A would write nothing on real data. Fixed by
+  the separate script.
+- **B2:** groups above Skjenkegruppen became Skjenke members. Fixed: direct
+  children only.
+- **M1:** a skjenker row could land on the parent. Fixed: always on a bar.
+- **M2:** parent-only members got no row. Now they get rows from their bar
+  history; anyone without bar history is in the check list for "Godkjenn
+  direkte" (5d step 4).
+- **M3:** kitchen members without Kokk. Resolved: kitchen membership gives
+  kokk, never skjenker.
+- **H1:** merging skiftplan into demo conflicts in `scripts/dev/seed_demo.py`
+  and `tests/unit/test_seed_demo.py`. Keep both imports, both summary lines
+  and both keys in the `again == {...}` dict.
+- **L1 (low):** inactive groups are ignored, but inactive templates still
+  count as evidence of a bar or kitchen.
+- **L2:** the old migration copy tests are replaced; the Postgres e2e tests
+  for the script have not been run yet.
+- **L3 (low):** wishes from parent-only members are not visible to bar
+  leaders, only to the Skjenke Gruppeadmin and Admin.
+
 ## Pre-existing issues, not step 2
 
 Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
@@ -1247,6 +1347,9 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
   could be limited to the shown people.
 - Low: the `allowed_tokens` agreement test is close to circular, because
   `allowed_tokens` calls `placement_problem`.
+- Low: the copy script lists ordinary verv names (Kokk, Skjenker) as
+  "unrecognised", meaning no special rule. A group with only a settings row
+  and no templates gives no rows.
 
 ## Not code, but on the critical path
 
@@ -1257,8 +1360,9 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
 - Review by etjenesten (show the prototype and this branch).
 - Real data in Personal: is Stjerne etc. already a subgroup of
   Skjenkegruppen? Skiftleder, Kokk and Opplæring verv set per person for this
-  and the previous semester, so the 5d migration can read them? After the
-  migration, leaders check its list and untick "tar opplæring" where needed.
+  and the previous semester, so the 5d copy script can read them? After the
+  script has run, leaders check its lists and adjust "tar opplæring" where
+  needed.
   Templates.
 - Test with a few Stjerne people, then App Store / Play review.
 - Ask etjenesten to check that Skiftlista fits the current plan: email volume
@@ -1267,7 +1371,7 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
   Samfunnet pays for hosting.
 - More questions for etjenesten: the distinct verv names
   (`assignment_roles.name`) used in production, names only, so the 5d
-  migration maps them correctly (no migration or seed in this repo holds the
+  copy script maps them correctly (no migration or seed in this repo holds the
   real list); and whether notifications should go to Slack instead of, or
   as well as, email, since leaders mostly use Slack.
 - For Samfunnet's privacy person: is it fine to keep qualifications
@@ -1275,7 +1379,8 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
   longer active? Verv history is already kept for every semester because
   pingvinpoeng are summed over all of it, and qualifications currently last
   forever, with no automatic deletion; only deleting the volunteer removes
-  them.
+  them. The copy script now reads all semesters, so it creates rows for many
+  former members.
 - Questions for etjenesten about Crescat: is there a read API for events
   (title, room, start/end, status)? How is access authenticated and who issues
   a read-only key? Rate limits? Can we match on `booking_request_id`? Goal:
