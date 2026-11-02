@@ -1,0 +1,40 @@
+{% extends "layouts/base.html" %}
+{% from "components/shared/ui_macros.html" import flash_notice %}
+
+{% block page_content %}
+  <section class="week-page grid gap-3">
+    {% if page.plan %}{% include "pages/shifts/_week_banners.html" %}{% endif %}
+
+    <div class="noprint flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
+      <h1 class="text-2xl font-medium tracking-tight text-stone-900">Skiftplan</h1>
+      <p class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+        <a href="/shifts{% if view %}?week={{ view.week_start.isoformat() }}&amp;group={{ view.bar_id }}{% endif %}" data-old-board-link>Gammel skiftplan</a>
+        {% if not no_groups %}
+          <a href="/shifts/settings">Innstillinger og stengte perioder</a>
+          <a href="/shifts/templates">Maler</a>
+          <a href="/shifts/generate">Lag skift for semesteret</a>
+        {% endif %}
+      </p>
+    </div>
+    <div class="noprint">
+      {{ flash_notice(notice, 'success', 'mb-0') }}
+      {{ flash_notice(error, 'error', 'mb-0') }}
+    </div>
+
+    {% if view %}
+      {% include "pages/shifts/_week_topline.html" %}
+      {% include "pages/shifts/_week_bar.html" %}
+      <div class="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_19rem]">
+        {% include "pages/shifts/_week_grid.html" %}
+        {% include "pages/shifts/_week_people.html" %}
+      </div>
+      {% include "pages/shifts/_week_strip.html" %}
+      <script type="application/json" id="week-data">{{ view.data | tojson }}</script>
+      <script defer src="{{ asset_url('js/shift-week.js') }}"></script>
+    {% else %}
+      <div class="app-panel py-10 text-center text-sm text-stone-700">
+        {% if no_groups %}Du er ikke gruppeadmin for noen grupper med skift. Be en administrator om tilgang.{% else %}Ingen barer med skift ennå.{% endif %}
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

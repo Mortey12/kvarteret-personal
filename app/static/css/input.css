@@ -329,3 +329,37 @@
   .group-combobox-option[data-active="true"] { background: #e7e5e4; }
   .group-combobox [hidden] { display: none; }
 }
+
+/* Leader week page (/shifts/week). Colours checked for WCAG 2.1 AA contrast. */
+@layer components {
+  .week-page :where(a, button, summary, [tabindex="0"]):focus-visible { outline: 3px solid var(--color-kvarteret-ink); outline-offset: 2px; }
+  /* The shared red button has 3.2:1 cream text; on this page the ink text gives 5.7:1. */
+  .week-page .app-button { color: var(--color-kvarteret-ink); }
+  .week-tab { display: inline-flex; min-height: 2.75rem; align-items: center; border: 2px solid var(--color-kvarteret-ink); background: white; padding: 0 1rem; font-weight: 600; color: var(--color-kvarteret-ink); text-decoration: none; }
+  .week-tab[aria-current="page"] { background: var(--color-kvarteret-ink); color: white; }
+  .week-chip { display: inline-flex; min-height: 2rem; align-items: center; border: 1px solid #78716c; background: white; padding: .15rem .6rem; font-size: .85rem; color: var(--color-kvarteret-ink); }
+  summary.week-chip { cursor: pointer; }
+  .week-chip-red { border: 2px solid #991b1b; color: #7f1d1d; font-weight: 600; }
+  .week-chip-yellow { border: 2px solid #78350f; background: #fef3c7; color: #78350f; font-weight: 600; }
+  .week-summary { display: inline-flex; min-height: 2rem; cursor: pointer; align-items: center; border: 1px solid var(--color-kvarteret-ink); background: white; padding: .15rem .6rem; }
+  .week-popover { position: absolute; z-index: 20; margin-top: .25rem; width: max-content; min-width: 14rem; max-width: 22rem; border: 2px solid var(--color-kvarteret-ink); background: white; padding: .5rem .75rem; box-shadow: 0 8px 16px #0002; }
+  .week-place { border: 1.5px solid var(--color-kvarteret-ink); background: white; padding: .15rem .4rem; min-height: 2.75rem; }
+  .week-place-open { border: 1.5px dashed #78716c; background: transparent; }
+  .week-place-red { border: 2px solid #991b1b; background: #fef2f2; }
+  .week-place-yellow { border: 2px solid #78350f; background: #fffbeb; }
+  .week-strip-item { display: inline-flex; min-height: 2.25rem; align-items: center; gap: .4rem; border: 1px solid #78716c; background: white; padding: .2rem .7rem; text-decoration: none; color: var(--color-kvarteret-ink); }
+  .week-strip-item[aria-current="page"] { border: 3px solid var(--color-kvarteret-ink); }
+  .week-strip-item[data-status="published"] { background: #ecfdf3; }
+  .week-print-title { display: none; }
+}
+
+/* Print the week grid only: everything else is marked noprint, and the page shell is hidden. */
+@media print {
+  .noprint { display: none !important; }
+  body:has(.week-print) header, body:has(.week-print) footer { display: none !important; }
+  body:has(.week-print) main { max-width: none; padding: 0; }
+  .week-print { border: 0; overflow: visible; }
+  .week-print-title { display: block; margin: 0 0 .5rem; font-size: 1.1rem; font-weight: 600; }
+  .week-print table { min-width: 0; font-size: 9pt; }
+  .week-print .week-place { break-inside: avoid; background: white; }
+}

@@ -7,7 +7,7 @@ is a 400 with the reason in ``detail``, which the board shows as is.
 from __future__ import annotations
 
 from datetime import date
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 
@@ -224,6 +224,41 @@ async def shift_settings_save(
     return redirect_to(_back("/shifts/settings", notice=message))
 
 
+BOARD_PATH = "/shifts"
+
+
+def safe_return_path(value: str | None) -> str:
+    """A relative path inside /shifts (query allowed), else the board.
+
+    No scheme, no host, no "//" at the start, no backslash, no control characters and no ".."
+    segments. ``/shifts`` and ``/shifts/...`` only, so ``/shiftsfoo`` is refused.
+    """
+    if not value or "\\" in value or value.startswith("//") or any(ord(c) < 32 or c == "\x7f" for c in value):
+        return BOARD_PATH
+    parts = urlsplit(value)
+    if parts.scheme or parts.netloc or parts.fragment:
+        return BOARD_PATH
+    path = parts.path
+    if path != BOARD_PATH and not path.startswith(BOARD_PATH + "/"):
+        return BOARD_PATH
+    if ".." in path.split("/"):
+        return BOARD_PATH
+    return f"{path}?{parts.query}" if parts.query else path
+
+
+def _status_redirect(
+    return_to: str | None, week: date, view_group: int | None, **message: str
+) -> str:
+    """Back to where the action came from. Without a valid return_to the board, as before."""
+    target = safe_return_path(return_to)
+    if target == BOARD_PATH:
+        return _back(BOARD_PATH, week=week.isoformat(), group=view_group, **message)
+    parts = urlsplit(target)
+    params = dict(parse_qsl(parts.query))
+    params.update(message)
+    return _back(parts.path, **params)
+
+
 @router.post("/shifts/weeks/status")
 async def shift_week_status_save(
     request: Request,
@@ -232,11 +267,11 @@ async def shift_week_status_save(
     new_status: str = Form(..., alias="status"),
     whole_month: bool = Form(False),
     view_group: int | None = Form(None),
+    return_to: str = Form(""),
     current_user=Depends(require_management_user),
     scope: GroupScope = Depends(get_shift_scope),
     shifts_service: ShiftsService = Depends(get_shifts_service),
 ):
-    board = "/shifts"
     try:
         message = await shifts_service.set_week_status(
             group_id=group_id, week=week, status=new_status, whole_month=whole_month, scope=scope
@@ -246,7 +281,7 @@ async def shift_week_status_save(
     except ShiftNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ShiftPlacementError as exc:
-        return redirect_to(_back(board, week=week.isoformat(), group=view_group, error=str(exc)))
+        return redirect_to(_status_redirect(return_to, week, view_group, error=str(exc)))
     log_admin_activity(
         request=request,
         user=current_user,
@@ -255,4 +290,4 @@ async def shift_week_status_save(
         subject_id=group_id,
         details={"week": week.isoformat(), "status": new_status, "whole_month": whole_month},
     )
-    return redirect_to(_back(board, week=week.isoformat(), group=view_group, notice=message))
+    return redirect_to(_status_redirect(return_to, week, view_group, notice=message))

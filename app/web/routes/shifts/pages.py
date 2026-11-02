@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.dependencies import (
     get_shift_scope,
@@ -14,7 +14,8 @@ from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.planning import OSLO
 from app.domain.shifts.service import ShiftsService
 from app.domain.shifts.setup_service import ShiftsSetupService
-from app.domain.shifts.errors import ShiftPlacementError
+from app.domain.shifts.week_page import load_week_page
+from app.domain.shifts.errors import ShiftForbiddenError, ShiftPlacementError
 from app.domain.shifts.planning import SLOT_KINDS, WEEKDAYS_NO
 from app.shared.semester import get_current_semester_code, get_semester_end_date
 from app.errors import NotConfiguredError
@@ -64,6 +65,42 @@ async def shifts_week(
             "section": "shifts",
             "current_user": current_user,
             "plan": plan,
+            "no_groups": scope.is_empty,
+            "notice": notice,
+            "error": error,
+        },
+    )
+
+
+@router.get("/shifts/week")
+async def shifts_week_page(
+    request: Request,
+    week: str | None = None,
+    group: str | None = None,
+    notice: str | None = None,
+    error: str | None = None,
+    current_user=Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+):
+    """The leader's week page: one bar and one week, read only plus the status actions."""
+    try:
+        page = await load_week_page(
+            shifts_service, week=_parse_week(week), group_id=_parse_group(group), scope=scope
+        )
+    except ShiftForbiddenError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except NotConfiguredError:
+        raise not_configured_http_exception("Skiftplanen er ikke satt opp ennå.")
+    return templates.TemplateResponse(
+        request,
+        "pages/shifts/shift_week.html",
+        {
+            "title": "Skiftplan: uke",
+            "section": "shifts",
+            "current_user": current_user,
+            "page": page,
+            "view": page.view,
             "no_groups": scope.is_empty,
             "notice": notice,
             "error": error,
