@@ -172,6 +172,11 @@ class ShiftsAppRepository(ShiftsRepository):
             stmt = stmt.where(shifts.c.starts_at < starts_before)
         return await self._load_shifts(stmt)
 
+    async def list_shifts_by_ids(self, shift_ids: list[int]) -> list[ShiftRecord]:
+        if not shift_ids:
+            return []
+        return await self._load_shifts(_shift_select().where(shifts.c.id.in_(shift_ids)))
+
     async def lock_shift(self, shift_id: int) -> None:
         """Hold the shift row until commit so two claims cannot fill one place."""
         await self.fetch_scalar(select(shifts.c.id).where(shifts.c.id == shift_id).with_for_update())
@@ -294,6 +299,24 @@ class ShiftsAppRepository(ShiftsRepository):
                     updated_at=func.now(),
                 )
             )
+
+    async def replace_wishes(self, volunteer_id: int, answers: dict[int, str | None]) -> None:
+        """Set many answers: one delete for the shifts, one multi-row insert for the non-null answers."""
+        if not answers:
+            return
+        await self.execute(
+            delete(shift_wishes).where(
+                shift_wishes.c.volunteer_id == volunteer_id,
+                shift_wishes.c.shift_id.in_(sorted(answers)),
+            )
+        )
+        rows = [
+            {"volunteer_id": volunteer_id, "shift_id": shift_id, "answer": answer, "updated_at": func.now()}
+            for shift_id, answer in sorted(answers.items())
+            if answer is not None
+        ]
+        if rows:
+            await self.execute(insert(shift_wishes).values(rows))
 
     # ------------------------------------------------------------ courses
 

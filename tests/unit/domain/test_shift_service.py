@@ -121,6 +121,9 @@ class FakeRepository:
         self.wish_queries += 1
         return {k: v for k, v in self.wishes.items() if k[0] in shift_ids and k[1] in volunteer_ids}
 
+    async def list_answered_volunteers(self, group_ids, starts_from, starts_before) -> dict:
+        return {}
+
     async def list_rules_for(self, semesters, volunteer_ids) -> dict:
         self.wish_queries += 1
         return {k: v for k, v in self.rules.items() if k[1] in semesters and k[0] in volunteer_ids}
@@ -165,9 +168,6 @@ class FakeRepository:
     async def set_week_statuses(self, group_id: int, weeks, status: str) -> None:
         for week in weeks:
             self.week_rows[(group_id, week)] = status
-
-    async def list_shift_group_weeks(self, starts_from, starts_before, group_ids) -> set:
-        return {(7, date(2026, 11, 2))} if 7 in group_ids else set()
 
     async def list_groups_with_settings(self) -> list[dict]:
         blank = {"app_enabled": None, "samf_enabled": None, "meeting_point": None, "courses_enabled": None}
@@ -559,7 +559,10 @@ async def test_banner_for_an_unpublished_week_and_none_once_published() -> None:
     assert len(plan.banners) == 1
     banner = plan.banners[0]
     assert banner.week_start == date(2026, 11, 2) and not banner.urgent
-    assert banner.text == "Uke 45 er ikke publisert. Den blir åpen for alle mandag 2. november."
+    assert banner.text == (
+        "Uke 45 er ikke publisert. 3 plasser er ledige, og de blir åpne for alle mandag 2. november."
+    )
+    assert banner.empty_places == 3
     urgent = ShiftsService(repo, now=_clock(date(2026, 10, 30)))
     assert (await urgent.get_week_plan(date(2026, 10, 26), scope=SCOPE)).banners[0].urgent
     await service.set_week_status(
@@ -724,13 +727,8 @@ def _wish_repo() -> FakeRepository:
         ]
     )
     repo.wishes = {(1, 100): "vil", (1, 104): "nei"}
-    repo.rules = {
-        (101, 20262, 0): "kan",
-        (103, 20262, 0): "vil",
-        (100, 20262, 0): "nei",  # the shift wish beats this
-        (102, 20261, 0): "vil",  # another semester does not count
-        (103, 20262, 3): "nei",  # another weekday does not count
-    }
+    # Weekday rules are retired: the board reads shift wishes only.
+    repo.rules = {(101, 20262, 0): "kan", (102, 20262, 0): "vil"}
     return repo
 
 
@@ -740,13 +738,13 @@ async def test_board_shows_wish_counts_and_names_per_shift() -> None:
     plan = await ShiftsService(repo).get_week_plan(date(2026, 11, 2), scope=SCOPE)
     wishes = plan.days[0].venues[0].shifts[0].wishes
     assert wishes is not None
-    # Wish beats rule (100), rule is used without a wish (101, 103), the rest is not set (102).
-    assert wishes.vil == ["Sigrid Skiftleder", "Vera Vil"]
-    assert wishes.kan == ["Sander Skjenker"]
+    # Only shift wishes count; the rules in the repository are ignored.
+    assert wishes.vil == ["Sigrid Skiftleder"]
+    assert wishes.kan == []
     assert wishes.nei == ["Nora Nei"]
-    assert wishes.ikke_satt == ["Tora Trainee"]
-    # One query per table for the whole week, not one per shift.
-    assert repo.wish_queries == 2
+    assert wishes.ikke_satt == ["Sander Skjenker", "Tora Trainee", "Vera Vil"]
+    # One query for the whole week, not one per shift.
+    assert repo.wish_queries == 1
 
 
 @pytest.mark.asyncio

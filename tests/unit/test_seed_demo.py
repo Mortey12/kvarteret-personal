@@ -14,8 +14,8 @@ from app.domain.courses.tables import course_completions, courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.tables import (
-    shift_assignments,
     shift_availability_rules,
+    shift_assignments,
     shift_group_settings,
     shift_slots,
     shift_templates,
@@ -253,7 +253,6 @@ async def _counts(db) -> dict[str, int]:
     tables = {
         "volunteers": volunteer_records,
         "completions": course_completions,
-        "rules": shift_availability_rules,
         "wishes": shift_wishes,
         "assignments": shift_assignments,
         "week_status": shift_week_status,
@@ -314,8 +313,16 @@ async def test_it_adds_the_demo_data_and_is_safe_to_run_twice(session) -> None:
     assert old < semester - 20  # more than four semesters back
 
     # Answers, wishes, and the marks.
-    assert first["availability_rows"] > 50 and after_first["rules"] == first["availability_rows"]
-    assert first["wishes"] > 0
+    assert "availability_rows" not in first  # weekday rules are retired
+    assert first["wishes"] > 50 and after_first["wishes"] == first["wishes"]
+    answers = set((await session.execute(select(shift_wishes.c.answer))).scalars())
+    assert answers == {"vil", "kan", "nei"}
+    # Some members answered nothing, so "Har svart" is below 100 percent.
+    answered = set((await session.execute(select(shift_wishes.c.volunteer_id))).scalars())
+    members = set(
+        (await session.execute(select(role_assignments.c.volunteer_id).where(role_assignments.c.semester == semester))).scalars()
+    )
+    assert 0 < len(members - answered) and len(answered) > 20
     marked = (
         await session.execute(
             select(shift_assignments.c.status_message, shift_assignments.c.cannot_attend, shift_assignments.c.swap_requested)
@@ -338,7 +345,7 @@ async def test_it_adds_the_demo_data_and_is_safe_to_run_twice(session) -> None:
     assert settings["Stjerne"] == (True, True)
     assert settings["Grøndahls"] == (True, True)
     assert settings["Halvtimen"][0] is True
-    assert after_first["week_status"] >= 6  # this and next month for three groups
+    assert after_first["week_status"] >= 3  # this and next week for three groups
 
     # The demo leader for /login/demo: one Admin account, not a volunteer.
     assert first["demo_leader"] == 1
@@ -352,7 +359,6 @@ async def test_it_adds_the_demo_data_and_is_safe_to_run_twice(session) -> None:
     assert again == {
         "people": 0,
         "qualification_rows": 0,
-        "availability_rows": 0,
         "wishes": 0,
         "status_marks": 0,
         "demo_leader": 0,
@@ -422,3 +428,59 @@ async def test_the_demo_logins_get_the_qualification_rows_the_handoff_describes(
     ) == 0
     await seed_into(session, now=now)
     assert await session.scalar(select(func.count()).select_from(volunteer_qualifications)) == before
+
+
+@CHECKS
+async def test_this_and_next_week_are_published_and_later_weeks_in_the_window_are_open(session) -> None:
+    from zoneinfo import ZoneInfo
+
+    from app.domain.shifts.app_rules import effective_week_status, week_start, wish_window_end
+
+    now = datetime.now(UTC)
+    await _base(session, now)
+    today = now.astimezone(ZoneInfo("Europe/Oslo")).date()
+    monday = week_start(today)
+    mondays = []
+    while monday <= wish_window_end(today):
+        mondays.append(monday)
+        monday += timedelta(days=7)
+    current = mondays[:2]  # this week and next week
+    later = mondays[2:]
+    assert len(current) == 2 and later
+
+    # An earlier seed left explicit published rows for the later weeks; one was set to allocating by hand.
+    stjerne = await session.scalar(select(groups.c.id).where(groups.c.name == "Stjerne"))
+    for m in later:
+        await session.execute(
+            insert(shift_week_status).values(
+                group_id=stjerne, week_start=m, status="allocating" if m == later[-1] else "published"
+            )
+        )
+
+    await seed_into(session, now=now)
+    status_rows = (
+        await session.execute(
+            select(shift_week_status.c.group_id, shift_week_status.c.week_start, shift_week_status.c.status)
+        )
+    ).all()
+    stored = {(gid, week if isinstance(week, date) else week.date()): status for gid, week, status in status_rows}
+    demo_groups = (
+        await session.execute(select(groups.c.id).where(groups.c.name.in_(("Stjerne", "Grøndahls", "Halvtimen"))))
+    ).scalars().all()
+    for gid in demo_groups:
+        for m in current:
+            assert stored[(gid, m)] == "published"
+        for m in later:
+            effective = effective_week_status(stored.get((gid, m)), m, today)
+            assert effective == ("allocating" if (gid == stjerne and m == later[-1]) else "open")
+            assert stored.get((gid, m)) in (None, "allocating")  # no published row is left
+
+    # A second run changes nothing.
+    snapshot = await _counts(session)
+    again = await seed_into(session, now=now)
+    assert again["wishes"] == 0 and await _counts(session) == snapshot
+    assert (
+        await session.execute(
+            select(shift_week_status.c.group_id, shift_week_status.c.week_start, shift_week_status.c.status)
+        )
+    ).all() == status_rows

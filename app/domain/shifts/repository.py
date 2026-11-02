@@ -169,21 +169,6 @@ class ShiftsRepository(SqlAlchemyRepository):
                     )
                 )
 
-    async def list_shift_group_weeks(
-        self, starts_from: datetime, starts_before: datetime, group_ids: list[int]
-    ) -> set[tuple[int, date]]:
-        """(group id, Oslo date of the start) for shifts in the range."""
-        if not group_ids:
-            return set()
-        rows = await self.fetch_all_mappings(
-            select(shifts.c.group_id, shifts.c.starts_at).where(
-                shifts.c.starts_at >= starts_from,
-                shifts.c.starts_at < starts_before,
-                shifts.c.group_id.in_(group_ids),
-            )
-        )
-        return {(row["group_id"], _aware(row["starts_at"]).astimezone(OSLO).date()) for row in rows}
-
     async def list_shifts_between(
         self,
         starts_from: datetime,
@@ -437,6 +422,28 @@ class ShiftsRepository(SqlAlchemyRepository):
             )
         )
         return {(row["shift_id"], row["volunteer_id"]): row["answer"] for row in rows}
+
+    async def list_answered_volunteers(
+        self, group_ids: list[int], starts_from: datetime, starts_before: datetime
+    ) -> dict[int, set[int]]:
+        """Group id -> volunteers with at least one answer (any kind) on a shift of the group
+        that starts in the range. One query."""
+        if not group_ids:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(shifts.c.group_id, shift_wishes.c.volunteer_id)
+            .select_from(shift_wishes.join(shifts, shifts.c.id == shift_wishes.c.shift_id))
+            .where(
+                shifts.c.group_id.in_(group_ids),
+                shifts.c.starts_at >= starts_from,
+                shifts.c.starts_at < starts_before,
+            )
+            .distinct()
+        )
+        found: dict[int, set[int]] = {}
+        for row in rows:
+            found.setdefault(row["group_id"], set()).add(row["volunteer_id"])
+        return found
 
     async def list_rules_for(
         self, semesters: list[int], volunteer_ids: list[int]

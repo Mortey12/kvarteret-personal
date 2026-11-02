@@ -9,6 +9,7 @@ from app.dependencies import get_shifts_service, get_shifts_setup_service
 from app.domain.shifts.errors import ShiftForbiddenError, ShiftPlacementError
 from app.domain.shifts.permissions import ALL_GROUPS, NO_GROUPS, GroupScope
 from app.domain.shifts.models import (
+    AnsweredView,
     AssignedPerson,
     PlacementResult,
     PoolPerson,
@@ -51,6 +52,7 @@ class FakeShiftsService:
         self.banners: list[WeekBanner] = []
         self.can_open = True
         self.wishes: ShiftWishes | None = None
+        self.answered: list[AnsweredView] = []
 
     async def manageable_scope(self, role, auth_user_id) -> GroupScope:
         self.calls.append(("scope", role))
@@ -129,6 +131,7 @@ class FakeShiftsService:
             swap_requests=1,
             statuses=[WeekStatusView(7, "Stjerne", "open", "Åpen for ønsker", False, False, self.can_open)],
             banners=self.banners,
+            answered=self.answered,
             pool=[
                 PoolPerson(
                     volunteer_id=3,
@@ -700,6 +703,21 @@ def test_week_status_for_another_group_is_refused_and_bad_status_reports_an_erro
     assert refused.status_code == 403
 
 
+def test_board_shows_who_has_answered_with_a_list_of_the_rest() -> None:
+    client, service = _client(UserRole.GROUP_ADMIN)
+    assert "data-answered" not in client.get("/shifts").text
+
+    service.answered = [AnsweredView(7, "Stjerne", "Desember 2026", 1, 3, ["Sigrid Skiftleder", "Tora Trainee"])]
+    page = client.get("/shifts").text
+    assert "Har svart 1 av 3" in page and "Desember 2026".lower() in page
+    assert "Vis hvem (2 har ikke svart)" in page
+    assert "<li>Sigrid Skiftleder</li>" in page and "<li>Tora Trainee</li>" in page
+
+    service.answered = [AnsweredView(7, "Stjerne", "Desember 2026", 3, 3, [])]
+    page = client.get("/shifts").text
+    assert "Har svart 3 av 3" in page and "Vis hvem" not in page
+
+
 def test_banner_is_shown_for_an_unpublished_week_and_hidden_otherwise() -> None:
     client, service = _client(UserRole.GROUP_ADMIN)
     assert "data-week-banner" not in client.get("/shifts").text
@@ -710,11 +728,16 @@ def test_banner_is_shown_for_an_unpublished_week_and_hidden_otherwise() -> None:
     calm = client.get("/shifts").text
     assert "data-week-banner" in calm
     assert "Uke 49 er ikke publisert. Den blir åpen for alle mandag 30. november." in calm
-    assert "border-amber-500" not in calm
+    assert 'data-banner-level="warning"' in calm and "border-amber-500" in calm
+    assert "border-red-700" not in calm
 
     service.banners[0].urgent = True
     urgent = client.get("/shifts").text
-    assert "border-amber-500" in urgent and 'role="alert"' in urgent
+    assert 'data-banner-level="strong"' in urgent and "border-red-700" in urgent and 'role="alert"' in urgent
+    assert "border-amber-500" not in urgent
+    # Not dismissable, and above the page heading (full width, first on the page).
+    assert "dismiss" not in urgent.lower()
+    assert urgent.index("data-week-banner") < urgent.index("Skiftplan</h1>")
     assert '<input type="hidden" name="week" value="2026-11-30">' in urgent
 
 

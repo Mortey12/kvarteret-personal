@@ -2,7 +2,7 @@
 
 Adds to a database that ``seed_synthetic`` and ``seed_shifts`` have already filled:
 about 100 volunteers in total, Halvtimen members under 20, barkurs completions and a few
-expired brannkurs, weekday answers and shift wishes, a "kan ikke" and a swap request in
+expired brannkurs, per-shift answers (vil, kan, nei; some people have none), a "kan ikke" and a swap request in
 the coming two weeks, Grøndahls and Halvtimen switched on in the app (with their weeks
 published), qualification rows for the Skjenke members, a few people with verv outside
 the Skjenke groups (no rows: they only see places open for samfunnettjeneste), and the
@@ -49,7 +49,6 @@ from app.db.tables import (
     groups,
     role_assignments,
     shift_assignments,
-    shift_availability_rules,
     shift_group_settings,
     shift_slots,
     shift_week_status,
@@ -61,11 +60,11 @@ from app.db.tables import (
 from app.domain.shifts.app_rules import (
     COURSE_VALID_SEMESTERS,
     STATUS_PUBLISHED,
-    add_months,
     effective_week_status,
     semester_from_index,
     semester_index,
     week_start,
+    wish_window_end,
 )
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from seed_shifts import add_qualifications
@@ -347,33 +346,12 @@ def by_email_is_plain(vid: int, by_email: Mapping[str, int], demo: Mapping[str, 
     return all(by_email.get(email) != vid for email in demo)
 
 
-async def add_availability(session, *, semester: int, members: list[tuple[int, str, str]]) -> int:
-    already = set(
-        (
-            await session.execute(
-                select(shift_availability_rules.c.volunteer_id).where(
-                    shift_availability_rules.c.semester == semester
-                )
-            )
-        ).scalars()
-    )
-    rows = []
-    for vid in sorted({vid for vid, _, _ in members}):
-        rng = random.Random(f"availability-{vid}")
-        if vid in already or rng.random() < 0.15:  # most, not all
-            continue
-        for weekday in sorted(rng.sample(range(7), rng.randint(3, 5))):
-            answer = rng.choices(ANSWERS, weights=(4, 3.5, 2.5))[0]
-            rows.append(
-                {"volunteer_id": vid, "semester": semester, "weekday": weekday, "answer": answer}
-            )
-    if rows:
-        await session.execute(insert(shift_availability_rules), rows)
-    return len(rows)
-
-
 async def add_wishes(session, *, today: date, members: list[tuple[int, str, str]]) -> int:
-    """Per-shift answers on shifts in weeks that are still open for wishes."""
+    """Per-shift answers on shifts in weeks that are still open for wishes.
+
+    Most people answer a good share of their group's open shifts (a mix of vil, kan and nei);
+    about one in five answers nothing, so "Har svart" stays below 100 percent.
+    """
     first_monday = week_start(today) + timedelta(days=7)
     starts_from = datetime.combine(first_monday, datetime.min.time(), tzinfo=OSLO)
     upcoming = (
@@ -381,7 +359,7 @@ async def add_wishes(session, *, today: date, members: list[tuple[int, str, str]
             select(shifts.c.id, shifts.c.group_id, shifts.c.starts_at)
             .where(shifts.c.starts_at >= starts_from, shifts.c.is_closed.is_(False))
             .order_by(shifts.c.starts_at, shifts.c.id)
-            .limit(400)
+            .limit(1500)
         )
     ).all()
     explicit = {
@@ -407,12 +385,14 @@ async def add_wishes(session, *, today: date, members: list[tuple[int, str, str]
     for vid, group, _ in members:
         rng = random.Random(f"wishes-{vid}")
         pool = by_group.get(group_ids[group], [])
-        if not pool or rng.random() > 0.45:
+        if not pool or rng.random() < 0.2:
             continue
-        for shift_id in rng.sample(pool, min(len(pool), rng.randint(1, 3))):
-            if (shift_id, vid) not in existing:
+        share = rng.uniform(0.4, 0.9)
+        for shift_id in pool:
+            answer = rng.choices(ANSWERS, weights=(4, 3.5, 2.5))[0]
+            if rng.random() < share and (shift_id, vid) not in existing:
                 existing.add((shift_id, vid))
-                rows.append({"shift_id": shift_id, "volunteer_id": vid, "answer": rng.choice(ANSWERS)})
+                rows.append({"shift_id": shift_id, "volunteer_id": vid, "answer": answer})
     if rows:
         await session.execute(insert(shift_wishes), rows)
     return len(rows)
@@ -551,23 +531,34 @@ async def switch_groups_on(session, *, today: date) -> None:
                 .where(shift_group_settings.c.group_id == group_id)
                 .values(app_enabled=True, courses_enabled=True)
             )
-        # This and next month are published, like Stjerne; later weeks stay open for wishes.
-        this_month = today.replace(day=1)
-        monday = this_month + timedelta(days=(7 - this_month.weekday()) % 7)
-        after_next = add_months(this_month, 2)
-        while monday < after_next:
-            has_row = await session.scalar(
-                select(shift_week_status.c.group_id).where(
-                    shift_week_status.c.group_id == group_id, shift_week_status.c.week_start == monday
-                )
-            )
-            if has_row is None:
+        await set_demo_week_statuses(session, group_id=group_id, today=today)
+
+
+async def set_demo_week_statuses(session, *, group_id: int, today: date) -> None:
+    """A rolling window from the run date: this week and next week are published (explicit
+    rows, so Ledige and Mine have claimable places). Every later week inside the wish window
+    is open for wishes: an explicit published row left by an earlier seed is deleted, so the
+    date rule (later weeks are open) applies. Open or allocating rows set by hand are left
+    alone."""
+    this_monday = week_start(today)
+    last_published = this_monday + timedelta(days=7)
+    window_end = wish_window_end(today)
+    row = shift_week_status.c
+    monday = this_monday
+    while monday <= max(window_end, last_published):
+        stored = await session.scalar(
+            select(row.status).where(row.group_id == group_id, row.week_start == monday)
+        )
+        if monday <= last_published:
+            if stored is None:
                 await session.execute(
                     insert(shift_week_status).values(
                         group_id=group_id, week_start=monday, status=STATUS_PUBLISHED
                     )
                 )
-            monday += timedelta(days=7)
+        elif stored == STATUS_PUBLISHED:
+            await session.execute(delete(shift_week_status).where(row.group_id == group_id, row.week_start == monday))
+        monday += timedelta(days=7)
 
 
 async def add_demo_leader(session, *, now: datetime) -> bool:
@@ -624,7 +615,6 @@ async def seed_into(session, *, now: datetime) -> dict[str, int]:
         now=now,
     )
     await add_courses(session, now=now, semester=semester, members=members)
-    summary["availability_rows"] = await add_availability(session, semester=semester, members=members)
     await switch_groups_on(session, today=today)
     summary["wishes"] = await add_wishes(session, today=today, members=members)
     summary["status_marks"] = len(await add_status_marks(session, now=now))

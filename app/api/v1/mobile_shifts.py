@@ -31,9 +31,11 @@ from app.domain.shifts.app_models import (
     ShiftActionResponse,
     ShiftAppConfigResponse,
     ShiftCoursesResponse,
+    ShiftWishCalendarResponse,
     ShiftWishesResponse,
     StatusMessageRequest,
     WishAnswerRequest,
+    WishAnswersRequest,
 )
 from app.domain.shifts.app_service import MAX_OPEN_DAYS, ShiftsAppService
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
@@ -250,18 +252,55 @@ async def undo_cannot_attend(identity: Identity, service: Service, assignment_id
     responses=_ERRORS,
 )
 async def get_wishes(identity: Identity, service: Service) -> ShiftWishesResponse:
-    """Weekday answers for the semester, monthly status, and shifts that take wishes now.
+    """Monthly status and the shifts that take wishes now, with the person's answers.
 
-    Only the person and the group's leaders see wishes.
+    ``rules`` is always empty: weekday rules are retired. Prefer
+    ``GET /wishes/calendar``. Only the person and the group's leaders see wishes.
     """
     with _shift_errors():
         return await service.get_wishes(_volunteer_id(identity))
+
+
+@router.get(
+    "/wishes/calendar",
+    response_model=ShiftWishCalendarResponse,
+    operation_id="getShiftWishCalendar",
+    responses={**_ERRORS, **_NOT_FOUND},
+)
+async def get_wish_calendar(
+    identity: Identity,
+    service: Service,
+    month: Annotated[
+        str | None,
+        Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="YYYY-MM; default is this month"),
+    ] = None,
+) -> ShiftWishCalendarResponse:
+    """One month of shifts in the person's groups with their answers, deadline info and own shifts."""
+    with _shift_errors():
+        return await service.get_wish_calendar(_volunteer_id(identity), month)
+
+
+@router.put(
+    "/wishes/answers",
+    response_model=ShiftWishCalendarResponse,
+    operation_id="setShiftWishAnswers",
+    responses={**_ERRORS, **_REFUSED},
+)
+async def set_shift_wish_answers(
+    identity: Identity,
+    service: Service,
+    payload: WishAnswersRequest,
+) -> ShiftWishCalendarResponse:
+    """Set or clear answers for 1 to 400 shifts, all or nothing. Returns the month of the first item."""
+    with _shift_errors():
+        return await service.set_shift_wish_answers(_volunteer_id(identity), payload.answers)
 
 
 @router.put(
     "/wishes/weekdays/{weekday}",
     response_model=ShiftWishesResponse,
     operation_id="setShiftWeekdayRule",
+    deprecated=True,
     responses={**_ERRORS, **_REFUSED},
 )
 async def set_weekday_rule(
@@ -270,7 +309,7 @@ async def set_weekday_rule(
     payload: WishAnswerRequest,
     weekday: int = Path(ge=0, le=6, description="0 = Monday ... 6 = Sunday"),
 ) -> ShiftWishesResponse:
-    """Set or clear (``answer: null``) the answer for one weekday this semester."""
+    """Deprecated: weekday rules are retired. Still stored, but nothing reads them."""
     with _shift_errors():
         return await service.set_weekday_rule(_volunteer_id(identity), weekday, payload.answer)
 
@@ -287,7 +326,7 @@ async def set_shift_wish(
     shift_id: int,
     payload: WishAnswerRequest,
 ) -> ShiftWishesResponse:
-    """Override the weekday answer for one shift (``answer: null`` goes back to the weekday answer)."""
+    """Set one shift's answer (``answer: null`` clears it)."""
     with _shift_errors():
         return await service.set_shift_wish(_volunteer_id(identity), shift_id, payload.answer)
 

@@ -11,8 +11,8 @@ from app.domain.shifts.app_rules import (
     PERIOD_STATUSES,
     effective_answer,
     effective_week_status,
-    semester_of,
 )
+from app.domain.shifts.answered import answered_views
 from app.domain.shifts.errors import (
     ShiftForbiddenError,
     ShiftNotFoundError,
@@ -62,6 +62,7 @@ from app.domain.shifts.week_status import (
     BANNER_DAYS,
     SETTABLE_STATUSES,
     can_open_week,
+    empty_places_by_week,
     is_past_week,
     leader_status,
     mondays_in_month,
@@ -185,6 +186,17 @@ class ShiftsService:
             await self._attach_wishes(records, days, pool_ids)
         shown = [o for o in group_options if group_id is None or o.group_id == group_id]
         statuses, banners = await self._week_statuses(week_start, group_options, shown)
+        answered = (
+            []
+            if scope.is_empty
+            else await answered_views(
+                self.repository,
+                semester=get_current_semester_code(self._now()),
+                week_start=week_start,
+                bars=shown,
+                pool_ids=pool_ids,
+            )
+        )
         return WeekPlan(
             week_start=week_start,
             week_label=format_week(week_start),
@@ -198,6 +210,7 @@ class ShiftsService:
             pool=pool,
             statuses=statuses,
             banners=banners,
+            answered=answered,
         )
 
     async def _week_statuses(
@@ -226,18 +239,24 @@ class ShiftsService:
             )
         banners: list[WeekBanner] = []
         if coming:
-            with_shifts = await self.repository.list_shift_group_weeks(
-                datetime.combine(coming[0], time.min, tzinfo=OSLO),
-                datetime.combine(coming[-1] + timedelta(days=7), time.min, tzinfo=OSLO),
-                all_ids,
+            empty = empty_places_by_week(
+                await self.repository.list_shifts_between(
+                    datetime.combine(coming[0], time.min, tzinfo=OSLO),
+                    datetime.combine(coming[-1] + timedelta(days=7), time.min, tzinfo=OSLO),
+                    group_ids=all_ids,
+                )
             )
-            weeks_with_shifts = {(gid, monday_of(day)) for gid, day in with_shifts}
             for week in coming:
                 for option in group_options:
-                    if (option.group_id, week) not in weeks_with_shifts:
+                    if (option.group_id, week) not in empty:
                         continue
                     banner = unpublished_week_banner(
-                        option.group_id, option.name, week, stored.get((option.group_id, week)), today
+                        option.group_id,
+                        option.name,
+                        week,
+                        stored.get((option.group_id, week)),
+                        today,
+                        empty[(option.group_id, week)],
                     )
                     if banner:
                         banners.append(banner)
@@ -317,7 +336,7 @@ class ShiftsService:
     async def _attach_wishes(
         self, records: list[ShiftRecord], days: list, pool_ids: list[int]
     ) -> None:
-        """What the leader's pool answered per shift. Two queries for the whole week.
+        """What the leader's pool answered per shift. One query for the whole week.
 
         Only people in ``pool_ids`` are read, so a leader never gets names or
         answers for anyone outside their scope.
@@ -330,24 +349,15 @@ class ShiftsService:
         if not members:
             return
         volunteer_ids = sorted(members)
-        local_start = {record.shift_id: record.starts_at.astimezone(OSLO) for record in records}
-        wishes = await self.repository.list_wishes_for(sorted(local_start), volunteer_ids)
-        rules = await self.repository.list_rules_for(
-            sorted({semester_of(record.starts_at) for record in records}), volunteer_ids
+        wishes = await self.repository.list_wishes_for(
+            sorted({record.shift_id for record in records}), volunteer_ids
         )
-        records_by_id = {record.shift_id: record for record in records}
         for day in days:
             for venue in day.venues:
                 for shift in venue.shifts:
-                    record = records_by_id[shift.shift_id]
-                    weekday = local_start[shift.shift_id].weekday()
-                    semester = semester_of(record.starts_at)
                     summary = ShiftWishes()
                     for volunteer_id, name in members.items():
-                        answer = effective_answer(
-                            wishes.get((shift.shift_id, volunteer_id)),
-                            rules.get((volunteer_id, semester, weekday)),
-                        )
+                        answer = effective_answer(wishes.get((shift.shift_id, volunteer_id)))
                         getattr(summary, answer if answer in ("vil", "kan", "nei") else "ikke_satt").append(name)
                     shift.wishes = summary
 

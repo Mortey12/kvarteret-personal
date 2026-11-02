@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="nn">
+<head>
+<meta charset="utf-8">
+<title>Ønsker, desember</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#FFF6E6}
+a{color:#7A2B2B}a:hover{color:#5A1F1F}
+</style>
+</helmet>
+<div style="width: 390px; height: 840px; box-sizing: border-box; background: #FFF6E6; color: #1B1B1B; font-family: Roboto, system-ui, sans-serif; padding: 16px 16px 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="text-align: center; font-weight: 500; font-size: 14px; letter-spacing: 0.04em; padding: 6px 0 12px; border-bottom: 1px solid #EADFCF">DET AKADEMISKE KVARTER</div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<span style="border: 1px solid #7A2B2B; background: #7A2B2B; color: #FFFFFF; border-radius: 999px; padding: 6px 12px; font-size: 13px">Ønsker</span>
+<span style="border: 1px solid #DCCFBD; border-radius: 999px; padding: 6px 12px; font-size: 13px">Stjerne</span>
+<span style="border: 1px solid #DCCFBD; border-radius: 999px; padding: 6px 12px; font-size: 13px">Andre</span>
+<span style="border: 1px solid #DCCFBD; border-radius: 999px; padding: 6px 12px; font-size: 13px">Mine (1)</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-size: 18px; font-weight: 500">Desember 2026</h1>
+<p style="margin: 0; font-size: 13px; font-weight: 500; color: #7A2B2B">Svarfrist 15. november</p>
+<p style="margin: 0; font-size: 13px; color: #5F5A55">Kvar prikk er eitt skift. Venstre er dagskift, høgre er kveldsskift.</p>
+</div>
+<div style="background: #FFF0E2; border: 1px solid #EADFCF; border-radius: 18px; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-size: 13px; color: #5F5A55">Svaret gjeld</p>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{scopes}}" as="opt" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{opt.pressed}}" onClick="{{opt.pick}}" style="{{opt.style}}">{{opt.label}}</button>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px">
+<sc-for list="{{weekdays}}" as="wd" hint-placeholder-count="7">
+<button type="button" aria-label="{{wd.aria}}" onClick="{{wd.pick}}" style="min-height: 32px; border: 1px solid #DCCFBD; background: #FFF6E6; color: #1B1B1B; border-radius: 999px; font-size: 12px; font-family: inherit; cursor: pointer; padding: 0">{{wd.label}}</button>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 12px; color: #5F5A55">Trykk på ein ukedag for å velje alle desse dagane. Svar på ein heil ukedag blir ståande for heile semesteret.</p>
+<div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px">
+<sc-for list="{{cells}}" as="cell" hint-placeholder-count="31">
+<sc-if value="{{cell.blank}}" hint-placeholder-val="{{false}}">
+<div style="min-height: 44px"></div>
+</sc-if>
+<sc-if value="{{cell.inactive}}" hint-placeholder-val="{{false}}">
+<div style="min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; color: #7A7065" aria-label="{{cell.aria}}">{{cell.day}}</div>
+</sc-if>
+<sc-if value="{{cell.active}}" hint-placeholder-val="{{true}}">
+<button type="button" aria-label="{{cell.aria}}" aria-pressed="{{cell.pressed}}" onClick="{{cell.toggle}}" style="{{cell.style}}">
+<span>{{cell.day}}</span>
+<span style="display: flex; justify-content: center; align-items: center; gap: 6px; height: 12px">
+<sc-for list="{{cell.dots}}" as="dot" hint-placeholder-count="2">
+<span aria-hidden="true" style="{{dot.style}}"></span>
+</sc-for>
+</span>
+</button>
+</sc-if>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 13px; color: #5F5A55" aria-live="polite">{{countText}}</p>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<button type="button" onClick="{{setVil}}" style="min-height: 44px; border: 1px solid #DCCFBD; background: #FFF6E6; color: #1B1B1B; border-radius: 999px; padding: 0 14px; font-size: 13px; font-family: inherit; cursor: pointer">Vil gjerne</button>
+<button type="button" onClick="{{setKan}}" style="min-height: 44px; border: 1px solid #DCCFBD; background: #FFF6E6; color: #1B1B1B; border-radius: 999px; padding: 0 14px; font-size: 13px; font-family: inherit; cursor: pointer">Kan om nødvendig</button>
+<button type="button" onClick="{{setNei}}" style="min-height: 44px; border: 1px solid #DCCFBD; background: #FFF6E6; color: #1B1B1B; border-radius: 999px; padding: 0 14px; font-size: 13px; font-family: inherit; cursor: pointer">Kan ikkje</button>
+<button type="button" onClick="{{clear}}" style="min-height: 44px; border: 1px solid #DCCFBD; background: #FFF6E6; color: #1B1B1B; border-radius: 999px; padding: 0 14px; font-size: 13px; font-family: inherit; cursor: pointer">Fjern svar</button>
+</div>
+<div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 12px; color: #5F5A55">
+<span style="display: flex; gap: 5px; align-items: center"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #3E9B53; display: inline-block"></span>vil</span>
+<span style="display: flex; gap: 5px; align-items: center"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #E9B824; display: inline-block"></span>kan</span>
+<span style="display: flex; gap: 5px; align-items: center"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #7A2B2B; display: inline-block"></span>kan ikkje</span>
+<span style="display: flex; gap: 5px; align-items: center"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFFFFF; border: 1px solid #CDBFAA; box-sizing: border-box; display: inline-block"></span>ikkje sett</span>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":840}}'>
+class Component extends DCLogic {
+  state = {
+    sel: {},
+    scope: 'alle',
+    st: { '4dag': 'v', '4kveld': 'k', '11dag': 'v', '11kveld': 'k', '9dag': 'n', '9kveld': 'n', '17kveld': 'v' }
+  };
+
+  renderVals() {
+    const first = 1;
+    const days = 31;
+    const sel = this.state.sel || {};
+    const st = this.state.st || {};
+    const scope = this.state.scope || 'alle';
+    const colors = { v: '#3E9B53', k: '#E9B824', n: '#7A2B2B' };
+    const shiftsFor = (d) => (((first + d - 1) % 7) >= 5 ? [] : ['dag', 'kveld']);
+    const W = ['M', 'T', 'O', 'T', 'F', 'L', 'S'];
+    const N = ['måndagar', 'tysdagar', 'onsdagar', 'torsdagar', 'fredagar', 'laurdagar', 'søndagar'];
+    const names = { v: 'vil gjerne', k: 'kan om nødvendig', n: 'kan ikkje' };
+
+    const weekdays = W.map((w, i) => ({
+      label: w,
+      aria: 'Vel alle ' + N[i],
+      pick: () => {
+        const ds = [];
+        for (let d = 1; d <= days; d++) {
+          if ((first + d - 1) % 7 === i && shiftsFor(d).length) ds.push(d);
+        }
+        if (!ds.length) return;
+        const all = ds.every((d) => sel[d]);
+        const next = Object.assign({}, sel);
+        ds.forEach((d) => { if (all) { delete next[d]; } else { next[d] = true; } });
+        this.setState({ sel: next });
+      }
+    }));
+
+    const cells = [];
+    for (let i = 0; i < first; i++) {
+      cells.push({ blank: true, inactive: false, active: false, day: '', dots: [] });
+    }
+    for (let d = 1; d <= days; d++) {
+      const sh = shiftsFor(d);
+      const isSel = !!sel[d];
+      const parts = sh.map((x) => {
+        const a = st[d + x];
+        return x + ' ' + (a ? names[a] : 'ikkje sett');
+      });
+      cells.push({
+        blank: false,
+        inactive: sh.length === 0,
+        active: sh.length > 0,
+        day: d,
+        pressed: isSel ? 'true' : 'false',
+        aria: d + '. desember' + (parts.length ? ': ' + parts.join(', ') : ', ingen skift'),
+        style: 'min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 13px; font-family: inherit; color: #1B1B1B; cursor: pointer; padding: 4px 0; border-radius: 12px; border: 2px solid ' + (isSel ? '#1B1B1B' : 'transparent') + '; background: ' + (isSel ? '#FFF6E6' : 'transparent'),
+        dots: sh.map((x) => {
+          const a = st[d + x];
+          const c = a ? colors[a] : '#FFFFFF';
+          const b = a ? colors[a] : '#CDBFAA';
+          const inScope = isSel && (scope === 'alle' || scope === x);
+          return { style: 'width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; display: inline-block; background: ' + c + '; border: 1px solid ' + b + (inScope ? '; outline: 2px solid #1B1B1B; outline-offset: 1px' : '') };
+        }),
+        toggle: () => {
+          const next = Object.assign({}, sel);
+          if (next[d]) { delete next[d]; } else { next[d] = true; }
+          this.setState({ sel: next });
+        }
+      });
+    }
+
+    const scopes = [['alle', 'Begge skift'], ['dag', 'Dagskift'], ['kveld', 'Kveldsskift']].map(([k, l]) => ({
+      label: l,
+      pressed: k === scope ? 'true' : 'false',
+      style: 'min-height: 44px; border-radius: 999px; padding: 0 14px; font-size: 13px; font-family: inherit; cursor: pointer; border: 1px solid ' + (k === scope ? '#7A2B2B' : '#DCCFBD') + '; background: ' + (k === scope ? '#7A2B2B' : '#FFF6E6') + '; color: ' + (k === scope ? '#FFFFFF' : '#1B1B1B'),
+      pick: () => this.setState({ scope: k })
+    }));
+
+    const apply = (v) => {
+      const next = Object.assign({}, st);
+      Object.keys(sel).forEach((key) => {
+        const d = Number(key);
+        shiftsFor(d).forEach((x) => {
+          if (scope === 'alle' || scope === x) {
+            if (v) { next[d + x] = v; } else { delete next[d + x]; }
+          }
+        });
+      });
+      this.setState({ st: next, sel: {} });
+    };
+
+    const count = Object.keys(sel).length;
+
+    return {
+      weekdays: weekdays,
+      cells: cells,
+      scopes: scopes,
+      countText: count ? count + (count === 1 ? ' dato vald' : ' datoar valde') : 'Ingen datoar valde',
+      setVil: () => apply('v'),
+      setKan: () => apply('k'),
+      setNei: () => apply('n'),
+      clear: () => apply('')
+    };
+  }
+}
+</script>
+</body>
+</html>

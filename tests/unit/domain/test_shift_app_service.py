@@ -704,26 +704,27 @@ async def test_swap_is_not_possible_after_start(world: World) -> None:
 # ---------------------------------------------------------------- wishes
 
 
-async def test_weekday_rules_and_shift_wishes(world: World) -> None:
+async def test_weekday_rules_are_retired_and_shift_wishes_work(world: World) -> None:
     wishes = await world.service.get_wishes(SANDER)
-    assert [r.weekday for r in wishes.rules] == [1, 2, 3]
+    assert wishes.rules == []
     assert [x.shift_id for x in wishes.shifts] == [world.shift_ids["dec"]]
     assert {w.week_start: w.status for w in wishes.weeks} == {date(2026, 11, 2): "published", date(2026, 11, 30): "open"}
 
+    # The deprecated call still stores, but nothing reads it.
     wishes = await world.service.set_weekday_rule(SANDER, 2, "kan")
-    assert next(r for r in wishes.rules if r.weekday == 2).answer == "kan"
+    assert wishes.rules == []
+    assert wishes.shifts[0].answer is None and not wishes.shifts[0].from_rule
+    assert (await world.session.execute(select(shift_availability_rules.c.answer))).scalars().all() == ["kan"]
 
     wishes = await world.service.get_wishes(SANDER)
     december = next(w for w in wishes.weeks if w.week_start == date(2026, 11, 30))
     assert december.week_number == 49 and december.label == "Uke 49 · 30. nov–6. des"
     assert december.accepts_wishes and december.status_label == "Åpen for ønsker"
-    [shift] = wishes.shifts
-    assert shift.shift_id == world.shift_ids["dec"] and shift.answer == "kan" and shift.from_rule
 
     wishes = await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], "nei")
     assert wishes.shifts[0].answer == "nei" and not wishes.shifts[0].from_rule
     wishes = await world.service.set_shift_wish(SANDER, world.shift_ids["dec"], None)
-    assert wishes.shifts[0].answer == "kan" and wishes.shifts[0].from_rule
+    assert wishes.shifts[0].answer is None
 
     with pytest.raises(ShiftPlacementError, match="publisert"):
         await world.service.set_shift_wish(SANDER, world.shift_ids["tue"], "vil")

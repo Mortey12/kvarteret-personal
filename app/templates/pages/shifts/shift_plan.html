@@ -3,6 +3,18 @@
 
 {% block page_content %}
   <section class="grid gap-7">
+    {% for banner in plan.banners %}
+      <form action="/shifts/weeks/status" class="flex w-full flex-wrap items-center justify-between gap-4 border-4 px-6 py-5 text-lg font-medium {% if banner.urgent %}border-red-700 bg-red-100 text-red-950{% else %}border-amber-500 bg-amber-100 text-amber-950{% endif %}" data-week-banner data-banner-level="{{ 'strong' if banner.urgent else 'warning' }}" method="post" role="{{ 'alert' if banner.urgent else 'status' }}">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="hidden" name="group_id" value="{{ banner.group_id }}">
+        <input type="hidden" name="week" value="{{ banner.week_start.isoformat() }}">
+        <input type="hidden" name="status" value="published">
+        {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
+        <span>{% if plan.groups | length > 1 %}<strong>{{ banner.group_name }}:</strong> {% endif %}{{ banner.text }}</span>
+        <button class="app-button" type="submit">Publiser</button>
+      </form>
+    {% endfor %}
+
     <header class="grid justify-items-center gap-3 pt-3 text-center">
       <h1 class="text-5xl leading-none font-light tracking-tight text-stone-900 md:text-7xl">Skiftplan</h1>
       <p class="text-sm text-stone-700">Dra en frivillig fra lista til en ledig plass, eller mellom plasser. Dra tilbake til lista for å ta personen av skiftet.</p>
@@ -17,18 +29,6 @@
     {% endif %}
     {{ flash_notice(notice, 'success', 'mb-0') }}
     {{ flash_notice(error, 'error', 'mb-0') }}
-
-    {% for banner in plan.banners %}
-      <form action="/shifts/weeks/status" class="flex flex-wrap items-center justify-between gap-3 border-2 px-4 py-3 text-sm {% if banner.urgent %}border-amber-500 bg-amber-100 text-amber-950{% else %}border-stone-300 bg-white text-stone-800{% endif %}" data-week-banner method="post" role="{{ 'alert' if banner.urgent else 'status' }}">
-        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
-        <input type="hidden" name="group_id" value="{{ banner.group_id }}">
-        <input type="hidden" name="week" value="{{ banner.week_start.isoformat() }}">
-        <input type="hidden" name="status" value="published">
-        {% if plan.selected_group_id %}<input type="hidden" name="view_group" value="{{ plan.selected_group_id }}">{% endif %}
-        <span>{% if plan.groups | length > 1 %}<strong>{{ banner.group_name }}:</strong> {% endif %}{{ banner.text }}</span>
-        <button class="app-button" type="submit">Publiser</button>
-      </form>
-    {% endfor %}
 
     <form action="/shifts" class="app-panel" method="get">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end">
@@ -85,6 +85,28 @@
                 <button class="app-button-secondary" type="submit" data-publish-month>Publiser måneden</button>
               </form>
             </div>
+          </div>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    {% if plan.answered %}
+      <section class="app-panel grid gap-3" aria-label="Har svart" data-answered>
+        <h2 class="text-lg font-semibold text-stone-900">Ønsker for {{ plan.answered[0].month_label | lower }}</h2>
+        {% for item in plan.answered %}
+          <div class="grid gap-1 border-b border-stone-300 pb-3 last:border-b-0 last:pb-0" data-answered-group data-group-id="{{ item.group_id }}">
+            <p class="text-sm text-stone-900">
+              {% if plan.answered | length > 1 %}<strong>{{ item.group_name }}:</strong> {% endif %}
+              <span data-answered-count>Har svart {{ item.answered }} av {{ item.total }}</span>
+            </p>
+            {% if item.missing %}
+              <details data-answered-missing>
+                <summary class="cursor-pointer text-sm font-semibold text-stone-700">Vis hvem ({{ item.missing | length }} har ikke svart)</summary>
+                <ul class="mt-2 grid gap-1 text-sm text-stone-800">
+                  {% for name in item.missing %}<li>{{ name }}</li>{% endfor %}
+                </ul>
+              </details>
+            {% endif %}
           </div>
         {% endfor %}
       </section>
