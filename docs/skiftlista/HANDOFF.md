@@ -21,32 +21,49 @@ Update by hand at the end of every session. Last updated 2026-11-02.
   and wrote nothing). Rollback branch in Neon: `before-skiftplan-2026-10-29`,
   expires 2026-11-05. Rule for later: a new migration must run on Neon before
   the matching merge into demo.
-- **Next action** (decided 2026-10-30, adjusted 2026-11-02; see "Wish calendar
-  and leader page package" under "Decisions already made"): (1) one read-only
-  Opus design pass for the whole package, then ask Morten; (2) server sessions
-  on Sonnet with tests, a read-only Opus review of the migration before Neon,
-  then Neon and the demo following the runbook; (3) the leader page on Sonnet
-  (Personal); (4) the app calendar on Sonnet (kvarteret-internbevis); (5) then
-  4d-plus, then 5d step 3.
+- **Done 2026-11-02 (read-only passes and a docs session):** the design pass
+  for the wish calendar and leader page package,
+  `docs/skiftlista/design-pass-wishes.md`, and Morten's decisions on it; the
+  conformance pass against Kvarteret's own repos and guidelines,
+  `docs/skiftlista/conformance-pass.md` (it ran on Sonnet; an Opus pass can
+  spot-check its judgement calls if that turns out costly). Both decision sets
+  are written into this file under "Design pass results (decided 2026-11-02)"
+  and "Conformance pass results (2026-11-02)" in the package section. Nothing
+  of the package is built yet. Do not edit the two pass files; they are the
+  record of the reasoning.
+- **Next action** (decided 2026-11-02; replaces the 2026-10-30 / 11-02 list):
+  (1) **S0**: split `app_service.py` by area as a pure move (Sonnet, M);
+  (2) **S1 and A1** (the first slice, no migration), then **S2** (M1), **A2**,
+  **L1**, **L2**, **G1**, **L3**, **L4**, **A3**, then the calendar feed
+  (session list and sizes in section J of the design pass file; the order is
+  in "Conformance pass results", item 20); server sessions on Sonnet with
+  tests, a read-only Opus review of each migration before Neon, then Neon and
+  the demo following the runbook; (3) the lists "before the pilot", "before the
+  store build" and "before any upstream PR" (under "Conformance pass results");
+  (4) then 4d-plus, then 5d step 3. Step 8 notifications (Slack) and 5c have no
+  slot in this order yet (open, see the package section).
 - **Parked, waiting for etjenesten:** OTA publishing (blocks the store
   build); real verv names (block running the copy script on real data);
   Findings A, C and E and hosting limits (block the official pilot, not the
-  build); Slack versus email (decides step 8 notifications); Crescat (event
-  drafts).
+  build); the Slack app and its questions (step 8; the direction is decided,
+  see step 8); Crescat (event drafts). Finding E is known to etjenesten and
+  being fixed (per Morten, 2026-11-02).
 - **Parked, running the copy script on real data** needs, in this order:
   templates or settings rows for the bars and the kitchen; the real verv names
   from etjenesten; an answer from Samfunnet's privacy person; a read-only Opus
   review of the script; a dry run first.
 - **Can proceed without etjenesten:** all of 5d, 4d-plus, 5a2, 5b, the wish
   calendar and leader page package and the server side of 4c, all against
-  fake data. (The OR-Tools check in the package needs etjenesten's answer
-  before plan A is chosen; plan B does not.)
+  fake data. (Plan B, plain Python, is chosen for the suggestion function, so
+  nothing waits for etjenesten's OR-Tools answer.)
 - **Rules for Claude Code prompts:** start with "Read
   docs/skiftlista/HANDOFF.md fully"; say which files may change; no commit,
   push, seed or migration run by Claude Code; never `ruff format`; never
   `git add -A` or `git add .` (Morten adds files by name after
   `git status --short`); never push to Kvarteret's repos or open PRs
-  (`origin` is the fork, pushes to upstream are blocked); never run
+  (`origin` is the fork; in both repos, Personal and kvarteret-internbevis, the
+  `upstream` remote is set to `no_push`; the app repo's was done 2026-11-02);
+  fetch only from upstream; never run
   `eas update` or `eas build`; no real names in data or docs; no em dashes;
   end with a plain report and the exact list of changed files. Commit
   messages end with `Co-Authored-By: Claude <model> <noreply@anthropic.com>`
@@ -61,6 +78,15 @@ Update by hand at the end of every session. Last updated 2026-11-02.
   READY". The `claude` launch command goes in its own command block.
   Commands that change something go one per command block, because pasting
   several lines sometimes drops the first letter of a line.
+  Standing rules from 2026-11-02: (a) new code follows the guidelines the
+  conformance pass found (`docs/skiftlista/conformance-pass.md`); a rule we
+  deliberately break is written down with the reason (in the code or docs next
+  to it); a short repeat of the pass runs before anything goes toward
+  etjenesten or the pilot; it is read-only and only fetches. (b) The GitHub
+  fork is public, like Kvarteret's own repositories: write this file with that
+  in mind (no secrets, no real names, no hosting credentials). A security
+  finding that is not yet reported to etjenesten is never put in a committed
+  file; it is kept in `~/kvarteret-private-notes.md`, outside the repo.
 
 ## Goal and hard constraints
 
@@ -83,8 +109,9 @@ Update by hand at the end of every session. Last updated 2026-11-02.
 - Plan doc and setup guide: Morten's private Claude docs (ask Morten for access).
 - Mockups for the wish calendar and leader page package (decided 2026-10-30):
   `docs/skiftlista/mockups/Main.dc.html` (the app, "Ønsker, desember 2026",
-  Nynorsk) and `docs/skiftlista/mockups/Leader.dc.html` (the leader page on a
-  laptop, Bokmål like today's board). Morten's copy in Claude Design:
+  Nynorsk; the app itself is Bokmål plus English) and
+  `docs/skiftlista/mockups/Leader.dc.html` (the leader page on a laptop,
+  Bokmål like today's board). Morten's copy in Claude Design:
   https://claude.ai/artifact/McyzpMmfTYqwf5vJvmA6wM (only Morten can open it).
   Reference only: see "Mockups" in the package section.
 
@@ -133,7 +160,9 @@ Also fixed: dev seed produced semester code `20253` (now
   `samf_enabled`, `meeting_point`, `courses_enabled`), `shift_week_status` (per group and
   week, `week_start` is the Monday: `open` / `allocating` / `published`; no
   row: the current week and earlier are published, later weeks are open),
-  `shift_availability_rules` (weekday answers per semester),
+  `shift_availability_rules` (weekday answers per semester; retired from reads
+  2026-11-02, the table is dropped in a later migration after the store build,
+  see 'Design pass results'),
   `shift_wishes` (per-shift answers), `course_sessions` +
   `course_session_signups` (owned by the courses module), and on
   `shift_assignments`: `cannot_attend`, `status_message`, `status_changed_at`.
@@ -239,7 +268,8 @@ Apply the closed-periods table locally with `uv run alembic upgrade head`.
 Fake data only. `scripts/dev/seed_demo.py` adds demo data on top of
 `seed_synthetic` and `seed_shifts`: about 100 volunteers, Halvtimen members
 under 20, barkurs and a few expired brannkurs, weekday answers and shift
-wishes, two "kan ikke" and one more swap request in the coming two weeks,
+wishes (after S1 the seed writes per-shift answers instead of weekday rules,
+see 'Design pass results'), two "kan ikke" and one more swap request in the coming two weeks,
 Grøndahls and Halvtimen switched on in the app with this and next month
 published, course checks on for Stjerne and Grøndahls, and two people with
 verv outside the Skjenke groups (samfunnettjeneste). It is safe to run twice.
@@ -582,10 +612,11 @@ What we learned on 2026-10-29:
   compute expiry as 4 semesters later. Barkurs is only required for
   samfunnettjeneste in bar places; brannkurs for everyone. A person must be
   signed up for a course that takes place before the shift.
-- Wishes: weekday rules (vil gjerne / kan hvis nødvendig / kan aldri / ikke
-  satt) plus per-shift override. Monthly allocation is made and published
-  between the 15th and 20th of the previous month. Volunteers can set
-  wishes for the whole semester.
+- Wishes: the answers are vil gjerne / kan hvis nødvendig / kan aldri / ikke
+  satt, one per shift. The weekday rules that were here (weekday rules plus a
+  per-shift override) are retired (replaced 2026-11-02, see 'Design pass results'). Monthly allocation is made and
+  published between the 15th and 20th of the previous month. Volunteers can
+  set wishes for the whole semester.
 - Allocation status is per group and **week**, not per month (the 15th–20th
   monthly routine stays as the leaders' process, the code does not depend on
   it; a leader publishes a month by publishing its weeks). A week is
@@ -600,7 +631,8 @@ What we learned on 2026-10-29:
   migration; the app API still accepts and reports `allocating`, which takes
   wishes like `open`). "Åpne for ønsker" is refused, in the UI and on the
   server, for the current week and earlier (`can_open_week`).
-  Wishes are unchanged: per shift plus weekday rules. `GET /wishes` lists
+  Wishes: per shift only; the weekday rules are retired (replaced 2026-11-02, see 'Design pass results').
+  `GET /wishes` lists
   weeks that have shifts, from today through the end of the semester (spring
   Jan–Jun, autumn Jul–Dec) and at least through next month, so January takes
   wishes in December (`effective_week_status`, `week_start`,
@@ -779,15 +811,18 @@ What we learned on 2026-10-29:
   Samfunnet's IT group, and Samfunnet pays for hosting.
 - Ownership is role based (Skjenkeleder, HS leder/driftsansvarlig); role
   admins can grant access; a maintenance role for etjenesten.
-- Notifications: email for the pilot. Push to be built together with
-  etjenesten's planned shared notifications.
+- Notifications: Slack is the main channel, with a layer that can add email
+  (direction only, nothing built; see step 8) (replaced 2026-11-02, see 'Design pass results'). Push to be built
+  together with etjenesten's planned shared notifications.
 
 ### Wish calendar and leader page package (decided 2026-10-30, adjusted 2026-11-02)
 
 Decisions Morten made on 2026-10-30, adjusted on 2026-11-02. Where this
 section differs from an older bullet, this section wins; the older bullets are
-marked "replaced". Nothing here is built yet. Items marked **Open** are for the
-design pass.
+marked "replaced". Nothing here is built yet. The design pass has run; its
+decisions are in "Design pass results (decided 2026-11-02)" below, and where
+the text between here and that subsection differs from it, the subsection
+wins. Items marked **Open** are still open.
 
 **Priority.** The wish calendar (5e) is what the bar leaders wanted most at the
 demo meeting. It moves to the top as one package, together with the leader page
@@ -801,7 +836,9 @@ https://claude.ai/artifact/McyzpMmfTYqwf5vJvmA6wM (only Morten can open it).
   Design canvas, which is not in the repo, so they do not run on their own.
   Read the markup and the Component script.
 - The decisions in this file win where a mockup differs. Known differences:
-  - App mockup: it has "Begge skift / Dagskift / Kveldsskift" (decided:
+  - App mockup: it is Nynorsk, but the app is Bokmål plus English (decided
+    2026-11-02); the mockup still shows the "Ukedager" idea and the weekday
+    semester line, which no longer apply (weekday rules are retired). It has "Begge skift / Dagskift / Kveldsskift" (decided:
     "Alle skift" plus one option per shift name) and the line "Svar på ein
     heil ukedag blir ståande for heile semesteret" (no longer applies: a
     weekday letter only selects dates). It shows "Svarfrist 15. november" but
@@ -810,8 +847,8 @@ https://claude.ai/artifact/McyzpMmfTYqwf5vJvmA6wM (only Morten can open it).
   - Leader mockup: it lacks "Vis andre", note and maks in the people list, the
     maks warning, opplæring, the month strip and "Sist endret av". Its
     suggestion logic is deliberately naive; the real one is below.
-- **Open:** which language the app uses (the app mockup is Nynorsk); still to
-  be checked.
+- **Decided 2026-11-02:** the app language is Bokmål plus English, like the
+  rest of the app. The Nynorsk mockup is reference only.
 
 **App calendar (Ønsker tab).**
 - A month view; one dot per wishable shift per day, left to right by start
@@ -828,15 +865,15 @@ https://claude.ai/artifact/McyzpMmfTYqwf5vJvmA6wM (only Morten can open it).
   standing rule. "Kopier fra forrige måned" repeats one's own answers for the
   next month. (Decided 2026-11-02; this replaces the idea from 2026-10-30 of
   standing weekday rules limited to hours of the day.)
-- Today's whole-day weekday rules are not migrated to anything new.
-  **Open** for the design pass: whether existing rules keep counting as
-  answers, how they show in the calendar, and whether the separate "Ukedager"
-  list is retired so there is one place to answer. Rejected: an extra "gjelder
-  hele semesteret" switch (clutter).
+- Weekday rules are retired (decided 2026-11-02; replaces the open question
+  here): reads stop using them, the separate "Ukedager" list goes, and there is
+  one place to answer. Details under "Design pass results". Rejected: an extra
+  "gjelder hele semesteret" switch (clutter).
 - The answer deadline shows in the app ("Svarfrist ...") with days left, and a
-  banner if the person has not answered. Each bar's leader sets the deadline.
-- Saving many answers at once, all or nothing (a batch endpoint): probably
-  yes. **Open:** confirm in the design pass.
+  banner if the person has not answered. Each bar's leader sets the deadline
+  (per bar and month, soft: see "Design pass results").
+- Saving many answers at once, all or nothing (a batch endpoint): yes
+  (decided 2026-11-02, `PUT /wishes/answers`).
 - Yes: a short note to the leader per month (for example "Eksamen 10.-14."); a
   personal "maks skift denne måneden"; one's own published shifts marked in the
   calendar; "Legg til i kalender".
@@ -859,8 +896,11 @@ fits a laptop, with little clutter.
   fit); "Kopier forrige uke" (as suggestions, skipping "kan ikke"); "Skriv ut"
   (week grid only); "Godta forslag (n)" and "Forkast forslag" when there are
   suggestions; "Lag forslag for uka" (red); "Publiser uka" once no suggestions
-  are left. Nothing reaches the app before the week is published. Only the
-  bars' admins publish.
+  are left. Nothing reaches the app before the week is published, except that
+  an untouched week (a future week with no `shift_week_status` row) publishes
+  itself on its Monday (replaced 2026-11-02, see "Design pass results", item
+  13); pending suggestions never show in the app. Only the bars' admins
+  publish.
 - The week grid: days as columns, shifts as rows; every shift's first place is
   the skiftleder place (only approved skiftledere), the rest are skjenker
   places; names in the places; "N vil · N kan" per cell; suggestions dashed
@@ -886,15 +926,17 @@ fits a laptop, with little clutter.
   would land on a skiftleder place.
 - "Angre" after every change (up to 20 steps). "Lag forslag på nytt" fills
   around what the leader already chose. Fairness stats. "Sist endret av ...".
-  A warning when two leaders edit the same week. Probably a month strip of
-  week statuses to jump between weeks (**open:** confirm in the design pass).
+  A warning when two leaders edit the same week. A month strip of week
+  statuses to jump between weeks: yes (decided 2026-11-02).
 - The separate sidebar list and its sticky fix (5a2) are replaced by this
   panel.
 - Opplæring: the trainee stands in a normal skjenker place marked "opplæring",
   shown with the skiftleder who takes trainees (as decided for 5d step 3); the
   suggestion pairs them.
-- **Open:** a notification when a week is published (email needs no app
-  update; push needs a store build).
+- **Open:** a notification when a week is published. The channel is Slack
+  first (direction in step 8) with email possible later; nothing is decided or
+  built. The channel question stays open until etjenesten and Slack answers
+  are in (see step 8).
 
 **Suggestion algorithm and fairness.**
 - Runs on Personal's server behind one function ("lag forslag for denne
@@ -903,10 +945,13 @@ fits a laptop, with little clutter.
   problem). First check that the package fits Personal's hosting (Vercel
   function size limits) and that etjenesten accepts the new dependency. Plan B
   if either fails: "scarcest place first" plus an improvement pass with swaps,
-  in plain Python. **Open:** plan A or plan B, pending the hosting check and
-  etjenesten's answer.
+  in plain Python. **Decided 2026-11-02: plan B**, plain Python, deterministic,
+  with solver-neutral input and output. OR-Tools is not used now (protobuf
+  downgrade, unverified size); the question to etjenesten stays as a later,
+  non-blocking note.
 - Hard rules for the suggestion: the right qualification for the place;
-  Halvtimen 20+; never "kan ikke" (on the shift or a whole-day weekday rule);
+  Halvtimen 20+; never "kan ikke" on the shift (replaced 2026-11-02: weekday rules are
+  retired);
   no overlapping shifts; the person's own "maks" and the bar's quota; never
   move what a leader placed or accepted.
 - Maks for leaders (decided 2026-11-02): a leader may place someone above
@@ -924,16 +969,17 @@ fits a laptop, with little clutter.
   share; weekend requirements are spread fairly; trainees go on shifts with a
   skiftleder who takes trainees.
 
-**Samfunnettjeneste (open, for the design pass).** Decided 2026-11-02 that it
-is checked, nothing more. How the package meets samfunnettjeneste (7a to 7h).
-Points to check:
+**Samfunnettjeneste (checked in the design pass, decided 2026-11-02).** Points
+that were checked, and the answers:
 - The suggestion only fills places for the bar's own pool and leaves places
   open for samf alone unless a leader fills them.
-- Deadline, notes, maks and fairness counters are per bar, separate from samf
-  duty counting (7c, `counted_for_group_id`).
-- **Open:** whether samf people can send wishes, and whether they appear under
-  "Vis andre".
-- The data model must not block samf later.
+- Deadline, notes, maks and fairness counters are per bar and per person,
+  separate from samf duty counting (7c, `counted_for_group_id`).
+- Samfunnettjeneste people send no wishes and are not in "Vis andre" (pool
+  rule, Finding D). This is decided (item 10).
+- The data model does not block samf later. The samfunnettjeneste plan must go
+  through `tables.py` or an injected protocol (module independence in the
+  architecture doc, item 21).
 
 **Known work the package needs.**
 - Server: the batch endpoint; deadline per bar; notes and "maks" per person
@@ -948,18 +994,189 @@ Points to check:
 - Outside dependency for real use: the app reaching phones (store build or
   OTA) goes through etjenesten.
 
-**New order of work.**
-1. One read-only Opus design pass for the whole package: read the wishes API
-   and storage, weekday rules, week status, the board and the app's Ønsker
-   view; propose the data model (deadline, notes, maks, fairness counters),
-   the batch endpoint, the migration, what happens to the existing weekday
-   rules, the build split into small sessions, the OR-Tools hosting check, and
-   the samfunnettjeneste check; then ask Morten.
-2. Server sessions on Sonnet, with tests; read-only Opus review of the
-   migration before Neon; then Neon and the demo, following the runbook.
-3. The leader page on Sonnet (Personal).
-4. The app calendar on Sonnet (kvarteret-internbevis).
-5. Then 4d-plus, then 5d step 3.
+**New order of work.** Replaced 2026-11-02: the design pass has run and the
+session order is under "Conformance pass results" (item 20) below. The old
+list, for reference: (1) the design pass, (2) server sessions, (3) the leader
+page, (4) the app calendar, (5) then 4d-plus and 5d step 3.
+
+#### Design pass results (decided 2026-11-02)
+
+Morten accepted the recommendations of `docs/skiftlista/design-pass-wishes.md`
+and changed the copy rule (item 7). The reasoning, the data model, the
+endpoint shapes and the build split (section J) are in that file; this is the
+short form. Item numbers are those of the decision list; items 14 and 17 are
+replaced by items 14 and 20 of the later list (see "Conformance pass
+results").
+
+1. **Weekday rules are retired.** Reads stop using them: `effective_answer`
+   takes only the per-shift wish; `get_wishes` and the board stop reading
+   rules. `PUT /wishes/weekdays/{weekday}` stays but is deprecated and writes
+   nothing that is read. `GET /wishes` returns `rules: []`. The "Ukedager"
+   list in the app goes. The table `shift_availability_rules` is dropped in a
+   later migration after the store build (and is then also removed from the
+   volunteer delete cleanup). `seed_demo.py` writes per-shift answers instead
+   of weekday rules. The suggestion's hard rule is "never 'kan ikke' on the
+   shift".
+2. **"Har svart N av M":** at least one `shift_wishes` row on a shift of that
+   bar in that month, any answer. A note alone does not count. Board counts
+   and names come from `shift_wishes` only.
+3. **Deadline:** per bar per month. Column
+   `shift_group_settings.wish_deadline_day` (day of the month before, 1 to 28,
+   null = none), set on `/shifts/settings`. Soft: the app keeps accepting
+   wishes until the week is published; after the deadline the text says
+   "Svarfrist gått ut". No per-month overrides now.
+4. **Note and maks:** new table `shift_month_answers` (volunteer, month, note
+   up to 200 characters, `max_shifts`), per person across all bars; leaders
+   whose pool includes the person see the note. Added to the volunteer delete
+   cleanup.
+5. **"Alle skift" plus one option per shift name:** built in the app from the
+   distinct shift titles in the shown month; no storage. The batch request
+   carries explicit `shift_ids`.
+6. **Fairness counters** are computed on demand (new `fairness.py`), not
+   stored.
+7. **Endpoints:** `PUT /wishes/answers` (batch, all or nothing, idempotent, 1
+   to 400 items, duplicates refused); `GET /wishes/calendar?month=` (month
+   view: deadline, days left, `has_answered`, note, maks, shifts with day,
+   answer, `accepts_wishes`, `past`, and the person's own published shifts);
+   `PUT /wishes/calendar/month` (note, maks); `POST
+   /wishes/calendar/copy?month=` ("Kopier fra forrige måned", server side,
+   never overwrites). **Copy rule (Morten's change to the design pass):** copy
+   a weekday-and-shift-title pattern from the previous month only when about
+   three quarters or more of its dates had the same answer, so one-off answers
+   (exams, trips) are not repeated; never copy the note. Published and past
+   weeks show dimmed and are not selectable.
+8. **Suggestions** are stored in their own table `shift_suggestions`, not in
+   `shift_assignments`. "Godta forslag" re-checks each one through the normal
+   assign path and reports skipped ones; publishing is refused while a week has
+   suggestions. "Angre" is client side (sessionStorage, 20 steps) using
+   inverse actions. Plan B (plain Python, deterministic, solver-neutral input
+   and output) is chosen for the suggestion function; OR-Tools is not used
+   now (protobuf downgrade, unverified size). The OR-Tools question to
+   etjenesten stays as a later, non-blocking note.
+9. **Migrations** are split, all additive: **M1** with S2 (`wish_deadline_day`,
+   `shift_month_answers`, and the extra items in item 20 below); **M2** with
+   L3 (`shift_suggestions`); **M3** with L4 (`shift_week_activity` for "Sist
+   endret av" and the two-leaders warning). L4 may be cut down. **Open:**
+   whether the existing admin activity log can serve instead of
+   `shift_week_activity`. Each migration gets a read-only Opus review before
+   Neon.
+10. **Samfunnettjeneste** people send no wishes and are not in "Vis andre"
+    (pool rule, Finding D).
+11. **App language:** Bokmål plus English, like the rest of the app. The
+    Nynorsk mockup is reference only.
+12. **Opplæring on the leader page:** as today (opplæring places) until 5d
+    step 3. "0 helg" and the per-bar quota depend on 5c (not built) and are
+    inert until then. **Open:** where 5c goes in the order.
+13. **Week auto-publish and the banner.** A future week without a
+    `shift_week_status` row stays open for wishes and publishes itself on its
+    Monday. Kept. The text "Nothing reaches the app before the week is
+    published" now reads "...except that an untouched week publishes itself on
+    its Monday". Pending suggestions never show in the app. In the pilot,
+    planned weeks are published with "Publiser måneden". The unpublished-week
+    banner becomes large: full width at the top of the board and the leader
+    page, warning colour from 10 days before and the strong warning colour from
+    3 days before, not dismissable. It names the consequence (how many places
+    are empty and "blir åpne for alle mandag", how many pending suggestions the
+    week has) and has the "Publiser" button. It is shown to everyone whose
+    scope covers the bar. For the skjenkeleder (Gruppeadmin of Skjenke) and
+    Admin it lists every bar in scope that has an unpublished week starting
+    within 10 days, so they see all bars at once; no new right is needed. The
+    banner change is small enough to go in S1 (text and style on today's
+    board) and is carried into the leader page in L1. The reminder message
+    (step 8) goes to the bar leaders and to the skjenkeleder.
+14. **Calendar, both ways** (replaced by item 14 of the later list, see
+    "Conformance pass results"). A3 is the single-shift button: iOS gets a
+    short-lived signed `.ics` link opened with `expo-linking`, Android a
+    Google Calendar template link; no new native packages; `expo-calendar` is
+    not used; A3 gets a short read-only Opus look at the signed link. A
+    separate later session adds a **personal calendar feed**: one subscribe
+    link ("Abonner på vaktene dine") that works in Google Calendar, Outlook and
+    Apple Calendar and updates itself; a reset-link button; the feed holds
+    only that person's published shifts and no other names; it needs a stored
+    secret per person (a small additive migration **M4** with a read-only Opus
+    review). Google refreshes subscribed feeds slowly (often up to a day), so
+    urgent changes still go by message. Messages in Slack link to the app
+    (Mine tab), not to the 10-minute `.ics` link. Privacy: Google and
+    Microsoft fetch the feed, so they see shift titles, times and venues; this
+    is a question for Samfunnet's privacy person (see "Not code").
+15. **Leader page:** built as a new route next to the old board, then
+    `/shifts` switches to it; server-rendered Jinja plus one new plain
+    JavaScript file with a JSON data block; the people panel replaces the
+    sidebar list.
+16. **Conformance pass:** see "Conformance pass results" below.
+17. **Session order:** replaced by item 20 of the later list.
+18. **Notifications (step 8), direction only, nothing built.** Written into
+    step 8 below.
+
+#### Conformance pass results (2026-11-02)
+
+A read-only pass comparing our work with Kvarteret's own repos and their
+guidelines. Report: `docs/skiftlista/conformance-pass.md` (do not edit it; it
+ran on Sonnet, so an Opus pass can spot-check its judgement calls if that turns
+out costly). Items 16, 19, 20 and 21 of the decisions.
+
+- **16. The pass and the standing rule.** The pass compared the guideline
+  inventory, our changes against each rule, drift from upstream main
+  including the migration chain, and our footprint in shared code. It fetched
+  only; never push to Kvarteret's repos. Standing rule: new code follows the
+  guidelines the pass finds; a rule we deliberately break is written down with
+  the reason. A short repeat runs before anything goes toward etjenesten or
+  the pilot.
+- **Summary of the report.** Personal is 33 commits ahead and 0 behind
+  `upstream/develop`; the app is 6 ahead and 0 behind `upstream/development`.
+  Upstream's Alembic head `20261025_1200` is the start of our chain, so
+  nothing collides. Personal passes ruff, lint-imports, pytest (1080) and the
+  openapi check; the app passes biome, tsc, jest and depcruise.
+- **19. Answers to the report's six questions.** (1) Nothing from
+  `docs/skiftlista` goes upstream; upstream gets a clean branch of code, tests
+  and reference docs only, and a docs split (durable parts into
+  `docs/reference` and `docs/explanation`) comes before any upstream PR. (2)
+  Zod in the app: a written deviation (precedent: upstream's events client);
+  add a Zod parse only for the most variable responses if reviewers ask. (3)
+  Hide the Skift tab when Skiftlista is off, using the config query, before
+  the store build. (4) Split `app_service.py` (1,276 lines against a written
+  cap of about 800) before S1 as a pure move. (5) RLS, the index rename and the
+  missing constraints go into the package's first migration M1. (6) App
+  language Bokmål plus English.
+- **20. Session order** (replaces item 17 of the first list).
+  - **S0** (Sonnet, M): split `app_service.py` by area (claim, mine, wishes,
+    courses); `ShiftsAppService` stays as a thin facade; pure move, tests
+    unchanged, no behaviour change.
+  - Then **S1 and A1** (first slice, no migration). S1 also logs the app-side
+    wish events like claim (`shift.app.wishes`). A1 also gives the colour dots
+    text equivalents, regenerates the Personal client (`npm run
+    api:generate:personal`), and adds the missing "// Style escape hatch"
+    comment in `ProgressBar.tsx`.
+  - Then **S2** (M1 and the rest of S2 as in the design pass), **A2**, **L1**,
+    **L2**, **G1**, **L3**, **L4**, **A3**, then the calendar feed (item 14).
+  - **M1 contains:** RLS and REVOKE from PUBLIC, anon, authenticated for
+    `shift_week_status` and `shift_closed_periods`; renaming
+    `ix_shift_closed_periods_group_id` to `shift_closed_periods_group_id_idx`;
+    `wish_deadline_day`; `shift_month_answers`. In the same session
+    `tables.py` declares the 10 CHECK constraints and 9 indexes the migrations
+    create, and all new tables get RLS from the start. M1 gets a read-only Opus
+    review before Neon. Morten runs the Postgres e2e tests (needs a local
+    Postgres and the Supabase stubs described in `run-tests.md`) before that
+    review.
+  - **Before the pilot:** confirm dialogs use `hx-confirm` (the new leader page
+    does); a keyboard alternative on the board; check test and seed names.
+  - **Before the store build:** hide the Skift tab; review the English strings.
+  - **Before any upstream PR:** docs split; update
+    `docs/explanation/kvarteret-personal-architecture.md` and
+    `docs/README.md`; `api:check:personal` in the app's CI; commit subjects;
+    split the work into reviewable series (about 23,700 new lines in Personal
+    and 9,400 in the app); talk to etjenesten first about an ADR or issue,
+    since the samfunnettjeneste plan touches groups and rights.
+  - The demo needs `seed_demo.py` re-run on Neon after S1 (runbook step 6,
+    host confirmation, and a fresh Neon rollback branch per runbook step 2).
+- **21.** The samfunnettjeneste plan must go through `tables.py` or an
+  injected protocol (module independence in the architecture doc).
+
+Other 2026-11-02 decisions that are not in the lists above: Finding E is known
+to etjenesten and being fixed, and unreported security findings are never put
+in a committed file (see "Security review: open items" and the standing rules
+under "Start here"); in the app repo the `upstream` remote is now `no_push`,
+like Personal's.
 
 ## Step 1 (API for the app): done
 
@@ -979,7 +1196,10 @@ Known gaps, deliberately left to later steps:
 - **Unpublished-week warning**: done. A banner on the board appears when a
   week with shifts starts within 10 days and is not published ("Uke 49 er
   ikke publisert. Den blir åpen for alle mandag 30. november."), in warning
-  colour from 3 days before, with a "Publiser" button. For a week with an
+  colour from 3 days before, with a "Publiser" button. (Becomes a large,
+  non-dismissable banner from 10 days before, with the consequence and the
+  number of pending suggestions, shown to everyone whose scope covers the bar;
+  replaced 2026-11-02, see 'Design pass results', item 13.) For a week with an
   explicit non-published row the text says it is not visible in the app until
   published, since explicit rows never auto-publish. Email reminders come
   with step 8.
@@ -1097,10 +1317,11 @@ Known gaps, deliberately left to later steps:
 5a. ~~Show wishes to leaders on the board~~ (done). Each shift card on
    `/shifts` has a collapsed `<details>` line "Ønsker: 4 vil · 2 kan · 3 nei ·
    5 ikke satt" that lists the names under each answer. The answer per person
-   and shift is `effective_answer` in `app_rules.py` (per-shift wish, else the
-   weekday rule of the shift's semester and Oslo weekday, else "ikke satt");
-   the app's `get_wishes` uses the same function. `ShiftsService._attach_wishes`
-   reads the pool's wishes and rules with one query per table for the whole
+   and shift is `effective_answer` in `app_rules.py` (per-shift wish, else
+   "ikke satt"; the weekday-rule step is removed in S1, replaced 2026-11-02,
+   see 'Design pass results'); the app's `get_wishes` uses the same function. `ShiftsService._attach_wishes`
+   reads the pool's wishes and rules with one query per table (rules are no
+   longer read after S1) for the whole
    displayed week (`list_wishes_for`, `list_rules_for`). Only people in the
    leader's pool are counted or named; an empty scope reads nothing. No reasons
    exist, and the app API shows wishes only to the person themselves.
@@ -1108,11 +1329,13 @@ Known gaps, deliberately left to later steps:
    group (today it is the whole pool); see 5a2.
 5b. **Who has answered** (demo feedback): per bar and period, "x av y har
    svart" for leaders, with the list of who has not answered. Someone "har
-   svart" for a period if they have weekday rules for the semester or at least
-   one answer on a shift in that period. The reminder button comes with email
+   svart" for a bar in a month if they have at least one `shift_wishes` row on
+   a shift of that bar in that month, any answer; a note alone does not count
+   (replaced 2026-11-02, see 'Design pass results', item 2; the weekday-rule
+   condition is gone). The reminder button comes with email
    (step 8). The package has "Har svart N av M" with "Vis hvem" and computes it
-   from the calendar answers; the reminder button is not mentioned there.
-   **Open: check against the 2026-10-30 package in the design pass.**
+   from the answers; built first on today's board in S1. The reminder button
+   comes with step 8 (to the leaders and the skjenkeleder, see item 13).
 5c. **Per-bar requirements** (see decisions): a per-bar settings table with
    rule types: weekend shifts per semester (weekend days per bar), max per
    week, pensioner 1 a month. Warnings only, never blocking. Pace warning to
@@ -1555,7 +1778,8 @@ Known gaps, deliberately left to later steps:
 5e. **Wish calendar in the app**: now part of the wish calendar and leader
    page package, which comes first (see "Wish calendar and leader page package"
    under "Decisions already made"). The old idea of weekday rules limited to
-   dagskift or kveldsskift is dropped. For reference: the existing wishes API
+   dagskift or kveldsskift is dropped, and weekday rules are retired
+   altogether (replaced 2026-11-02, see 'Design pass results'). For reference: the existing wishes API
    has `PUT /wishes/weekdays/{weekday}` and `PUT /wishes/shifts/{shift_id}`,
    so a multi-date answer is one call per shift today; the week list only
    covers weeks that accept wishes (replaced 2026-10-30, see 'Wish calendar
@@ -1566,10 +1790,11 @@ Known gaps, deliberately left to later steps:
    from 5c and 5d). Week status and publishing (`shift_week_status`, open →
    published for leaders; `allocating` is legacy) move into the package
    (replaced 2026-10-30, see 'Wish calendar and leader page package'). Items
-   the package does not mention, kept as they were; **open: check against the
-   2026-10-30 package in the design pass:** the "Publiser måneden" shortcut
-   that publishes all weeks of a month, `fordelingWarnings()` from the
-   prototype, and the unpublished-week warning described under known gaps.
+   the package does not mention, kept as they were; **Checked in the design
+   pass (2026-11-02):** "Publiser måneden" stays (the pilot uses it) and the
+   unpublished-week warning becomes the large banner (item 13).
+   `fordelingWarnings()` from the prototype: open, not mentioned in the design
+   pass decisions.
    Wishes are already stored by the app.
 6. **Courses**: leader screens for `course_sessions` (date, place, capacity,
    cancel) and the sign-up lists. Sign-up and expiry are in the app API.
@@ -1600,12 +1825,31 @@ Known gaps, deliberately left to later steps:
    - 7h. "Send påminnelse" (templates and cron route, step 8).
    - Crescat events as drafts for event shifts: depends on etjenesten's
      answers (see "Not code").
-8. **Swaps and sick days** with email to the right leaders, show
+8. **Swaps and sick days** with messages to the right leaders, show
    `status_message` to them (not to skiftleder), delete it after the shift.
    Also the reminder button for volunteers who have not sent in wishes (5b),
    and the samfunnettjeneste reminders (7h): to the group's leader, and for
-   per-member duties also to members who have not done a shift. Needs new
-   email templates and a cron route.
+   per-member duties also to members who have not done a shift. The
+   unpublished-week reminder goes to the bar leaders and to the skjenkeleder.
+   Needs new message templates and a cron route. **Direction decided
+   2026-11-02, nothing built:**
+   - Slack is the main channel for leaders and volunteers (all volunteers are
+     expected to be in Slack). A notification layer picks the channel per
+     person, so email can be added later. This replaces "email for the pilot".
+   - Slack is a nudge, not the only way to learn something: shifts and changes
+     are always in the app. Messages link to the app (Mine tab).
+   - Matching is by email between Personal and Slack. Leaders and the
+     skjenkeleder see a list "N uten Slack-kobling" with names so they can
+     follow up in person. A manual link (Slack user set by a leader or the
+     person) is open and only built if many do not match.
+   - Messages are short and factual (what, when, where, link). Volunteer
+     names only in a person's own DM, never in a channel post. Quiet hours and
+     a per-person opt-out are required.
+   - **Open, from outside:** a Slack workspace admin to create or approve the
+     app (post messages, look up users by email); the secret stored in the
+     hosting environment by etjenesten; channel post versus DMs for leaders;
+     an answer from Samfunnet's privacy person on sending name, date and shift
+     through Slack with an opt-out.
 9. Small: keyboard alternative to drag and drop (the "Legg til" button in
    5a2 covers it),
    semester-end data cleanup. (The per-person "tar ikke opplæring" is gone;
@@ -1625,33 +1869,17 @@ Known gaps, deliberately left to later steps:
   etjenesten, not fixed in this branch.
 - **Finding C:** the CSP allows `'unsafe-inline'` (app-wide). Reported to
   etjenesten, not fixed in this branch.
-- **Finding E (verified by reading the code on 2026-10-29, not run):** in
-  Personal's volunteer and group routes, the paths below need only Admin or
-  Gruppeadmin and check nothing about which group, so any Gruppeadmin can
-  edit membership in any group. Qualifications and the pool depend on
-  membership, so this decides who can take places. Paths confirmed:
-  - add, edit and delete role assignments, on both the group page and the
-    volunteer page;
-  - group history delete (not in the earlier text);
-  - semester transfer (it also does not check that the verv belongs to the
-    group; not in the earlier text);
-  - volunteer delete: any Gruppeadmin can delete any volunteer with
-    memberships, shift rows and qualifications.
-  Application approval is partly covered: the group is limited to the
-  applicant's own choices, but the approver's group is not checked. Also, any
-  Gruppeadmin can re-parent or deactivate any group (PATCH and POST on
-  groups), and group scope follows the parent tree, so this widens their own
-  Skiftlista scope; and any Gruppeadmin can create, rename and delete verv in
-  any group. `group_admin_memberships` can be changed by Admin only, so it is
-  not affected. Impact: this does not block building step 2, but it must be
-  fixed or explicitly accepted before the pilot, because qualifications and
-  the pool depend on membership. Fix direction (prose only): check the
-  actor's group scope (their groups plus subgroups, the same rule as
-  `manageable_groups`) in each of these services; make re-parenting and
-  deactivating Admin only, or require both old and new parent to be in
-  scope. This is Personal-wide, so it belongs with etjenesten, not this fork.
-  Not reported to etjenesten, not fixed in this branch. See also the bar
-  switch notes under "Not code".
+- **Finding E (group-scope authorization gaps in Personal's group and
+  volunteer routes):** known to etjenesten and being fixed (per Morten,
+  2026-11-02). Short summary until the fix is released: some management
+  actions on membership, groups and verv check the Admin or Gruppeadmin role
+  but not which group the actor administers. Qualifications and the pool
+  depend on active membership, so this must be fixed or explicitly accepted
+  before the pilot. It is Personal-wide and belongs with etjenesten, not this
+  fork. The path-by-path list is not kept here (this fork is public); the
+  checklist for the longer message to etjenesten is under "Notes for
+  etjenesten (not sent)". See also the bar switch notes under "Not code".
+- **Findings A and C stay as reported** (see above).
 - **Finding B:** `?notice=` and `?error=` text in URLs. Low priority.
 - Mobile login session handling was not reviewed.
 
@@ -1719,15 +1947,19 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
 - More questions for etjenesten: the distinct verv names
   (`assignment_roles.name`) used in production, names only, so the 5d
   copy script maps them correctly (no migration or seed in this repo holds the
-  real list); and whether notifications should go to Slack instead of, or
-  as well as, email, since leaders mostly use Slack.
+  real list); and the Slack questions for step 8 (the direction is Slack first, decided
+  2026-11-02; see "Notes for etjenesten").
 - For Samfunnet's privacy person: is it fine to keep qualifications
   (skjenker, skiftleder, kokk, who approved, when) for people who are no
   longer active? Verv history is already kept for every semester because
   pingvinpoeng are summed over all of it, and qualifications currently last
   forever, with no automatic deletion; only deleting the volunteer removes
   them. The copy script now reads all semesters, so it creates rows for many
-  former members.
+  former members. Also for the privacy person (added 2026-11-02): (a) sending
+  a volunteer's name, date and shift through Slack, with a per-person opt-out
+  (step 8); (b) the personal calendar feed: Google and Microsoft fetch the
+  feed, so they see shift titles, times and venues (item 14); the feed holds
+  only that person's published shifts and no other names.
 - Questions for etjenesten about Crescat: is there a read API for events
   (title, room, start/end, status)? How is access authenticated and who issues
   a read-only key? Rate limits? Can we match on `booking_request_id`? Goal:
@@ -1748,7 +1980,7 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
   the row's own group). Known behaviour: nothing re-checks future shift
   assignments after a membership change, and the board gives no warning (see
   the parked warning under 5a2); weekday rules carry over to the new bar (they
-  have no group); old per-shift wishes stay visible to the old bar's leaders
+  have no group; moot after S1, since rules are no longer read); old per-shift wishes stay visible to the old bar's leaders
   while the person can no longer see or change them in the app. Still open:
   the cross-bar skjenker training count (Morten's leaning, see "Training and
   approval") and the question below.
@@ -1778,12 +2010,8 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
   for the real Personal. Read-only check of this repo (2026-10-29): a
   membership is a `role_assignments` row (volunteer, group, verv, semester),
   so membership and verv are one row and removing it ends both for that
-  semester. Add, edit and delete (`/groups/{id}/role-assignments`,
-  `/volunteers/{id}/role-assignments`, `.../{assignment_id}`) require
-  `require_management_user`, which is the Admin or Gruppeadmin role and
-  nothing more: no check of which group, so a Gruppeadmin can edit
-  membership in any group (verified by reading the code on 2026-10-29, see
-  Finding E). Removing a row does not touch `shift_assignments`,
+  semester. Editing membership is covered by Finding E (known to
+  etjenesten and being fixed; see "Security review: open items"). Removing a row does not touch `shift_assignments`,
   so the person stays on future shifts (and, once 5d is built, a training
   row stays but is inert). Ask etjenesten or Morten whether that is the
   intended practice at Samfunnet.
@@ -1794,29 +2022,44 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
 ## Notes for etjenesten (not sent)
 
 Not sent. Morten will send a longer message later. Keep this list current.
+This fork is public: nothing about an unreported security finding goes here; it
+is kept in `~/kvarteret-private-notes.md`, outside the repo.
 
-- Any Gruppeadmin can add, edit and delete group membership in any group;
-  nothing checks which group the person administers. Paths: add, edit and
-  delete role assignment on the group page and on the volunteer page, group
-  history delete, semester transfer.
-- Semester transfer also does not check that the verv belongs to the group.
-- Any Gruppeadmin can re-parent or deactivate any group. Group scope follows
-  the parent tree, so this widens their own scope.
-- Any Gruppeadmin can create, rename and delete verv in any group.
-- Any Gruppeadmin can delete any volunteer, including memberships, shift rows
-  and qualifications.
-- Application approval is limited to the applicant's own group choices, but
-  the approver's group is not checked.
-- `group_admin_memberships` can be changed by Admin only, so it is not
-  affected.
-- Found by reading the code on 2026-10-29; not tested by running it.
-- Fix direction: check the actor's group scope (their groups plus subgroups)
-  in each of these services; make re-parenting and deactivating Admin only, or
-  require both old and new parent in scope.
+Security:
+
+- Finding E (group-scope authorization gaps) is known to etjenesten and being
+  fixed (per Morten, 2026-11-02). Until the fix is released this file keeps
+  only a short summary. Checklist for the longer message, to confirm each is
+  covered by the fix:
+  - role assignments on the group page and on the volunteer page;
+  - group history delete;
+  - semester transfer;
+  - volunteer delete;
+  - re-parenting or deactivating groups;
+  - creating, renaming and deleting verv;
+  - application approval, which checks only the applicant's own group
+    choices, not the approver's group.
 - Why it matters for Skiftlista: qualifications and the leader pool depend on
   active membership, so this must be fixed or accepted before the pilot.
-- Do you accept the OR-Tools (`ortools`) dependency in Personal for the
-  weekly suggestion function (Google CP-SAT), and does it fit the hosting
-  (Vercel function size limits)? If not, a plain Python fallback is used.
+- Findings A (CSRF cookie not tied to the session) and C (CSP allows
+  `'unsafe-inline'`) stay as reported.
+
+Questions:
+
+- OR-Tools (`ortools`) for the weekly suggestion function (Google CP-SAT), and
+  whether it fits the hosting (Vercel function size limits): **later, not
+  blocking (plan B, plain Python, is chosen).**
+- Slack (step 8, direction decided 2026-11-02): who can create or approve a
+  Slack app in the workspace (post messages, look up users by email); the app's
+  secret stored in the hosting environment by etjenesten; channel post or DMs
+  for leaders.
+- Before any upstream PR: talk about an ADR or issue first, since the
+  samfunnettjeneste plan touches groups and rights; and the docs split and
+  commit series described under "Conformance pass results".
 - Other questions for etjenesten are listed under "Not code, but on the
-  critical path" (verv names, Slack versus email, Crescat, OTA, hosting).
+  critical path" (verv names, Slack, Crescat, OTA, hosting).
+
+For Samfunnet's privacy person (the full list is under "Not code, but on the
+critical path"): qualifications kept for former members; sending name, date and
+shift through Slack with an opt-out; the personal calendar feed (Google and
+Microsoft see shift titles, times and venues).
