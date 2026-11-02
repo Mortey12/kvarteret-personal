@@ -32,5 +32,8 @@
     </li>
   </ul>
   {% if page.status %}{% include "pages/shifts/_week_status_actions.html" %}{% endif %}
-  <button class="app-button-secondary noprint ml-auto min-h-11 px-4 text-sm" type="button" data-print-week>Skriv ut</button>
+  <div class="noprint ml-auto flex flex-wrap gap-2">
+    <button class="app-button-secondary min-h-11 px-4 text-sm" type="button" aria-expanded="true" aria-controls="week-people-panel" data-people-toggle>Skjul folk</button>
+    <button class="app-button-secondary min-h-11 px-4 text-sm" type="button" data-print-week>Skriv ut</button>
+  </div>
 </div>

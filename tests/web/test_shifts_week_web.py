@@ -180,6 +180,7 @@ def test_week_page_has_no_inline_event_handlers_or_inline_scripts_of_its_own() -
     assert re.findall(r"<script\b[^>]*>", html.split("<main", 1)[1]) == [
         '<script type="application/json" id="week-data">',
         re.findall(r'<script defer src="[^"]*shift-week\.js[^"]*">', html)[0],
+        re.findall(r'<script defer src="[^"]*shift-week-people\.js[^"]*">', html)[0],
     ]
 
 
@@ -529,3 +530,80 @@ def test_a_bar_with_all_seven_days_has_no_collapsed_column() -> None:
     assert "data-collapsed" not in grid
     assert 'data-used-days="7"' in grid and grid.count('scope="col"') == 8
     assert 'scope="row"' in grid
+
+
+def _panel(html: str) -> str:
+    return html.split("data-people-panel-wrap", 1)[1].split("data-people-region", 1)[0]
+
+
+def test_search_input_has_a_visible_label() -> None:
+    panel = _panel(_page())
+
+    assert re.search(r'<label[^>]*for="week-people-search"[^>]*>Søk etter navn</label>', panel)
+    assert re.search(r'<input[^>]*id="week-people-search"[^>]*type="search"', panel)
+
+
+def test_filter_buttons_are_toggle_buttons_with_visible_text() -> None:
+    panel = _panel(_page())
+
+    for key, label in (("sl", "Bare skiftledere"), ("unanswered", "Ikke svart"), ("noshift", "Uten skift denne uka")):
+        assert re.search(
+            rf'<button[^>]*type="button"[^>]*aria-pressed="false"[^>]*data-filter="{key}">{label}</button>', panel
+        )
+    assert re.search(r'<button[^>]*type="button"[^>]*hidden[^>]*data-people-reset>Nullstill</button>', panel)
+
+
+def test_count_is_a_polite_live_region_with_the_empty_text() -> None:
+    panel = _panel(_page())
+
+    match = re.search(r'<p[^>]*aria-live="polite"[^>]*aria-atomic="true"[^>]*data-people-count>(.*?)</p>', panel, re.S)
+    assert match and "Viser 2 av 2" in match.group(1)
+    assert re.search(r"<span data-people-empty hidden> Ingen treff</span>", match.group(1))
+
+
+def test_every_person_row_has_a_button_with_the_name_and_aria_pressed() -> None:
+    html = _page()
+    rows = re.findall(r"<li [^>]*data-person .*?</li>", html.split("data-people-list", 1)[1], re.S)
+
+    assert len(rows) == 2
+    for row in rows:
+        assert re.search(r'<button[^>]*type="button"[^>]*aria-pressed="false"[^>]*data-person-button>[^<]+</button>', row)
+    assert re.search(r'data-person-button>Tora Tilgjengelig</button>', html)
+    assert 'class="week-selected-tag' in html and ">Valgt<" in html
+
+
+def test_selection_line_is_hidden_until_used_and_has_fjern_valg() -> None:
+    html = _page()
+
+    assert re.search(r'<p[^>]*data-selection hidden>Viser: <strong data-selection-name></strong>', html)
+    assert re.search(r'<button[^>]*type="button"[^>]*data-selection-clear>Fjern valg</button>', html)
+    assert "noprint" in re.search(r'<p[^>]*data-selection hidden', html).group(0)
+
+
+def test_fold_button_controls_the_panel_and_both_are_noprint_where_needed() -> None:
+    html = _page()
+    button = re.search(r"<button[^>]*data-people-toggle>Skjul folk</button>", html).group(0)
+    target = re.search(r'aria-controls="([^"]+)"', button).group(1)
+
+    assert 'aria-expanded="true"' in button
+    assert len(re.findall(rf'id="{target}"', html)) == 1
+    assert re.search(rf'<div class="[^"]*noprint[^"]*" id="{target}"', html)
+    assert re.search(r'<div class="noprint ml-auto[^"]*">\s*<button[^>]*data-people-toggle', html)
+    assert 'data-people-folded="false"' in html and "data-week-layout" in html
+
+
+def test_new_controls_are_in_keyboard_order_search_filters_list_then_grid_after_panel_in_source() -> None:
+    html = _page()
+
+    # Source order is the tab order: search, filters, reset, people list; the grid comes first in the
+    # layout, so its content is reached before the panel only through its own (non-focusable) cells.
+    panel = html.split("data-people-panel-wrap", 1)[1]
+    assert panel.index("data-people-search") < panel.index("data-filter=") < panel.index("data-people-reset") < panel.index("data-person-button")
+
+
+def test_no_inline_handlers_in_the_new_controls() -> None:
+    html = _page()
+    page = html.split('id="week-data"')[0].split("<main", 1)[1]
+
+    assert not re.search(r"\son[a-z]+\s*=", page, re.I)
+    assert "style=" not in _panel(html)

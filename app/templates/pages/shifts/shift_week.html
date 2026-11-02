@@ -2,7 +2,7 @@
 {% from "components/shared/ui_macros.html" import flash_notice %}
 
 {% block page_content %}
-  <section class="week-page grid gap-3">
+  <section class="week-page grid gap-3" data-week-root>
     {% if page.plan %}{% include "pages/shifts/_week_banners.html" %}{% endif %}
 
     <div class="noprint flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
@@ -24,13 +24,15 @@
     {% if view %}
       {% include "pages/shifts/_week_topline.html" %}
       {% include "pages/shifts/_week_bar.html" %}
-      <div class="grid gap-3 min-[1180px]:grid-cols-[minmax(0,1fr)_16.25rem]">
+      <p class="week-selection noprint" data-selection hidden>Viser: <strong data-selection-name></strong> <button class="app-button-secondary min-h-8 px-3 text-sm" type="button" data-selection-clear>Fjern valg</button></p>
+      <div class="week-layout" data-week-layout data-people-folded="false">
         {% include "pages/shifts/_week_grid.html" %}
         {% include "pages/shifts/_week_people.html" %}
       </div>
       {% include "pages/shifts/_week_strip.html" %}
       <script type="application/json" id="week-data">{{ view.data | tojson }}</script>
       <script defer src="{{ asset_url('js/shift-week.js') }}"></script>
+      <script defer src="{{ asset_url('js/shift-week-people.js') }}"></script>
     {% else %}
       <div class="app-panel py-10 text-center text-sm text-stone-700">
         {% if no_groups %}Du er ikke gruppeadmin for noen grupper med skift. Be en administrator om tilgang.{% else %}Ingen barer med skift ennå.{% endif %}

@@ -1,17 +1,31 @@
-<div class="week-people-wrap noprint" data-people-panel-wrap>
+<div class="week-people-wrap noprint" id="week-people-panel" data-people-panel-wrap>
   <div class="week-people flex flex-col gap-2 border-2 border-stone-900 bg-white p-3" data-people-panel>
     <div class="flex items-baseline justify-between gap-2">
       <h2 class="text-base font-semibold">Folk denne uka</h2>
       <span class="text-xs text-stone-700">{{ view.people | length }} personer</span>
     </div>
+    <div class="grid gap-1.5" data-people-filters>
+      <label class="text-xs font-semibold" for="week-people-search">Søk etter navn</label>
+      <input class="week-search" id="week-people-search" type="search" autocomplete="off" spellcheck="false" data-people-search>
+      <div class="flex flex-wrap gap-1.5" role="group" aria-label="Filtrer folk">
+        <button class="week-filter" type="button" aria-pressed="false" data-filter="sl">Bare skiftledere</button>
+        <button class="week-filter" type="button" aria-pressed="false" data-filter="unanswered">Ikke svart</button>
+        <button class="week-filter" type="button" aria-pressed="false" data-filter="noshift">Uten skift denne uka</button>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <p class="text-xs text-stone-800" aria-live="polite" aria-atomic="true" data-people-count><span data-count-text>Viser {{ view.people | length }} av {{ view.people | length }}</span><span data-people-empty hidden> Ingen treff</span></p>
+        <button class="week-filter" type="button" hidden data-people-reset>Nullstill</button>
+      </div>
+    </div>
     <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain border-y border-stone-300 py-1.5" role="region" aria-label="Liste over folk denne uka" tabindex="0" data-people-region>
       <ul class="grid content-start gap-1" data-people-list>
         {% for person in view.people %}
-          <li class="border border-stone-300 px-2 py-1 text-sm" data-person data-volunteer-id="{{ person.volunteer_id }}" data-name="{{ person.name | lower }}" data-sl="{{ 1 if person.is_sl else 0 }}" data-week-count="{{ person.week_count }}" data-month-count="{{ person.month_count }}" data-began="{{ 1 if person.began else 0 }}">
+          <li class="week-person border border-stone-300 px-2 py-1 text-sm" data-person data-volunteer-id="{{ person.volunteer_id }}" data-name="{{ person.name | lower }}" data-sl="{{ 1 if person.is_sl else 0 }}" data-week-count="{{ person.week_count }}" data-month-count="{{ person.month_count }}" data-began="{{ 1 if person.began else 0 }}">
             <div class="flex items-baseline justify-between gap-2">
               <span class="flex min-w-0 items-baseline gap-1">
-                <span class="truncate font-medium leading-tight">{{ person.name }}</span>
+                <button class="week-person-btn truncate font-medium leading-tight" type="button" aria-pressed="false" data-person-button>{{ person.name }}</button>
                 {% if person.is_sl %}<span class="shrink-0 text-xs font-semibold text-stone-800"><span aria-hidden="true">SL</span><span class="sr-only">godkjent skiftleder</span></span>{% endif %}
+                <span class="week-selected-tag shrink-0 text-xs font-semibold">Valgt</span>
               </span>
               <span class="shrink-0 text-xs {{ 'text-stone-700' if person.began else 'font-semibold text-red-800' }}" data-person-status>{{ person.status_word }}</span>
             </div>

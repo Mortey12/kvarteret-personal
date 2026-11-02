@@ -332,7 +332,7 @@
 
 /* Leader week page (/shifts/week). Colours checked for WCAG 2.1 AA contrast. */
 @layer components {
-  .week-page :where(a, button, summary, [tabindex="0"]):focus-visible { outline: 3px solid var(--color-kvarteret-ink); outline-offset: 2px; }
+  .week-page :where(a, button, summary, input, [tabindex="0"]):focus-visible { outline: 3px solid var(--color-kvarteret-ink); outline-offset: 2px; }
   /* The shared red button has 3.2:1 cream text; on this page the ink text gives 5.7:1. */
   .week-page .app-button { color: var(--color-kvarteret-ink); }
   .week-tab { display: inline-flex; min-height: 2.75rem; align-items: center; border: 2px solid var(--color-kvarteret-ink); background: white; padding: 0 1rem; font-weight: 600; color: var(--color-kvarteret-ink); text-decoration: none; }
@@ -365,17 +365,17 @@
   .week-grid-table[data-used-days="5"] { min-width: 43rem; }
   .week-grid-table[data-used-days="6"] { min-width: 47rem; }
   .week-grid-table[data-used-days="7"] { min-width: 51rem; }
-  /* People panel. Stacked under the grid it is a 24rem scroll box. From 1180px it sits beside the grid
+  /* People panel. Stacked under the grid it is a 32rem scroll box. From 1180px it sits beside the grid
      and its box is taken out of the flow (absolute, inset 0 in a relative wrapper), so its height is
-     the height of the grid row (at least 22rem) and never the number of people. The header stays
+     the height of the grid row (at least 30rem) and never the number of people. The header stays
      above the scrolling list. */
-  .week-people { max-height: 24rem; }
+  .week-people { max-height: 32rem; }
   /* ONE BREAKPOINT, 1180px (also min-[1180px] in shift_week.html). Worst case is a bar with all seven days
      used: grid 51rem (816px) + its 2px borders (4px) + gap-3 (12px) + panel 16.25rem (260px) = 1092px of
      content. The page adds px-8 on each side from 1024px (64px) and the viewport width includes a classic
      scrollbar (about 15px): 1092 + 64 + 15 = 1171px, rounded up to 1180px. */
   @media (min-width: 1180px) {
-    .week-people-wrap { position: relative; min-height: 22rem; }
+    .week-people-wrap { position: relative; min-height: 30rem; }
     .week-people { position: absolute; inset: 0; max-height: none; }
   }
   .week-place-open { border: 1.5px dashed #78716c; background: transparent; }
@@ -385,6 +385,41 @@
   .week-strip-item[aria-current="page"] { border: 3px solid var(--color-kvarteret-ink); }
   .week-strip-item[data-status="published"] { background: #ecfdf3; }
   .week-print-title { display: none; }
+  /* L1b. Layout: grid and people panel side by side from 1180px; folded, the grid takes the full width. */
+  .week-layout { display: grid; gap: .75rem; }
+  @media (min-width: 1180px) {
+    .week-layout { grid-template-columns: minmax(0, 1fr) 16.25rem; }
+  }
+  .week-layout[data-people-folded="true"] { grid-template-columns: minmax(0, 1fr); }
+  .week-people-wrap[hidden] { display: none; }
+  /* Search, filters and the person buttons. Ink on white 19.9:1; pressed filter white on ink 19.9:1. */
+  .week-search { box-sizing: border-box; width: 100%; min-height: 2.25rem; border: 2px solid var(--color-kvarteret-ink); background: white; padding: .25rem .5rem; font-size: .875rem; color: var(--color-kvarteret-ink); }
+  .week-filter { min-height: 2rem; border: 2px solid var(--color-kvarteret-ink); background: white; padding: .15rem .6rem; font-size: .8125rem; font-weight: 600; color: var(--color-kvarteret-ink); cursor: pointer; }
+  .week-filter[aria-pressed="true"] { background: var(--color-kvarteret-ink); color: white; }
+  .week-filter[aria-pressed="true"]::before { content: "\2713\00a0"; }
+  .week-filter[hidden] { display: none; }
+  .week-person { position: relative; }
+  .week-person-btn { min-height: 1.5rem; max-width: 100%; text-align: left; color: inherit; cursor: pointer; }
+  /* The whole row is the click target; the button stays the one tab stop with the name as its text. */
+  .week-person-btn::after { content: ""; position: absolute; inset: 0; }
+  .week-person-btn:focus-visible::after { outline: 3px solid var(--color-kvarteret-ink); outline-offset: 1px; }
+  .week-person[hidden] { display: none; }
+  .week-person[data-selected="true"] { border: 3px solid var(--color-kvarteret-ink); background: #f5f5f4; }
+  .week-selected-tag { display: none; }
+  .week-person[data-selected="true"] .week-selected-tag { display: inline; border: 1px solid var(--color-kvarteret-ink); padding: 0 .25rem; }
+  /* "Viser: <name>" above the grid. */
+  .week-selection { margin: 0; border: 2px solid var(--color-kvarteret-ink); background: white; padding: .35rem .75rem; font-size: .9375rem; }
+  .week-selection[hidden] { display: none; }
+  .week-selection > button { margin-left: .5rem; vertical-align: middle; }
+  /* Grid markers for the selected person. Placed: 3px ink outline inside the cell (19.9:1 on white) and
+     a solid ink label with white text (19.9:1). Answer line: stone-800 on white 15.2:1, dots as above. */
+  .week-cell-placed { outline: 3px solid var(--color-kvarteret-ink); outline-offset: -3px; }
+  .week-select-note { margin: 0 0 .35rem; font-size: .75rem; }
+  .week-select-placed { display: inline-block; background: var(--color-kvarteret-ink); padding: .1rem .45rem; font-weight: 700; color: white; }
+  .week-select-answer { display: flex; align-items: center; gap: .35rem; color: var(--color-stone-800); }
+  /* "Opptatt" in the day header: #78350f on #fef3c7 8.2:1, border on the grey collapsed header 7.2:1. */
+  .week-busy { display: block; margin-top: .25rem; border: 1px solid #78350f; background: #fef3c7; padding: 0 .2rem; font-size: .75rem; font-weight: 600; color: #78350f; }
+  .week-collapsed .week-busy { padding: 0; font-size: .625rem; text-align: center; overflow-wrap: anywhere; }
 }
 
 /* Print the week grid only: everything else is marked noprint, and the page shell is hidden. */
@@ -398,4 +433,7 @@
   .week-print .week-place { break-inside: avoid; background: white; }
   /* Answers print as the word only. */
   .week-dot { display: none; }
+  /* The selected person's markers are a screen aid; the print stays as it was. */
+  .week-select-note, .week-busy { display: none !important; }
+  .week-cell-placed { outline: none; }
 }
