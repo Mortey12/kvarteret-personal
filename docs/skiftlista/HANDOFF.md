@@ -42,8 +42,10 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
 - **Next action** (decided 2026-11-02 evening; replaces the earlier list). The
   reasons and details are under "Changes after the design pass (2026-11-02
   evening)" in the package section:
-  (1) **L1b** is built (see "Built 2026-11-02, L1b"); (2) **L2**, placing people
-  (click-to-place, drag and drop, the place popover), "Vis andre", swap; (3) demo update 2; (4) conformance pass 2 (wider: pull
+  (1) **L1b** is built (see "Built 2026-11-02, L1b"); (2) **L2a**, placing by
+  clicking (see "L2 plan"; start from a clean repo with the demo branch merged;
+  one prompt for the first half and one for the second half), then **L2b** (drag
+  and drop) and "Vis andre"; (3) demo update 2; (4) conformance pass 2 (wider: pull
   request history and review comments of the two repos, samfunnetibergen,
   org-level rules; public repos only); (5) Morten runs the Postgres e2e tests;
   (6) design pass 2 (read-only Opus: weekly planning and the dials turned into
@@ -1349,11 +1351,45 @@ unchanged.
   is needed while the panel is beside the grid. (d) The status buttons sit on
   the same row as the week navigation when there is room, "Skriv ut" on the
   right. (e) "svarte kan ikke" shows as "!" plus the word "kan ikke" in the
-  box, with the hidden text "Problem: svarte kan ikke".
+  box, with the hidden text "Problem: svarte kan ikke". (f) The week bar always
+  has two rows so it does not jump between weeks: row 1 is the view (arrows,
+  status badge, chips, "Skjul folk", "Skriv ut"), row 2 the actions (the status
+  buttons and the hint, without a max width). Replaces (d). Session
+  b5ed3a1e-2f8e-47d5-a998-8b56b84b1033.
 - **Not in L1a:** suggestions, "Fyll", copy last week, "Angre", "Sist endret
   av", deadline, note and maks, "0 helg", "Vis andre", selecting a person, the
   place popover, drag and drop, search and filters (L1b, L2 and later). Selecting
   a person, search and filters were built in L1b.
+
+#### L2 plan (decided in chat 2026-11-02, not built)
+
+L2a is placing by clicking, including "Bytt person" (swap). L2b is drag and drop
+and "Vis andre"; drag and drop adds no new placing rules and comes after L2a. The mockup was approved in chat. L2a decisions:
+- Each action saves at once, one placement per request.
+- Two ways to start: place first (click "Ledig", a picker for the place) and
+  person first (a person selected in the people panel makes the empty places
+  that fit say "Sett inn <fornavn>").
+- Filled places have "Bytt person" (atomic replace) and "Fjern fra plassen".
+- The picker lists only people who fit the place (a skiftleder place takes
+  only approved skiftledere). Order: by answer for the shift (vil, kan, ikke
+  svart, kan ikke at the bottom); inside each group fewer shifts this week
+  first, then fewer this month, then name.
+- Each row shows name, SL mark, dot plus word, "N uka · N mnd" and warnings as
+  text with a tint (red for kan ikke, to skift samme dag, kan ikke i dag;
+  yellow for the rest). Warnings never block a hand placement.
+- Warnings and eligibility come from the server and reuse the existing rules;
+  no second copy in JS.
+- Published weeks may be changed (the marker "Endret etter publisering" comes
+  later). "Angre" and suggestions are later.
+- The picker is a labelled dialog with focus to the search field, Escape
+  returns focus, a live message, per the universal design rules.
+
+**Suggestion function (after L2a and the dials, not part of L2a):** plain
+deterministic Python with fairness. Hard rules for suggestions: the lowest of
+own maks, agreed number and bar max, the rest rule, absences, recurring days
+off. Warnings only for hand placement. Buttons: "Lag forslag", "Godta
+forslag", "Forkast", "Fyll", "Angre". Stored in its own table (S2 migration,
+with an Opus review before Neon).
 
 #### L1a decisions and universal design (2026-11-02)
 

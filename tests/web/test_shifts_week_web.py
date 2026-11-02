@@ -498,11 +498,22 @@ def test_people_panel_is_a_sticky_wrapper_with_a_labelled_focusable_region() -> 
     assert re.search(r'role="region" aria-label="Liste over folk denne uka" tabindex="0" data-people-region', html)
 
 
-def test_status_buttons_sit_in_the_week_bar_before_the_print_button() -> None:
+def test_status_buttons_sit_in_the_week_bar_after_the_print_button() -> None:
     bar = _page().split("data-week-bar", 1)[1].split("data-week-topline", 1)[0]
 
-    assert bar.index("data-week-status") < bar.index("data-print-week")
+    assert bar.index("data-print-week") < bar.index("data-week-status data-group-id")
     assert "ml-auto" in bar
+
+
+def test_week_bar_has_two_rows_with_status_buttons_in_the_second() -> None:
+    bar = _page().split("data-week-bar", 1)[1].split("data-week-topline", 1)[0]
+
+    assert bar.count("data-week-bar-row=") == 2
+    view_row, actions_row = bar.split('data-week-bar-row="actions"')
+    assert 'data-week-bar-row="view"' in view_row
+    assert "data-print-week" in view_row and "data-week-status data-group-id" not in view_row
+    assert "data-week-status data-group-id" in actions_row
+    assert "Åpne for ønsker" in actions_row and "Publiser uka" in actions_row
 
 
 def _grid_head(shift_days: list[int]) -> str:

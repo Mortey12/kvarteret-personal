@@ -11,5 +11,5 @@
       <button class="{{ 'app-button' if primary else 'app-button-secondary' }} min-h-11 px-4 text-sm" type="submit" {% if (item.status == form_status and item.explicit) or (form_status == 'open' and not item.can_open) %}disabled{% endif %}>{{ form_label }}</button>
     </form>
   {% endfor %}
-  {% if not item.can_open %}<p class="max-w-[12rem] text-xs leading-tight text-stone-700" data-open-hint>Bare kommende uker kan åpnes for ønsker.</p>{% endif %}
+  {% if not item.can_open %}<p class="text-xs leading-tight text-stone-700" data-open-hint>Bare kommende uker kan åpnes for ønsker.</p>{% endif %}
 </div>
