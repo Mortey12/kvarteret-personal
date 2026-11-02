@@ -159,6 +159,8 @@ class WeekView:
     rows: list[RowView]
     people: list[PersonRow]
     problem_count: int
+    # Places with at least one red problem; the rest of ``problem_count`` are yellow-only warnings.
+    problem_red_count: int
     problem_places: list[str]
     open_places: int
     without_shift: list[str]
@@ -487,6 +489,7 @@ def build_week_view(data: WeekInput) -> WeekView:
         rows=rows,
         people=people,
         problem_count=len(problem_places),
+        problem_red_count=sum(1 for place in places if place.level == RED),
         problem_places=problem_places,
         open_places=sum(cell.open_places for row in rows for cell in row.cells if cell),
         without_shift=without_shift,
