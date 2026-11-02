@@ -1,11 +1,11 @@
 <section class="week-print min-w-0 overflow-x-auto border-2 border-stone-900 bg-white" id="week-grid" aria-label="Ukeplan for {{ view.bar_name }}" data-week-grid>
   <h2 class="week-print-title">{{ view.bar_name }}: {{ view.week_label }}</h2>
   {% if view.rows %}
-    <table class="week-grid-table w-full min-w-[56rem] table-fixed border-collapse text-sm">
+    <table class="week-grid-table w-full min-w-[54rem] table-fixed border-collapse text-sm">
       <caption class="sr-only">Ukeplan for {{ view.bar_name }}, {{ view.week_label }}. Dager som kolonner, skift etter plass i dagen som rader.</caption>
       <thead>
         <tr>
-          <th class="w-24 border-b border-stone-300 p-2 text-left text-xs font-normal text-stone-700" scope="col"><span class="sr-only">Skift</span></th>
+          <th class="w-[5.5rem] border-b border-stone-300 p-2 text-left text-xs font-normal text-stone-700" scope="col"><span class="sr-only">Skift</span></th>
           {% for head in view.heads %}
             <th class="border-b border-l border-stone-300 p-2 text-left" scope="col" data-day="{{ head.day.isoformat() }}">
               <span class="block font-semibold">{{ head.name }}</span>
@@ -16,35 +16,41 @@
       </thead>
       <tbody>
         {% for row in view.rows %}
-          <tr data-grid-row data-position="{{ row.position }}">
-            <th class="border-t border-stone-300 p-2 text-left align-top" scope="row">
+          <tr class="week-row" data-grid-row data-position="{{ row.position }}">
+            <th class="p-2 text-left align-top [overflow-wrap:anywhere]" scope="row">
               <span class="block font-semibold">{{ row.title }}</span>
               <span class="block text-xs font-normal text-stone-700">{{ row.time_label }}</span>
               <span class="block text-xs font-normal text-stone-700">{{ row.label }}</span>
             </th>
             {% for cell in row.cells %}
               {% if cell is none %}
-                <td class="border-l border-t border-stone-300 bg-stone-200" data-cell-empty><span class="sr-only">Ingen skift</span></td>
+                <td class="border-l border-stone-300 bg-stone-200" data-cell-empty><span class="sr-only">Ingen skift</span></td>
               {% else %}
-                <td class="week-cell align-top border-l border-t border-stone-300 p-1.5" data-cell data-shift-id="{{ cell.shift_id }}" data-day="{{ cell.day.isoformat() }}">
+                <td class="week-cell align-top border-l border-stone-300 p-2" data-cell data-shift-id="{{ cell.shift_id }}" data-day="{{ cell.day.isoformat() }}">
                   {% if cell.is_closed %}<p class="mb-1 text-xs font-semibold text-stone-700">Stengt</p>{% endif %}
-                  <ul class="grid gap-1">
+                  <ul class="m-0 grid list-none gap-1.5 p-0">
                     {% for place in cell.places %}
                       <li class="week-place {% if place.is_open %}week-place-open{% endif %} {% if place.level %}week-place-{{ place.level }}{% endif %}" data-place data-slot-id="{{ place.slot_id }}" data-kind="{{ place.kind }}" data-token="{{ place.token }}"{% if place.volunteer_id %} data-volunteer-id="{{ place.volunteer_id }}" data-assignment-id="{{ place.assignment_id }}"{% endif %}{% if place.level %} data-level="{{ place.level }}"{% endif %}>
                         <span class="block text-[11px] uppercase tracking-wide text-stone-700">{{ place.kind_label }}</span>
                         {% if place.is_open %}
                           <span class="block text-stone-700">Ledig</span>
                         {% else %}
-                          <span class="block truncate font-medium">{{ place.name }}</span>
-                          {% if place.answer_word %}<span class="block text-xs text-stone-700" data-answer="{{ place.answer }}"><span class="sr-only">Svar: </span>{{ place.answer_word }}</span>{% endif %}
+                          <span class="week-name block font-medium leading-tight">{{ place.name }}</span>
+                          {% if place.answer %}<span class="week-answer" data-answer="{{ place.answer }}"><span class="week-dot week-dot-{{ place.answer }}" aria-hidden="true"></span><span class="sr-only">Svar: </span>{% if place.answer == 'nei' %}<span aria-hidden="true">! </span>{% endif %}{{ place.answer_word }}</span>{% endif %}
                           {% for problem in place.problems %}
-                            <span class="block text-xs font-semibold {{ 'text-red-800' if problem.level == 'red' else 'text-amber-900' }}" data-problem="{{ problem.level }}"><span class="sr-only">{{ 'Problem' if problem.level == 'red' else 'Advarsel' }}: </span><span aria-hidden="true">! </span>{{ problem.text }}</span>
+                            {# "svarte kan ikke" is already the answer line with its "!"; keep only the hidden text. #}
+                            {% if problem.text == 'svarte kan ikke' %}
+                              <span class="sr-only" data-problem="{{ problem.level }}">Problem: {{ problem.text }}. </span>
+                            {% else %}
+                              {% set short = problem.text | replace('to skift samme dag', '2 skift samme dag') %}
+                              <span class="block text-xs font-semibold {{ 'text-red-800' if problem.level == 'red' else 'text-amber-900' }}" data-problem="{{ problem.level }}"><span class="sr-only">{{ 'Problem' if problem.level == 'red' else 'Advarsel' }}: </span><span aria-hidden="true">! </span>{{ short }}</span>
+                            {% endif %}
                           {% endfor %}
                         {% endif %}
                       </li>
                     {% endfor %}
                   </ul>
-                  <p class="mt-1 text-xs text-stone-700" data-cell-counts><span class="sr-only">Ønsker: </span>{{ cell.vil }} vil · {{ cell.kan }} kan</p>
+                  <p class="mt-2 text-xs text-stone-700" data-cell-counts><span class="sr-only">Ønsker: </span>{{ cell.vil }} vil · {{ cell.kan }} kan</p>
                 </td>
               {% endif %}
             {% endfor %}

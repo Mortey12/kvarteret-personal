@@ -343,7 +343,26 @@
   .week-chip-yellow { border: 2px solid #78350f; background: #fef3c7; color: #78350f; font-weight: 600; }
   .week-summary { display: inline-flex; min-height: 2rem; cursor: pointer; align-items: center; border: 1px solid var(--color-kvarteret-ink); background: white; padding: .15rem .6rem; }
   .week-popover { position: absolute; z-index: 20; margin-top: .25rem; width: max-content; min-width: 14rem; max-width: 22rem; border: 2px solid var(--color-kvarteret-ink); background: white; padding: .5rem .75rem; box-shadow: 0 8px 16px #0002; }
-  .week-place { border: 1.5px solid var(--color-kvarteret-ink); background: white; padding: .15rem .4rem; min-height: 2.75rem; }
+  .week-place { box-sizing: border-box; width: 100%; min-width: 0; min-height: 2.75rem; overflow-wrap: anywhere; border: 1.5px solid var(--color-kvarteret-ink); background: white; padding: .3rem .45rem; }
+  .week-name { overflow-wrap: anywhere; }
+  .week-row > * { border-top: 2px solid #78716c; }
+  .week-answer { display: flex; align-items: center; gap: .4rem; font-size: .8125rem; color: var(--color-stone-800); }
+  /* Same fills as the app calendar dots; the outline carries the 3:1 contrast on any box. */
+  /* Round: the base layer forces border-radius 0 !important on everything, so the circle is a
+     radial gradient (fill inside, dark outline ring) clipped to a circle. */
+  .week-dot { display: inline-block; flex: none; width: .75rem; height: .75rem; clip-path: circle(50%); forced-color-adjust: none; }
+  .week-dot-vil { background: radial-gradient(circle, #3E9B53 0 56%, #14532d 60% 100%); }
+  .week-dot-kan { background: radial-gradient(circle, #E9B824 0 56%, #78350f 60% 100%); }
+  .week-dot-nei { background: radial-gradient(circle, #7F2E2E 0 56%, #3f1212 60% 100%); }
+  /* People panel. Stacked under the grid it is a 24rem scroll box. From 1100px it sits beside the grid
+     and its box is taken out of the flow (absolute, inset 0 in a relative wrapper), so its height is
+     the height of the grid row (at least 22rem) and never the number of people. The header stays
+     above the scrolling list. */
+  .week-people { max-height: 24rem; }
+  @media (min-width: 1100px) {
+    .week-people-wrap { position: relative; min-height: 22rem; }
+    .week-people { position: absolute; inset: 0; max-height: none; }
+  }
   .week-place-open { border: 1.5px dashed #78716c; background: transparent; }
   .week-place-red { border: 2px solid #991b1b; background: #fef2f2; }
   .week-place-yellow { border: 2px solid #78350f; background: #fffbeb; }
@@ -362,4 +381,6 @@
   .week-print-title { display: block; margin: 0 0 .5rem; font-size: 1.1rem; font-weight: 600; }
   .week-print table { min-width: 0; font-size: 9pt; }
   .week-print .week-place { break-inside: avoid; background: white; }
+  /* Answers print as the word only. */
+  .week-dot { display: none; }
 }

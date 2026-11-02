@@ -385,11 +385,10 @@ def test_icon_only_controls_name_the_week_they_go_to() -> None:
 def test_problems_have_text_markers_for_screen_readers() -> None:
     html = _page()
 
-    assert '<span class="sr-only">Problem: </span>' in html
     assert '<span class="sr-only">Advarsel: </span>' in html
-    assert '<span aria-hidden="true">! </span>svarte kan ikke' in html
+    assert 'Problem: svarte kan ikke. </span>' in html
     # Answer and counts have text too.
-    assert '<span class="sr-only">Svar: </span>kan ikke' in html
+    assert '<span class="sr-only">Svar: </span><span aria-hidden="true">! </span>kan ikke' in html
     assert '<span class="sr-only">Ønsker: </span>1 vil · 0 kan' in html
     assert 'Status: </span>Utkast: ikke synlig i appen' in html
 
@@ -426,3 +425,77 @@ def test_disabled_open_button_explains_itself_in_visible_text() -> None:
     html = client.get("/shifts/week?group=7").text
 
     assert "Bare kommende uker kan åpnes for ønsker." in html
+
+
+def _grid(html: str) -> str:
+    return html.split('id="week-grid"', 1)[1].split("</section>", 1)[0]
+
+
+def test_answered_place_has_dot_visible_word_and_hidden_text() -> None:
+    grid = _grid(_page())
+
+    assert re.search(
+        r'<span class="week-answer" data-answer="nei"><span class="week-dot week-dot-nei" aria-hidden="true"></span>'
+        r'<span class="sr-only">Svar: </span><span aria-hidden="true">! </span>kan ikke</span>',
+        grid,
+    )
+    assert re.search(
+        r'<span class="week-answer" data-answer="kan"><span class="week-dot week-dot-kan" aria-hidden="true"></span>'
+        r'<span class="sr-only">Svar: </span>kan</span>',
+        grid,
+    )
+    assert 'week-dot-kan' in grid
+    # Boxes stay untinted for answers: only problems tint a place.
+    assert "week-place-yellow" in grid and "week-place-red" in grid
+    assert "week-answer-" not in grid
+
+
+def test_ikke_svart_is_not_in_the_grid_but_is_in_the_people_panel() -> None:
+    client, service = _client()
+
+    async def no_wishes(shift_ids, volunteer_ids):
+        return {}
+
+    service.repository.list_wishes_for = no_wishes
+    html = client.get("/shifts/week?week=2026-11-02&group=7").text
+    grid = _grid(html)
+
+    assert "ikke svart" not in grid and "week-answer" not in grid and "week-dot" not in grid
+    assert "Sander Skjenker" in grid
+    panel = html.split("data-people-panel", 1)[1]
+    assert panel.count("ikke svart") == 1  # Sander; Tora has begun
+
+
+def test_kan_ikke_answer_has_hidden_problem_text_and_no_separate_visible_line() -> None:
+    grid = _grid(_page())
+    first_cell = grid.split("data-cell ", 2)[1]
+
+    assert '<span class="sr-only" data-problem="red">Problem: svarte kan ikke. </span>' in first_cell
+    assert 'data-problem="red"><span class="sr-only">Problem: </span>' not in first_cell
+    assert "! svarte kan ikke" not in grid
+    assert 'week-place-red' in first_cell
+    # Other problems stay visible, in short form.
+    assert '<span aria-hidden="true">! </span>2 skift denne uka' in grid
+
+
+def test_people_rows_are_two_lines_with_hidden_full_text() -> None:
+    html = _page()
+    panel = html.split("data-people-panel-wrap", 1)[1]
+
+    assert '<span aria-hidden="true">0 uka · 1 mnd</span><span class="sr-only">0 denne uka · 1 denne måneden</span>' in panel
+    assert "whitespace-nowrap" in panel
+    assert re.search(r'data-person data-volunteer-id="4" data-name="tora tilgjengelig" data-sl="1"', panel)
+
+
+def test_people_panel_is_a_sticky_wrapper_with_a_labelled_focusable_region() -> None:
+    html = _page()
+
+    assert 'data-people-panel-wrap' in html
+    assert re.search(r'role="region" aria-label="Liste over folk denne uka" tabindex="0" data-people-region', html)
+
+
+def test_status_buttons_sit_in_the_week_bar_before_the_print_button() -> None:
+    bar = _page().split("data-week-bar", 1)[1].split("data-week-topline", 1)[0]
+
+    assert bar.index("data-week-status") < bar.index("data-print-week")
+    assert "ml-auto" in bar

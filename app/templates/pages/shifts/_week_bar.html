@@ -1,6 +1,6 @@
 <div class="flex flex-wrap items-center gap-2 border-2 border-stone-900 bg-white px-3 py-2" data-week-bar>
   <a aria-label="Forrige uke, uke {{ view.previous_week.isocalendar().week }}" class="app-button-secondary noprint" href="/shifts/week?week={{ view.previous_week.isoformat() }}&amp;group={{ view.bar_id }}" data-week-prev><span aria-hidden="true">‹</span></a>
-  <h2 class="min-w-44 text-center text-base font-semibold" data-week-label>{{ view.week_label }}</h2>
+  <h2 class="min-w-40 text-center text-base font-semibold" data-week-label>{{ view.week_label }}</h2>
   <a aria-label="Neste uke, uke {{ view.next_week.isocalendar().week }}" class="app-button-secondary noprint" href="/shifts/week?week={{ view.next_week.isoformat() }}&amp;group={{ view.bar_id }}" data-week-next><span aria-hidden="true">›</span></a>
   <span class="app-badge" data-status="{{ view.status }}" data-week-status-badge><span class="sr-only">Status: </span>{{ view.status_text }}</span>
   <ul class="noprint m-0 flex list-none flex-wrap items-start gap-2 p-0 text-sm" aria-label="Oppsummering av uka" data-week-chips>
@@ -31,7 +31,6 @@
       {% endif %}
     </li>
   </ul>
-  <span class="flex-1"></span>
-  <button class="app-button-secondary noprint" type="button" data-print-week>Skriv ut</button>
   {% if page.status %}{% include "pages/shifts/_week_status_actions.html" %}{% endif %}
+  <button class="app-button-secondary noprint ml-auto min-h-11 px-4 text-sm" type="button" data-print-week>Skriv ut</button>
 </div>
