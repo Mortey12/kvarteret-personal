@@ -1,0 +1,39 @@
+<div class="flex flex-wrap items-center gap-2 border-2 border-stone-900 bg-white px-3 py-2" data-week-bar>
+  <a aria-label="Forrige uke, uke {{ view.previous_week.isocalendar().week }}" class="app-button-secondary noprint" href="/shifts/week?week={{ view.previous_week.isoformat() }}&amp;group={{ view.bar_id }}" data-week-prev><span aria-hidden="true">‹</span></a>
+  <h2 class="min-w-40 text-center text-base font-semibold" data-week-label>{{ view.week_label }}</h2>
+  <a aria-label="Neste uke, uke {{ view.next_week.isocalendar().week }}" class="app-button-secondary noprint" href="/shifts/week?week={{ view.next_week.isoformat() }}&amp;group={{ view.bar_id }}" data-week-next><span aria-hidden="true">›</span></a>
+  <span class="app-badge" data-status="{{ view.status }}" data-week-status-badge><span class="sr-only">Status: </span>{{ view.status_text }}</span>
+  <ul class="noprint m-0 flex list-none flex-wrap items-start gap-2 p-0 text-sm" aria-label="Oppsummering av uka" data-week-chips>
+    <li>
+      {% if view.problem_places %}
+        <details class="relative" data-chip-details="problems">
+          <summary class="week-chip week-chip-red" data-chip="problems"><span aria-hidden="true">! </span>{{ view.problem_count }} {{ 'problem' if view.problem_count == 1 else 'problemer' }}</summary>
+          <ul class="week-popover grid gap-0.5 text-sm">
+            {% for text in view.problem_places %}<li>{{ text }}</li>{% endfor %}
+          </ul>
+        </details>
+      {% else %}
+        <span class="week-chip" data-chip="problems">0 problemer</span>
+      {% endif %}
+    </li>
+    <li><span class="week-chip" data-chip="open">{{ view.open_places }} {{ 'ledig' if view.open_places == 1 else 'ledige' }}</span></li>
+    <li>
+      {% if view.without_shift %}
+        <details class="relative" data-chip-details="without-shift">
+          <summary class="week-chip week-chip-yellow" data-chip="without-shift">{{ view.without_shift | length }} uten skift</summary>
+          <div class="week-popover text-sm">
+            <p class="mb-1 text-xs text-stone-700">Har begynt å svare, men har ikke skift denne uka:</p>
+            <ul class="grid gap-0.5">{% for name in view.without_shift %}<li>{{ name }}</li>{% endfor %}</ul>
+          </div>
+        </details>
+      {% else %}
+        <span class="week-chip" data-chip="without-shift">0 uten skift</span>
+      {% endif %}
+    </li>
+  </ul>
+  {% if page.status %}{% include "pages/shifts/_week_status_actions.html" %}{% endif %}
+  <div class="noprint ml-auto flex flex-wrap gap-2">
+    <button class="app-button-secondary min-h-11 px-4 text-sm" type="button" aria-expanded="true" aria-controls="week-people-panel" data-people-toggle>Skjul folk</button>
+    <button class="app-button-secondary min-h-11 px-4 text-sm" type="button" data-print-week>Skriv ut</button>
+  </div>
+</div>
