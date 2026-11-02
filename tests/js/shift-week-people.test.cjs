@@ -68,3 +68,11 @@ test('answer words', () => {
   assert.equal(api.answerWord('vil'), 'vil');
   assert.equal(api.answerWord('x'), '');
 });
+
+test('stateKey tells one bar and week from another', () => {
+  const a = {bar_id: 7, week_start: '2026-11-02'};
+  assert.equal(api.stateKey(a), api.stateKey({bar_id: 7, week_start: '2026-11-02', people: []}));
+  assert.notEqual(api.stateKey(a), api.stateKey({bar_id: 8, week_start: '2026-11-02'}));
+  assert.notEqual(api.stateKey(a), api.stateKey({bar_id: 7, week_start: '2026-11-09'}));
+  assert.equal(api.stateKey(null), '');
+});

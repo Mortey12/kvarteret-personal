@@ -548,3 +548,15 @@ def test_picker_for_a_swap_refuses_an_assignment_on_another_place() -> None:
     response = client.get(f"/shifts/week/picker?slot_id={SECOND_SHIFT_SLOT}&replace={held}")
 
     assert response.status_code == 409 and "Plassen er endret" in response.json()["detail"]
+
+
+def test_week_root_has_a_distinct_id_per_bar_and_week_so_a_boosted_navigation_replaces_it() -> None:
+    client, _ = _client()
+
+    def root_id(query: str) -> str:
+        return re.search(r'<section[^>]*\sid="(week-root-[^"]+)"[^>]*data-week-root', client.get(f"/shifts/week?{query}").text).group(1)
+
+    here = root_id(f"group=7&week={WEEK}")
+    assert here == "week-root-7-2026-11-02"
+    assert root_id("group=7&week=2026-11-09") == "week-root-7-2026-11-09" != here
+    assert root_id(f"group=8&week={WEEK}") == "week-root-8-2026-11-02" != here
