@@ -6,21 +6,26 @@ the codebase again.
 
 ## Start here
 
-Update by hand at the end of every session. Last updated 2026-11-02.
+Update by hand at the end of every session. Last updated 2026-11-02 (evening).
 
-- **State:** branch `skiftlista/skiftplan`; the last commit before the
-  2026-11-02 docs session was `b10233b` (`fe4acbc` is the last code commit;
-  `cbaba3a` and `b10233b` are docs commits). 5d step 1 at `ca64766`, step 2 at
-  `e54cadb` and `94d5107` (eligibility from qualifications; seeds, semester
-  clock, parent members, texts, tests), verv copy script at `fe4acbc`. The
-  hosted demo (skiftlista-demo.onrender.com) is unchanged since 2026-10-29:
-  `skiftlista/demo` is at `4513caa` (a merge of skiftplan at `cbaba3a`),
-  pushed to the fork. On the demo database (Neon), migration A ran (now at
-  `20261101_1200`) and `seed_demo.py` wrote 73 qualification rows. A dry run
-  of the copy script on the demo database worked on Postgres (it would add 73
-  and wrote nothing). Rollback branch in Neon: `before-skiftplan-2026-10-29`,
-  expires 2026-11-05. Rule for later: a new migration must run on Neon before
-  the matching merge into demo.
+- **State** (2026-11-02 evening; replaces the earlier State text): Personal,
+  branch `skiftlista/skiftplan`: S0 `b154264` (`app_service.py` split into
+  mixins, pure move), S1 `d6df7c6` (wish calendar API, weekday rules retired in
+  reads, "Har svart" on the board), S1d `af06d65` (calendar months start at the
+  semester start). Docs commits before these: `ba27207`, `80362cd`. Tests 1111
+  passed, 26 skipped; no migration; Alembic head `20261101_1200`. The app,
+  `kvarteret-internbevis` branch `feat/skiftlista-mobile`: A1 `f4772cd`, A1b
+  `179797b`, A1c `ba5ec80`; Jest 398 passed; checked on an Android phone in
+  Expo Go, **not checked on iOS**. Details under "Built 2026-11-02" in the
+  package section. **Demo:** `skiftlista/demo` was updated on 2026-11-02 (merge
+  commit `644be17`, pushed to the fork, Render deployed, `/health` ok). On Neon
+  production: Alembic at `20261101_1200`, `seed_demo.py` added 1110 wishes,
+  week status has explicit rows only for 2026-11-02 and 2026-11-09. New Neon
+  rollback branch `before-wishcalendar-2026-11-02` (never expires); the older
+  `before-skiftplan-2026-10-29` expires 2026-11-05. The leader board on the
+  hosted demo shows the large banner and "Har svart" per bar; the app was
+  verified through Expo Go with the tunnel. Rule for later: a new migration
+  must run on Neon before the matching merge into demo.
 - **Done 2026-11-02 (read-only passes and a docs session):** the design pass
   for the wish calendar and leader page package,
   `docs/skiftlista/design-pass-wishes.md`, and Morten's decisions on it; the
@@ -28,20 +33,33 @@ Update by hand at the end of every session. Last updated 2026-11-02.
   `docs/skiftlista/conformance-pass.md` (it ran on Sonnet; an Opus pass can
   spot-check its judgement calls if that turns out costly). Both decision sets
   are written into this file under "Design pass results (decided 2026-11-02)"
-  and "Conformance pass results (2026-11-02)" in the package section. Nothing
-  of the package is built yet. Do not edit the two pass files; they are the
-  record of the reasoning.
-- **Next action** (decided 2026-11-02; replaces the 2026-10-30 / 11-02 list):
-  (1) **S0**: split `app_service.py` by area as a pure move (Sonnet, M);
-  (2) **S1 and A1** (the first slice, no migration), then **S2** (M1), **A2**,
-  **L1**, **L2**, **G1**, **L3**, **L4**, **A3**, then the calendar feed
-  (session list and sizes in section J of the design pass file; the order is
-  in "Conformance pass results", item 20); server sessions on Sonnet with
-  tests, a read-only Opus review of each migration before Neon, then Neon and
-  the demo following the runbook; (3) the lists "before the pilot", "before the
-  store build" and "before any upstream PR" (under "Conformance pass results");
-  (4) then 4d-plus, then 5d step 3. Step 8 notifications (Slack) and 5c have no
-  slot in this order yet (open, see the package section).
+  and "Conformance pass results (2026-11-02)" in the package section. The
+  first slice was built the same day (S0, S1, S1d, A1, A1b, A1c; see "Built
+  2026-11-02"), and some decisions changed in the evening (see "Changes after
+  the design pass (2026-11-02 evening)"). Do not edit the two pass files; they
+  are the record of the reasoning, and they still describe the monthly plan.
+- **Next action** (decided 2026-11-02 evening; replaces the earlier list). The
+  reasons and details are under "Changes after the design pass (2026-11-02
+  evening)" in the package section:
+  (1) **L1**, the new leader page layout; (2) **L2**, selecting, popover,
+  "Vis andre", swap; (3) demo update 2; (4) conformance pass 2 (wider: pull
+  request history and review comments of the two repos, samfunnetibergen,
+  org-level rules; public repos only); (5) Morten runs the Postgres e2e tests;
+  (6) design pass 2 (read-only Opus: weekly planning and the dials turned into
+  a data model, a migration split, the leader settings page and the app's
+  request flow, then ask Morten); (7) **S2** (the migration or migrations from
+  design pass 2, including the RLS and REVOKE fixes for `shift_week_status` and
+  `shift_closed_periods`, the index rename, the weekly table, the weekly
+  deadline and the dials; the weekly "Har svart" and "Ferdig"; copy from last
+  week; read-only Opus review of every migration before Neon); (8) the leader
+  settings page for the dials; (9) **A2** (mockup first: week-number column,
+  "Ferdig", deadline banner, note and maks, copy last week, agreements and
+  absence requests); (10) **G1**, then **L3** and **L4** (the suggestion uses
+  the dials); (11) demo update 3; (12) **A3** and the calendar feed; (13) the
+  lists "before the pilot", "before the store build" and "before any upstream
+  PR" (under "Conformance pass results"). Then 4d-plus and 5d step 3. Step 8
+  notifications (Slack) and 5c have no slot in this order yet (open, see the
+  package section).
 - **Parked, waiting for etjenesten:** OTA publishing (blocks the store
   build); real verv names (block running the copy script on real data);
   Findings A, C and E and hosting limits (block the official pilot, not the
@@ -255,6 +273,18 @@ uv run python scripts/export_openapi.py --check   # web routes are in openapi.js
 Postgres e2e: set `DATABASE_URL` and `E2E_DATABASE_URL` to a migrated
 Postgres and run `uv run pytest tests/e2e`.
 
+Logging in to the app locally (added 2026-11-02): the dev login code is saved
+in `.devdata/outbox`. Print the latest one with:
+
+```bash
+grep -E '^ +[0-9]{6}$' "$(ls -t .devdata/outbox/*.html | head -1)" | tr -d ' '
+```
+
+Expo's LAN address printed from WSL starts with `172.` and is not reachable
+from a phone; start Expo with `npx expo start --go --tunnel --clear`. The local
+LAN `.env.local` in `kvarteret-internbevis` uses the PC's Wi-Fi address (backup
+at `~/internbevis-env.local.lan-backup`); for the hosted demo see the runbook.
+
 Make shifts without the seed: open `/shifts/settings` and add closed periods
 (for example "Juleferie"), then `/shifts/templates` for the weekly pattern,
 then `/shifts/generate`: pick the group and range (default today to the end
@@ -423,8 +453,10 @@ request hang, because each request flushes telemetry before it answers.
 
 ## Demo update runbook
 
-Done once, on 2026-10-29 (the demo went from the merge of `961a0e4` to
-`4513caa`, a merge of skiftplan at `cbaba3a`). Keep it for the next update.
+Done twice. First on 2026-10-29 (the demo went from the merge of `961a0e4` to
+`4513caa`, a merge of skiftplan at `cbaba3a`). Second on 2026-11-02, an update
+without a migration (see "Update without a migration" below). Keep it for the
+next update.
 Migration A is schema only, so the old demo code keeps working on the new
 schema until the merge is deployed. A future migration must run on Neon before
 the matching merge.
@@ -455,6 +487,43 @@ the matching merge.
 10. Rollback: use the Neon branch and revert the demo merge. Avoid
     `alembic downgrade` (it drops the qualification rows).
 
+Update without a migration (done 2026-11-02): skip steps 1 to 4 (no revision
+check, no migration, no copy script dry run). A fresh rollback branch is still
+created in the Neon console (see the lessons below). Then:
+- merge `skiftlista/skiftplan` into `skiftlista/demo` locally (merge commit
+  `644be17`; only `docs/skiftlista/HANDOFF.md` conflicted), run the checks;
+- run `seed_demo.py` against Neon (it added 1110 wishes; the demo seed also
+  keeps only the current and next week explicitly published);
+- check the week status in the Neon SQL Editor (explicit rows only for
+  2026-11-02 and 2026-11-09);
+- push to the fork, wait for Render, check `/health`, then the board as
+  "Demo-leder", then the app.
+Neon state afterwards: Alembic at `20261101_1200`; rollback branch
+`before-wishcalendar-2026-11-02` (never expires); the older
+`before-skiftplan-2026-10-29` expires 2026-11-05.
+
+Lessons from 2026-11-02:
+- Use the DIRECT address of the Neon production branch: turn off "Pooled
+  connection" (the host has no `-pooler`) and show the password before copying.
+  Write it in a private file (`chmod 600`) as
+  `postgresql+asyncpg://...?ssl=require` (change `sslmode` to `ssl`, remove
+  `channel_binding`). Check the shape with a masked `sed`. Delete the file and
+  `unset DATABASE_URL` afterwards. Never paste the address or password into a
+  chat.
+- Run SQL checks in the Neon SQL Editor, never in the terminal.
+- Create the rollback as a child branch of production in the Neon console.
+- `git switch` fails while a merge is in progress.
+- In the demo merge only `docs/skiftlista/HANDOFF.md` conflicted:
+  `git checkout --theirs docs/skiftlista/HANDOFF.md`, `git add` it,
+  `git commit --no-edit`.
+- Run the code checks in a tab without a Neon address and the seed in a
+  separate tab.
+- The seed output counts 0 for things that already existed.
+- The app on the demo: change the host in `.env.local` to
+  `https://skiftlista-demo.onrender.com` (`sed` on the two `BASE_URL` lines);
+  the app login uses `DEMO_APP_CODE`, the leader login uses `DEMO_ACCESS_CODE`
+  ("Demo-leder").
+
 What we learned on 2026-10-29:
 
 - Run the code checks in a terminal that does not have the Neon `DATABASE_URL`
@@ -478,7 +547,8 @@ What we learned on 2026-10-29:
   Grøndahls) replace the old "1 shift a week" idea as the general model.
   Requirements are **per bar and warnings only, never blocking**. Max per
   week and the pensioner rule "1 a month" (verv `Pensjonist`) become rule
-  types in the same per-bar settings. Pensjonist stays a verv, not a
+  types in the same per-bar settings (the fixed pensioner rule is replaced
+  2026-11-02 evening by per-person agreements, see "Dials and absences"). Pensjonist stays a verv, not a
   qualification: it is a per-semester agreement. No hard max for people who want more; warn leaders
   instead (suggestion "more than 3 a week").
   - Weekend shifts: a requirement set per bar. Weekend days are set per bar
@@ -598,7 +668,7 @@ What we learned on 2026-10-29:
   shift, coloured by the answer (vil green, kan yellow, kan ikke the app's
   maroon, not set white with border). The volunteer selects dates, or taps a
   weekday letter (M–S) to select those days in the shown month, picks which
-  shifts the answer applies to ("Alle skift" plus one option per shift name),
+  shifts the answer applies to ("Alle skift" plus one option per shift name; (replaced 2026-11-02 evening, see "Changes after the design pass (2026-11-02 evening)"): the options are by position in the day, per bar),
   then vil / kan hvis nødvendig / kan ikke. A weekday tap only selects dates;
   it no longer makes a standing semester rule. The three answers stay. No
   longer app-only: server changes are needed (replaced 2026-10-30, see 'Wish
@@ -847,6 +917,13 @@ https://claude.ai/artifact/McyzpMmfTYqwf5vJvmA6wM (only Morten can open it).
   - Leader mockup: it lacks "Vis andre", note and maks in the people list, the
     maks warning, opplæring, the month strip and "Sist endret av". Its
     suggestion logic is deliberately naive; the real one is below.
+  - Updated 2026-11-02 evening: `Main.dc.html` predates the month stepper, the
+    "Svaret gjelder" buttons by position, the pinned action bar and the
+    week-number column. The real UI is described in the package section under
+    "Built 2026-11-02" and "Changes after the design pass (2026-11-02
+    evening)". A new mockup for the week-number column, "Ferdig", the deadline
+    banner, note and maks comes first in A2. The leader mockup shows
+    Grøndahls from Tuesday; the real days are Monday to Saturday.
 - **Decided 2026-11-02:** the app language is Bokmål plus English, like the
   rest of the app. The Nynorsk mockup is reference only.
 
@@ -854,28 +931,31 @@ https://claude.ai/artifact/McyzpMmfTYqwf5vJvmA6wM (only Morten can open it).
 - A month view; one dot per wishable shift per day, left to right by start
   time. Colours: vil green #3E9B53, kan hvis nødvendig yellow #E9B824, kan
   ikke the app's maroon, not set white with a border. Days with no shifts are
-  greyed out. Full months are shown, with a month switch.
+  greyed out. Full months are shown, with a month switch (replaced 2026-11-02 evening, see "Changes after the design pass (2026-11-02 evening)"): a stepper "‹ November 2026 ›" for any number of months; the months run from the first month of the current semester, earlier months are read only).
 - Tapping a date toggles it (dark border). Weekday letters M T O T F L S
   select those dates in the shown month. A "Svaret gjelder" row with "Alle
-  skift" plus one option per shift name, hidden when there is only one name.
+  skift" plus one option per shift name, hidden when there is only one name (replaced 2026-11-02 evening, see "Changes after the design pass (2026-11-02 evening)"): by position in the day within each bar).
   While dates are selected, the dots the answer will change get a dark ring.
   Answer buttons plus "Fjern svar"; a count of selected dates; a legend.
 - An answer applies to the selected shifts on the selected dates in the shown
   month only. A weekday letter only selects dates; it does not create a
   standing rule. "Kopier fra forrige måned" repeats one's own answers for the
-  next month. (Decided 2026-11-02; this replaces the idea from 2026-10-30 of
-  standing weekday rules limited to hours of the day.)
+  next month (replaced 2026-11-02 evening: "Kopier fra forrige uke", copy rule
+  open; see the changes subsection). (Decided 2026-11-02; this replaces the
+  idea from 2026-10-30 of standing weekday rules limited to hours of the day.)
 - Weekday rules are retired (decided 2026-11-02; replaces the open question
   here): reads stop using them, the separate "Ukedager" list goes, and there is
   one place to answer. Details under "Design pass results". Rejected: an extra
   "gjelder hele semesteret" switch (clutter).
 - The answer deadline shows in the app ("Svarfrist ...") with days left, and a
   banner if the person has not answered. Each bar's leader sets the deadline
-  (per bar and month, soft: see "Design pass results").
+  (per bar and month, soft: see "Design pass results"; replaced 2026-11-02
+  evening: per bar and week, N days before the week starts).
 - Saving many answers at once, all or nothing (a batch endpoint): yes
   (decided 2026-11-02, `PUT /wishes/answers`).
 - Yes: a short note to the leader per month (for example "Eksamen 10.-14."); a
-  personal "maks skift denne måneden"; one's own published shifts marked in the
+  personal "maks skift denne måneden" (both replaced 2026-11-02 evening: per
+  week, set by the volunteer); one's own published shifts marked in the
   calendar; "Legg til i kalender".
 
 **Times.** Hours are used only to show shift times and to count total hours
@@ -983,19 +1063,22 @@ that were checked, and the answers:
 
 **Known work the package needs.**
 - Server: the batch endpoint; deadline per bar; notes and "maks" per person
-  per month (a migration, read-only Opus review before Neon); the board's wish
+  per month (a migration, read-only Opus review before Neon) (replaced
+  2026-11-02 evening: deadline per bar per week, note and maks per person per
+  week in one weekly table; the migration is split by design pass 2); the board's wish
   counts and "who has answered" (5b, if not built) from the calendar answers;
   week status and publishing (check what exists); the suggestion function;
   "Vis andre"; permissions.
 - App (kvarteret-internbevis): the calendar, deadline, note, maks, own shifts,
-  "Kopier fra forrige måned", "Legg til i kalender". JS only where possible so
+  "Kopier fra forrige måned" (now "Kopier fra forrige uke"), "Legg til i kalender". JS only where possible so
   it can ship by OTA; no new native packages without asking Morten.
 - Personal: the new leader page.
 - Outside dependency for real use: the app reaching phones (store build or
   OTA) goes through etjenesten.
 
-**New order of work.** Replaced 2026-11-02: the design pass has run and the
-session order is under "Conformance pass results" (item 20) below. The old
+**New order of work.** Replaced 2026-11-02, and again 2026-11-02 evening: the
+current order is under "Next action" in "Start here". The order of item 20
+below is history. The old
 list, for reference: (1) the design pass, (2) server sessions, (3) the leader
 page, (4) the app calendar, (5) then 4d-plus and 5d step 3.
 
@@ -1019,18 +1102,26 @@ results").
    shift".
 2. **"Har svart N av M":** at least one `shift_wishes` row on a shift of that
    bar in that month, any answer. A note alone does not count. Board counts
-   and names come from `shift_wishes` only.
-3. **Deadline:** per bar per month. Column
+   and names come from `shift_wishes` only. (Replaced 2026-11-02 evening: "har
+   svart" is per week and means the person marked the week done, "Ferdig".
+   Until S2 this monthly rule is the interim meaning, "har begynt"; see the
+   changes subsection.)
+3. **Deadline** (replaced 2026-11-02 evening: per bar per week, N days before
+   the week starts; the column below is not built): per bar per month. Column
    `shift_group_settings.wish_deadline_day` (day of the month before, 1 to 28,
    null = none), set on `/shifts/settings`. Soft: the app keeps accepting
    wishes until the week is published; after the deadline the text says
    "Svarfrist gått ut". No per-month overrides now.
-4. **Note and maks:** new table `shift_month_answers` (volunteer, month, note
+4. **Note and maks** (replaced 2026-11-02 evening: per person per week, in a
+   weekly table of one row per person per week, `volunteer_id`, `week_start`,
+   `done_at`, `note`, `max_shifts`; `shift_month_answers` is not built): new
+   table `shift_month_answers` (volunteer, month, note
    up to 200 characters, `max_shifts`), per person across all bars; leaders
    whose pool includes the person see the note. Added to the volunteer delete
    cleanup.
-5. **"Alle skift" plus one option per shift name:** built in the app from the
-   distinct shift titles in the shown month; no storage. The batch request
+5. **"Alle skift" plus one option per shift name** (replaced 2026-11-02
+   evening: options by position in the day within each bar): built in the app
+   from the distinct shift titles in the shown month; no storage. The batch request
    carries explicit `shift_ids`.
 6. **Fairness counters** are computed on demand (new `fairness.py`), not
    stored.
@@ -1040,7 +1131,10 @@ results").
    answer, `accepts_wishes`, `past`, and the person's own published shifts);
    `PUT /wishes/calendar/month` (note, maks); `POST
    /wishes/calendar/copy?month=` ("Kopier fra forrige måned", server side,
-   never overwrites). **Copy rule (Morten's change to the design pass):** copy
+   never overwrites). (The two month endpoints, `PUT /wishes/calendar/month`
+   and `POST /wishes/calendar/copy?month=`, are replaced 2026-11-02 evening by
+   weekly ones, shapes to be set by design pass 2. `PUT /wishes/answers` and
+   `GET /wishes/calendar` are built.) **Copy rule (Morten's change to the design pass; open again 2026-11-02 evening, since the three quarter threshold was designed for a month):** copy
    a weekday-and-shift-title pattern from the previous month only when about
    three quarters or more of its dates had the same answer, so one-off answers
    (exams, trips) are not repeated; never copy the note. Published and past
@@ -1054,7 +1148,9 @@ results").
    now (protobuf downgrade, unverified size). The OR-Tools question to
    etjenesten stays as a later, non-blocking note.
 9. **Migrations** are split, all additive: **M1** with S2 (`wish_deadline_day`,
-   `shift_month_answers`, and the extra items in item 20 below); **M2** with
+   `shift_month_answers`, and the extra items in item 20 below; replaced
+   2026-11-02 evening: the contents of M1 and S2 come from design pass 2, with
+   the weekly table, the weekly deadline and the dials); **M2** with
    L3 (`shift_suggestions`); **M3** with L4 (`shift_week_activity` for "Sist
    endret av" and the two-leaders warning). L4 may be cut down. **Open:**
    whether the existing admin activity log can serve instead of
@@ -1072,7 +1168,9 @@ results").
     Monday. Kept. The text "Nothing reaches the app before the week is
     published" now reads "...except that an untouched week publishes itself on
     its Monday". Pending suggestions never show in the app. In the pilot,
-    planned weeks are published with "Publiser måneden". The unpublished-week
+    planned weeks are published with "Publiser måneden" (replaced 2026-11-02
+    evening: publishing is per week; "Publiser måneden" is an optional
+    shortcut). The unpublished-week
     banner becomes large: full width at the top of the board and the leader
     page, warning colour from 10 days before and the strong warning colour from
     3 days before, not dismissable. It names the consequence (how many places
@@ -1149,7 +1247,13 @@ out costly). Items 16, 19, 20 and 21 of the decisions.
     comment in `ProgressBar.tsx`.
   - Then **S2** (M1 and the rest of S2 as in the design pass), **A2**, **L1**,
     **L2**, **G1**, **L3**, **L4**, **A3**, then the calendar feed (item 14).
-  - **M1 contains:** RLS and REVOKE from PUBLIC, anon, authenticated for
+    (Replaced 2026-11-02 evening: the order is L1, L2, demo update 2,
+    conformance pass 2, Postgres e2e, design pass 2, S2, settings page, A2, G1,
+    L3, L4, demo update 3, A3; see "Next action" in "Start here".)
+  - **M1 contains** (replaced 2026-11-02 evening: the contents of M1 and S2
+    come from design pass 2; the RLS, REVOKE, rename and constraint items stay,
+    `wish_deadline_day` and `shift_month_answers` are replaced by the weekly
+    table, the weekly deadline and the dials): RLS and REVOKE from PUBLIC, anon, authenticated for
     `shift_week_status` and `shift_closed_periods`; renaming
     `ix_shift_closed_periods_group_id` to `shift_closed_periods_group_id_idx`;
     `wish_deadline_day`; `shift_month_answers`. In the same session
@@ -1178,6 +1282,174 @@ in a committed file (see "Security review: open items" and the standing rules
 under "Start here"); in the app repo the `upstream` remote is now `no_push`,
 like Personal's.
 
+#### Built 2026-11-02
+
+Built and committed on 2026-11-02, after the docs commit `ba27207`, in the
+build and demo session.
+
+1. **Personal** (branch `skiftlista/skiftplan`; no migration, Alembic head
+   `20261101_1200`; tests 1111 passed, 26 skipped):
+   - **S0** `b154264`: `app_service.py` split into `app_claim`, `app_mine`,
+     `app_wishes`, `app_courses` and `app_common` as mixins; the facade stays;
+     pure move.
+   - **S1** `d6df7c6`: weekday rules retired in reads; `GET /wishes/calendar`;
+     `PUT /wishes/answers`; "Har svart N av M" with "Vis hvem" on the board;
+     the `shift.app.wishes` audit event; `seed_demo` writes a rolling window of
+     per-shift answers; a larger unpublished-week banner.
+   - **S1d** `af06d65`: the calendar months run from the first month of the
+     current semester; earlier months are read only; the default month stays
+     the current month.
+2. **App** (`kvarteret-internbevis`, branch `feat/skiftlista-mobile`; Jest 398
+   passed): **A1** `f4772cd` (the calendar replaces the Ønsker list; the
+   Personal client regenerated), **A1b** `179797b` (read from git log: positions
+   per bar, month stepper, earlier months read only), **A1c** `ba5ec80` (answer
+   bar, shorter day cells, collapsible explanation). Tested on an Android phone
+   in Expo Go. **Not checked on iOS:** the NativeTabs bar placement of the
+   answer bar is unverified.
+
+#### Changes after the design pass (2026-11-02 evening)
+
+Decisions made on the evening of 2026-11-02 after the build and demo session.
+Where an earlier text differs, it is marked "(replaced 2026-11-02 evening)" in
+place.
+
+**Wish calendar changes** (replace the earlier text on the buttons, the month
+pills, and history):
+- **"Svaret gjelder" is by position in the day within each bar, not by shift
+  name.** One bar in the month: "Alle skift", "1. skift", "2. skift" and so on
+  up to the bar's largest day; the row is hidden when that is 1. Several bars:
+  "Alle skift", then per bar "<Bar> 1. skift", "<Bar> 2. skift" (or just
+  "<Bar>" for a bar with one shift a day). Selecting an option rings and sends
+  only the matching bar and position, only shifts that accept wishes. The row
+  is one line with a fixed height and scrolls sideways if needed.
+- **The month pills are a stepper** "‹ November 2026 ›" that works for any
+  number of months. It also shows with a single month (known small item).
+- **Earlier months of the current semester are readable, read only:** dimmed,
+  stored answers, own shifts marked, and the line "Denne måneden kan ikke
+  endres". **Parked:** longer history (earlier semesters). It depends on the
+  semester-end data cleanup and on Samfunnet's privacy person, and fits Mine or
+  a profile better than the wish calendar.
+- **The calendar always reserves six week rows,** so nothing below it moves
+  between months.
+- **A1c layout:** 48 point day cells; the hint and the legend are in one
+  collapsed "Forklaring" row at the end of the scroll; the count and the four
+  answer buttons (2 by 2) are in an action bar pinned above the tab bar, shown
+  only when days are selected.
+- **The default month:** the current month if any shift in it accepts wishes;
+  otherwise probe forward from the current month; never fetch earlier months to
+  decide it.
+- **The "shift type" idea is rejected.** The dev seed names Stjerne's Tuesday
+  evening shift "Quizskift"; it is left as is, since the buttons are by
+  position.
+- **Facts:** Stjerne usually has two shifts a day, Grøndahls and Halvtimen one;
+  Grøndahls runs Monday to Saturday (the leader mockup's Tuesday to Saturday
+  was a guess).
+
+**Publishing is per week.** "Publiser måneden" is an optional shortcut. The
+demo seed publishes only the current week and the next week (explicit rows),
+deletes old explicit published rows for later weeks inside the wish window, and
+leaves hand-set open or allocating rows alone.
+
+**Weekly planning** (decided by Morten 2026-11-02; replaces the earlier monthly
+decisions 2, 3 and 4 of "Design pass results", the month endpoints
+`PUT /wishes/calendar/month` and `POST /wishes/calendar/copy?month=`, and the
+M1 contents). Why: volunteers cannot commit a month ahead; the unit for
+planning, answering and publishing is the week; a bar that plans further ahead
+is a bonus, not a requirement.
+- **a. Answering is unchanged:** any open day, any time; the month calendar
+  stays for browsing.
+- **b. "Har svart" is per week:** a person has answered week W when they have
+  marked it done ("Ferdig" per week). "Påbegynt" means some answers in the week
+  but not done; "ikke svart" means neither. The leader page shows "Har svart N
+  av M" with "Vis hvem" for the displayed week. Until S2, "Har svart" on the
+  board and `has_answered` in the calendar response mean "har begynt" (at least
+  one answer in that month), and the first leader page (L1) shows the weekly
+  count with that interim meaning, labelled accordingly. The board panel
+  "Ønsker for <month>" becomes weekly.
+- **c. The deadline is per bar per week:** N days before the week starts, set
+  by the bar's leader; the app shows "Svarfrist" and days left for the week
+  being asked about. It replaces the planned `wish_deadline_day` (day of the
+  month before); that column is not built yet.
+- **d. The personal "maks" is per week and the note to the leader is per
+  week** (both replace per month), both set by the volunteer. The fairness
+  counters over the semester stay.
+- **e. "Kopier fra forrige uke"** replaces "Kopier fra forrige måned".
+  **Open:** the copy rule (the three quarter threshold was designed for a
+  month).
+- **f. Storage:** one table, one row per person per week (`volunteer_id`,
+  `week_start`, `done_at`, `note`, `max_shifts`), replaces `shift_month_answers`.
+  There is no separate session S1e: the weekly "Har svart" arrives with S2.
+- **g. Calendar (A2):** a week-number column on the left of the grid. Tapping a
+  week number selects all selectable days of that week; its check state shows
+  done, started or empty; a "Ferdig" action per week. Draw a mockup before
+  building it. **Open:** where exactly "Ferdig" sits.
+- **h. The leader page is a week grid** (days as columns, shifts as rows, the
+  people panel beside it); the volunteer app is a month calendar for browsing
+  and answering ahead.
+
+**Dials and absences** (decided by Morten 2026-11-02 as the model; the details
+go through design pass 2). Replaces the fixed "pensioner 1 a month" rule in 5c
+and the by-role `quota_for` in `app_rules.py`: a pensioner quota is agreed
+between the leader and the volunteer, so it is a setting. Nothing here is
+built; the tables are not designed yet.
+- **a. Everything is adjustable.** Bar defaults are set by the bar's leaders.
+  Per-person values are set by a leader, and a volunteer can send a request in
+  the app that a leader approves or edits. For the suggestion they are hard
+  rules; a leader placing someone by hand gets a warning, never a block.
+- **b. Per bar (defaults):** maximum shifts per week; minimum shifts per
+  period; weekend shifts per semester; rest between shifts (a minimum number of
+  hours between two shifts); leader-set limits (for example a maximum of
+  weekend or late shifts per person per period); the answer deadline (N days
+  before the week starts).
+- **c. Per volunteer:** an agreed number of shifts per period (week or month)
+  with a cap and a target (cap only for people without an agreement),
+  overriding the bar default and replacing the by-role pensioner rule; an
+  optional minimum override; recurring days off (a weekday, optionally a
+  position within the bar's day, for example never Fridays), agreed with a
+  leader; absences (a period with a start date, an optional end date, a kind
+  Ferie, Praksis or Annet, and an optional note; leaders set them, volunteers
+  send requests); the person's own maks per week (set by the volunteer);
+  leader-set limits per person.
+- **d. The cap that applies** is the lowest of the person's own maks, the
+  agreed number and the bar's maximum.
+- **e. Effects:** the suggestion treats caps, rest, recurring days off and
+  absences as hard rules, and targets and minimums as goals. Absence days count
+  automatically as "kan ikke" and as answered. Fairness counters, agreed
+  numbers, minimums and reminders pause during an absence. The leader page
+  shows a person's agreement and absence in the people panel (for example
+  "avtalt 1/mnd", "borte til 30. nov"). People who are absent for a whole week
+  are not counted in "Har svart N av M" or "N uten skift" for that week. "Under
+  minimum" is a chip for leaders, not a block.
+- **f. Privacy:** absence kinds are neutral (Ferie, Praksis, Annet); no health
+  reasons are stored; free-text notes are a risk. This goes on the list for
+  Samfunnet's privacy person (see "Not code"). Samfunnettjeneste duty counting
+  is not changed by an absence (open).
+- **g. Open:** default values per bar; the period unit of each dial; how
+  recurring days off and agreements show in the calendar; the details of the
+  request flow; whether the minimum is per week or per month.
+
+**Open points from the weekly planning and the dials:** the copy rule for
+"Kopier fra forrige uke"; where "Ferdig" sits in the calendar; default values
+per bar; the period unit of each dial; how recurring days off and agreements
+show in the calendar; the details of the request flow; whether the minimum is
+per week or per month; whether an absence changes samfunnettjeneste duty
+counting.
+
+#### Known small items (2026-11-02)
+
+- `repository.py` is 786 lines, near upstream's cap of about 800, so nothing
+  more goes in it. `seed_demo.py` is about 611 lines.
+- `list_rules_for`, `list_rules` and `list_template_weekdays` are unused in
+  reads; remove them with the table drop.
+- The log allow-list in `observability.py` drops unknown fields, so
+  `shift.app.wishes` keeps only `count` and `volunteer_id`, and
+  `shift.app.claim` loses `subject_*`.
+- The month stepper also shows with a single month.
+- The green and yellow dot colours are literals in `wishDotStyle.ts`; move them
+  to `global.css` later.
+- A batch is not split at 400 items.
+- On the demo, Grøndahls' current week is an explicit "open" row.
+
 ## Step 1 (API for the app): done
 
 Contract and rules are described in `docs/reference/api-boundaries.md`
@@ -1190,7 +1462,8 @@ Known gaps, deliberately left to later steps:
   panel for the displayed week: "Åpne for ønsker" (disabled for the
   current and past weeks), "Publiser
   uka" and "Publiser måneden" (explicit published rows for every Monday of
-  that calendar month). Shifts leaders put people on in an unpublished
+  that calendar month; since 2026-11-02 evening publishing is per week and
+  "Publiser måneden" is an optional shortcut). Shifts leaders put people on in an unpublished
   (future) week are drafts and do not show in the app's Mine until the week
   is published.
 - **Unpublished-week warning**: done. A banner on the board appears when a
@@ -1327,7 +1600,9 @@ Known gaps, deliberately left to later steps:
    exist, and the app API shows wishes only to the person themselves.
    Later: narrow the counts to people whose own groups include the shift's
    group (today it is the whole pool); see 5a2.
-5b. **Who has answered** (demo feedback): per bar and period, "x av y har
+5b. **Who has answered** (demo feedback; built in S1 as the interim meaning
+   "har begynt", per month; replaced 2026-11-02 evening: per week, "Ferdig",
+   from S2): per bar and period, "x av y har
    svart" for leaders, with the list of who has not answered. Someone "har
    svart" for a bar in a month if they have at least one `shift_wishes` row on
    a shift of that bar in that month, any answer; a note alone does not count
@@ -1336,7 +1611,11 @@ Known gaps, deliberately left to later steps:
    (step 8). The package has "Har svart N av M" with "Vis hvem" and computes it
    from the answers; built first on today's board in S1. The reminder button
    comes with step 8 (to the leaders and the skjenkeleder, see item 13).
-5c. **Per-bar requirements** (see decisions): a per-bar settings table with
+5c. **Per-bar requirements** (see decisions; replaced 2026-11-02 evening: the
+   fixed "pensioner 1 a month" rule and the by-role `quota_for` in
+   `app_rules.py` give way to adjustable dials, a pensioner quota being agreed
+   between the leader and the volunteer; see "Dials and absences"): a per-bar
+   settings table with
    rule types: weekend shifts per semester (weekend days per bar), max per
    week, pensioner 1 a month. Warnings only, never blocking. Pace warning to
    the leader halfway through the semester; closed periods never count. The
@@ -1959,7 +2238,12 @@ Found while reviewing 2026-10-29; not caused by 5d and not part of step 2.
   a volunteer's name, date and shift through Slack, with a per-person opt-out
   (step 8); (b) the personal calendar feed: Google and Microsoft fetch the
   feed, so they see shift titles, times and venues (item 14); the feed holds
-  only that person's published shifts and no other names.
+  only that person's published shifts and no other names; (c) absences
+  (added 2026-11-02 evening, see "Dials and absences"): the kinds are neutral
+  (Ferie, Praksis, Annet), no health reasons are stored, free-text notes are a
+  risk, and whether an absence changes samfunnettjeneste duty counting is open;
+  (d) longer history of a person's answers (earlier semesters), which is parked
+  until the semester-end data cleanup and this answer.
 - Questions for etjenesten about Crescat: is there a read API for events
   (title, room, start/end, status)? How is access authenticated and who issues
   a read-only key? Rate limits? Can we match on `booking_request_id`? Goal:
@@ -2062,4 +2346,5 @@ Questions:
 For Samfunnet's privacy person (the full list is under "Not code, but on the
 critical path"): qualifications kept for former members; sending name, date and
 shift through Slack with an opt-out; the personal calendar feed (Google and
-Microsoft see shift titles, times and venues).
+Microsoft see shift titles, times and venues); absences and their free-text
+notes (neutral kinds, no health reasons); longer answer history.
