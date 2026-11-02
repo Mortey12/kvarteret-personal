@@ -138,8 +138,10 @@ def test_week_page_renders_grid_people_chips_and_data_block() -> None:
     assert "Utkast: ikke synlig i appen" in html
     assert "Åpne for ønsker" in html and "Publiser uka" in html
     assert 'name="csrf_token"' in html
-    # Chips: Sander answered kan ikke on Monday and is on two shifts, so two places have problems.
-    assert re.search(r'data-chip="problems"[^>]*><span aria-hidden="true">! </span>2 problemer', html)
+    # Chips: Sander answered kan ikke on Monday (red) and is on two shifts (yellow on the other day):
+    # two places have problems, one of them red, so the chip says "1 problem" and lists both.
+    assert re.search(r'data-chip="problems"[^>]*><span aria-hidden="true">! </span>1 problem</summary>', html)
+    assert html.count("Sander Skjenker") >= 2
     assert re.search(r'data-chip="open"[^>]*>\d+ ledige', html)
     # Tora began answering and has no shift this week.
     assert re.search(r'data-chip="without-shift"[^>]*>1 uten skift', html)
@@ -543,13 +545,18 @@ def test_search_input_has_a_visible_label() -> None:
     assert re.search(r'<input[^>]*id="week-people-search"[^>]*type="search"', panel)
 
 
-def test_filter_buttons_are_toggle_buttons_with_visible_text() -> None:
+def test_filter_buttons_are_toggle_buttons_with_short_text_and_full_names() -> None:
     panel = _panel(_page())
 
-    for key, label in (("sl", "Bare skiftledere"), ("unanswered", "Ikke svart"), ("noshift", "Uten skift denne uka")):
-        assert re.search(
-            rf'<button[^>]*type="button"[^>]*aria-pressed="false"[^>]*data-filter="{key}">{label}</button>', panel
-        )
+    for key, visible, full in (
+        ("sl", "Bare SL", "Bare skiftledere"),
+        ("unanswered", "Ikke svart", None),
+        ("noshift", "Uten skift", "Uten skift denne uka"),
+    ):
+        match = re.search(rf'<button[^>]*type="button"[^>]*aria-pressed="false"[^>]*data-filter="{key}">(.*?)</button>', panel)
+        assert match and visible in match.group(1)
+        if full:
+            assert f'<span class="sr-only">{full}</span>' in match.group(1)
     assert re.search(r'<button[^>]*type="button"[^>]*hidden[^>]*data-people-reset>Nullstill</button>', panel)
 
 
@@ -607,3 +614,53 @@ def test_no_inline_handlers_in_the_new_controls() -> None:
 
     assert not re.search(r"\son[a-z]+\s*=", page, re.I)
     assert "style=" not in _panel(html)
+
+
+def _bar_html(**overrides) -> str:
+    from types import SimpleNamespace
+
+    from app.web.templates import templates
+
+    view = _view_for_bar(**overrides)
+    return templates.env.get_template("pages/shifts/_week_bar.html").render(view=view, page=SimpleNamespace(status=None))
+
+
+def _view_for_bar(*, count: int, red: int):
+    from datetime import date as _date
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        bar_id=7,
+        previous_week=_date(2026, 10, 26),
+        next_week=_date(2026, 11, 9),
+        week_label="Uke 45",
+        status="open",
+        status_text="Åpen",
+        problem_count=count,
+        problem_red_count=red,
+        problem_places=[f"2. nov, Dagskift: Person {i}" for i in range(count)],
+        open_places=0,
+        without_shift=[],
+    )
+
+
+def test_problem_chip_is_red_and_says_problemer_when_a_red_problem_exists() -> None:
+    html = _bar_html(count=3, red=2)
+
+    assert re.search(r'class="week-chip week-chip-red" data-chip="problems"><span aria-hidden="true">! </span>2 problemer</summary>', html)
+    assert html.count("<li>2. nov") == 3  # the list still has every place
+
+
+def test_problem_chip_is_yellow_and_says_advarsler_when_only_warnings() -> None:
+    html = _bar_html(count=2, red=0)
+
+    assert re.search(r'class="week-chip week-chip-yellow" data-chip="problems"><span aria-hidden="true">! </span>2 advarsler</summary>', html)
+    assert "week-chip-red" not in html
+    assert "1 advarsel<" in _bar_html(count=1, red=0)
+
+
+def test_problem_chip_is_plain_text_when_there_are_no_problems() -> None:
+    html = _bar_html(count=0, red=0)
+
+    assert '<span class="week-chip" data-chip="problems">0 problemer</span>' in html
+    assert 'data-chip-details="problems"' not in html

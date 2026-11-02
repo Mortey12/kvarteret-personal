@@ -197,6 +197,8 @@ def test_problems_red_for_kan_ikke_and_same_day_yellow_for_second_shift_in_week(
     # Bo on Wednesday has only the yellow week hint.
     wednesday = next(place for place in view.rows[0].cells[2].places if place.name == "Bo Beta")
     assert wednesday.level == "yellow"
+    # The red count only includes places with a red problem; yellow-only places add to problem_count alone.
+    assert 0 < view.problem_red_count < view.problem_count
 
 
 def test_board_warning_about_extra_shifts_is_not_repeated_but_other_warnings_show() -> None:
@@ -225,6 +227,7 @@ def test_chips_count_problems_open_places_and_people_without_shift() -> None:
     )
 
     assert view.problem_count == 1
+    assert view.problem_red_count == 1  # Bo answered kan ikke
     assert view.open_places == 1 + 4 * 3  # shift 1 has 1 open; shifts 2 to 5 have 3 each
     assert view.without_shift == ["Cy Gamma"]  # began, no shift; Bo has one
 

@@ -4,15 +4,17 @@
       <h2 class="text-base font-semibold">Folk denne uka</h2>
       <span class="text-xs text-stone-700">{{ view.people | length }} personer</span>
     </div>
-    <div class="grid gap-1.5" data-people-filters>
-      <label class="text-xs font-semibold" for="week-people-search">Søk etter navn</label>
-      <input class="week-search" id="week-people-search" type="search" autocomplete="off" spellcheck="false" data-people-search>
-      <div class="flex flex-wrap gap-1.5" role="group" aria-label="Filtrer folk">
-        <button class="week-filter" type="button" aria-pressed="false" data-filter="sl">Bare skiftledere</button>
-        <button class="week-filter" type="button" aria-pressed="false" data-filter="unanswered">Ikke svart</button>
-        <button class="week-filter" type="button" aria-pressed="false" data-filter="noshift">Uten skift denne uka</button>
+    <div class="grid gap-1" data-people-filters>
+      <div class="grid gap-0.5">
+        <label class="text-xs font-semibold leading-tight" for="week-people-search">Søk etter navn</label>
+        <input class="week-search" id="week-people-search" type="search" autocomplete="off" spellcheck="false" data-people-search>
       </div>
-      <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+      <div class="flex flex-wrap gap-1" role="group" aria-label="Filtrer folk">
+        <button class="week-filter" type="button" aria-pressed="false" data-filter="sl"><span aria-hidden="true">Bare SL</span><span class="sr-only">Bare skiftledere</span></button>
+        <button class="week-filter" type="button" aria-pressed="false" data-filter="unanswered">Ikke svart</button>
+        <button class="week-filter" type="button" aria-pressed="false" data-filter="noshift"><span aria-hidden="true">Uten skift</span><span class="sr-only">Uten skift denne uka</span></button>
+      </div>
+      <div class="flex items-center justify-between gap-2">
         <p class="text-xs text-stone-800" aria-live="polite" aria-atomic="true" data-people-count><span data-count-text>Viser {{ view.people | length }} av {{ view.people | length }}</span><span data-people-empty hidden> Ingen treff</span></p>
         <button class="week-filter" type="button" hidden data-people-reset>Nullstill</button>
       </div>
