@@ -173,8 +173,7 @@ def test_week_contract_warning_follows_the_leader_board_rule() -> None:
     assert "Pensjonistavtalen din er 1 skift i måneden." in week_contract_warning(2, 49, pensioner)
 
 
-def test_effective_answer_wish_beats_rule_and_rule_fills_in() -> None:
-    assert effective_answer("nei", "vil") == "nei"
-    assert effective_answer("vil", None) == "vil"
-    assert effective_answer(None, "kan") == "kan"
-    assert effective_answer(None, None) is None
+def test_effective_answer_is_only_the_per_shift_wish() -> None:
+    assert effective_answer("nei") == "nei"
+    assert effective_answer("vil") == "vil"
+    assert effective_answer(None) is None

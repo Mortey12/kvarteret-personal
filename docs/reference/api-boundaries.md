@@ -69,7 +69,10 @@ Trial and review sessions are not volunteers: `GET /config` answers
 | `GET /mine` | Coming shifts, weekly/monthly quota or samfunnettjeneste progress |
 | `POST`/`DELETE /assignments/{id}/swap-request` | Ask for / cancel a swap |
 | `POST`/`DELETE /assignments/{id}/cannot-attend` | "Kan ikke i dag" on the day / undo |
-| `GET /wishes`, `PUT /wishes/weekdays/{0-6}`, `PUT /wishes/shifts/{id}` | Weekday answers per semester and per-shift overrides |
+| `GET /wishes`, `PUT /wishes/shifts/{id}` | Weeks that take wishes and per-shift answers (`rules` is always `[]`) |
+| `GET /wishes/calendar?month=YYYY-MM` | One month of shifts in the person's groups: answer, `accepts_wishes`, `past`, per-group `has_answered`, own published shifts (`mine`), the months to switch to. `deadline`, `days_left`, `note` and `max_shifts` are `null` until they are built |
+| `PUT /wishes/answers` | Batch of 1 to 400 answers (`null` clears), all or nothing: one refused shift writes nothing (`409`, first reason and the count). Duplicate `shift_id` is `422`. Returns the calendar for the month of the first item |
+| `PUT /wishes/weekdays/{0-6}` | Deprecated. Weekday rules are retired: still stored, never read |
 | `GET /courses`, `POST`/`DELETE /courses/sessions/{id}/signup` | Brann-/barkurs status, dates and sign-up |
 
 Errors are `{"detail": "<Norwegian text>"}` meant to be shown as is: `401`
@@ -92,7 +95,8 @@ and take wishes. `GET /wishes` returns `weeks` (only weeks with at least one
 shift: `group_id`, `group_name`, `week_start`, `week_number`, `label`,
 `status`, `status_label`, `note`, `accepts_wishes`) from today through the end
 of the semester (January to June, July to December) and at least through next
-month. Keep these
+month. A wish
+means the per-shift answer only (weekday rules are retired in reads). Keep these
 responses additive: installed app versions keep parsing old fields.
 
 ### Now-playing API

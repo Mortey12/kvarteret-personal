@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 WishAnswer = Literal["vil", "kan", "nei"]
 Tone = Literal["ok", "info", "warn", "off"]
@@ -239,6 +239,76 @@ class ShiftWishesResponse(_Model):
 
 class WishAnswerRequest(_Model):
     answer: WishAnswer | None
+
+
+class WishAnswerItem(_Model):
+    shift_id: int
+    answer: WishAnswer | None
+
+
+class WishAnswersRequest(_Model):
+    """Many answers at once, all or nothing. ``answer: null`` clears the answer."""
+
+    answers: list[WishAnswerItem] = Field(min_length=1, max_length=400)
+
+    @model_validator(mode="after")
+    def _no_duplicate_shifts(self) -> "WishAnswersRequest":
+        ids = [item.shift_id for item in self.answers]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Each shift_id may appear only once.")
+        return self
+
+
+# ---------------------------------------------------------------- wish calendar
+
+
+class WishMonthOption(_Model):
+    month: str  # "YYYY-MM"
+    label: str  # "Desember 2026"
+
+
+class WishCalendarGroup(_Model):
+    group_id: int
+    group_name: str
+    # At least one answer (any kind) on a shift of this group in the month.
+    has_answered: bool
+    # Filled in later (per-bar deadline); null until then.
+    deadline: date | None
+    days_left: int | None
+
+
+class WishCalendarShift(_Model):
+    shift_id: int
+    group_id: int
+    group_name: str
+    day: date  # Oslo date of the start
+    starts_at: datetime
+    ends_at: datetime
+    time_label: str
+    title: str
+    answer: WishAnswer | None
+    # False for published weeks and for shifts that have started: show dimmed.
+    accepts_wishes: bool
+    past: bool
+
+
+class WishCalendarMine(_Model):
+    shift_id: int
+    kind: str
+    day: date
+
+
+class ShiftWishCalendarResponse(_Model):
+    month: str  # "YYYY-MM"
+    month_label: str
+    months: list[WishMonthOption]
+    groups: list[WishCalendarGroup]
+    # Filled in later (note and maks per month); null until then.
+    note: str | None
+    max_shifts: int | None
+    shifts: list[WishCalendarShift]
+    # The person's own published shifts in the month.
+    mine: list[WishCalendarMine]
 
 
 # ---------------------------------------------------------------- courses

@@ -178,6 +178,19 @@ class WeekBanner:
     week_start: date
     text: str
     urgent: bool
+    empty_places: int = 0
+
+
+@dataclass(slots=True)
+class AnsweredView:
+    """"Har svart N av M" for one bar and month; ``missing`` are the names that have not answered."""
+
+    group_id: int
+    group_name: str
+    month_label: str
+    answered: int
+    total: int
+    missing: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -208,6 +221,7 @@ class WeekPlan:
     pool: list[PoolPerson] = field(default_factory=list)
     statuses: list[WeekStatusView] = field(default_factory=list)
     banners: list[WeekBanner] = field(default_factory=list)
+    answered: list[AnsweredView] = field(default_factory=list)
 
 
 @dataclass(slots=True)

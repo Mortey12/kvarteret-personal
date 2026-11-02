@@ -3622,6 +3622,81 @@
         "title": "ShiftSummary",
         "type": "object"
       },
+      "ShiftWishCalendarResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/WishCalendarGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "max_shifts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Shifts"
+          },
+          "mine": {
+            "items": {
+              "$ref": "#/components/schemas/WishCalendarMine"
+            },
+            "title": "Mine",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "month_label": {
+            "title": "Month Label",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/WishMonthOption"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/WishCalendarShift"
+            },
+            "title": "Shifts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "month",
+          "month_label",
+          "months",
+          "groups",
+          "note",
+          "max_shifts",
+          "shifts",
+          "mine"
+        ],
+        "title": "ShiftWishCalendarResponse",
+        "type": "object"
+      },
       "ShiftWishesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3808,6 +3883,37 @@
         "title": "WeekdayRule",
         "type": "object"
       },
+      "WishAnswerItem": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vil",
+                  "kan",
+                  "nei"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "shift_id",
+          "answer"
+        ],
+        "title": "WishAnswerItem",
+        "type": "object"
+      },
       "WishAnswerRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3832,6 +3938,198 @@
           "answer"
         ],
         "title": "WishAnswerRequest",
+        "type": "object"
+      },
+      "WishAnswersRequest": {
+        "additionalProperties": false,
+        "description": "Many answers at once, all or nothing. ``answer: null`` clears the answer.",
+        "properties": {
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/WishAnswerItem"
+            },
+            "maxItems": 400,
+            "minItems": 1,
+            "title": "Answers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answers"
+        ],
+        "title": "WishAnswersRequest",
+        "type": "object"
+      },
+      "WishCalendarGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Left"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "has_answered": {
+            "title": "Has Answered",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "group_id",
+          "group_name",
+          "has_answered",
+          "deadline",
+          "days_left"
+        ],
+        "title": "WishCalendarGroup",
+        "type": "object"
+      },
+      "WishCalendarMine": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "shift_id",
+          "kind",
+          "day"
+        ],
+        "title": "WishCalendarMine",
+        "type": "object"
+      },
+      "WishCalendarShift": {
+        "additionalProperties": false,
+        "properties": {
+          "accepts_wishes": {
+            "title": "Accepts Wishes",
+            "type": "boolean"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vil",
+                  "kan",
+                  "nei"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "group_id": {
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "past": {
+            "title": "Past",
+            "type": "boolean"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "time_label": {
+            "title": "Time Label",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "group_id",
+          "group_name",
+          "day",
+          "starts_at",
+          "ends_at",
+          "time_label",
+          "title",
+          "answer",
+          "accepts_wishes",
+          "past"
+        ],
+        "title": "WishCalendarShift",
+        "type": "object"
+      },
+      "WishMonthOption": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "label"
+        ],
+        "title": "WishMonthOption",
         "type": "object"
       },
       "WishShift": {
@@ -6331,7 +6629,7 @@
     },
     "/api/v1/mobile-card/shifts/wishes": {
       "get": {
-        "description": "Weekday answers for the semester, monthly status, and shifts that take wishes now.\n\nOnly the person and the group's leaders see wishes.",
+        "description": "Monthly status and the shifts that take wishes now, with the person's answers.\n\n``rules`` is always empty: weekday rules are retired. Prefer\n``GET /wishes/calendar``. Only the person and the group's leaders see wishes.",
         "operationId": "getShiftWishes",
         "parameters": [
           {
@@ -6399,9 +6697,198 @@
         ]
       }
     },
+    "/api/v1/mobile-card/shifts/wishes/answers": {
+      "put": {
+        "description": "Set or clear answers for 1 to 400 shifts, all or nothing. Returns the month of the first item.",
+        "operationId": "setShiftWishAnswers",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WishAnswersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftWishCalendarResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Shift Wish Answers",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
+    "/api/v1/mobile-card/shifts/wishes/calendar": {
+      "get": {
+        "description": "One month of shifts in the person's groups with their answers, deadline info and own shifts.",
+        "operationId": "getShiftWishCalendar",
+        "parameters": [
+          {
+            "description": "YYYY-MM; default is this month",
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM; default is this month",
+              "title": "Month"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftWishCalendarResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not switched on for this person."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftErrorResponse"
+                }
+              }
+            },
+            "description": "The shift, place or course is gone."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Wish Calendar",
+        "tags": [
+          "mobile-shifts"
+        ]
+      }
+    },
     "/api/v1/mobile-card/shifts/wishes/shifts/{shift_id}": {
       "put": {
-        "description": "Override the weekday answer for one shift (``answer: null`` goes back to the weekday answer).",
+        "description": "Set one shift's answer (``answer: null`` clears it).",
         "operationId": "setShiftWish",
         "parameters": [
           {
@@ -6510,7 +6997,8 @@
     },
     "/api/v1/mobile-card/shifts/wishes/weekdays/{weekday}": {
       "put": {
-        "description": "Set or clear (``answer: null``) the answer for one weekday this semester.",
+        "deprecated": true,
+        "description": "Deprecated: weekday rules are retired. Still stored, but nothing reads them.",
         "operationId": "setShiftWeekdayRule",
         "parameters": [
           {
