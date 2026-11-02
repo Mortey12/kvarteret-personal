@@ -46,15 +46,24 @@
     return { placed, answer };
   }
 
-  function isBusy(person, day) {
-    return person.busy_days.includes(day);
+  // Days (YYYY-MM-DD) on which the person is placed in a shift of the shown bar.
+  function placedDays(shifts, volunteerId) {
+    return new Set(
+      shifts.filter((shift) => shift.places.some((place) => place.volunteer_id === volunteerId)).map((shift) => shift.day),
+    );
+  }
+
+  // "Opptatt": a shift that day in some other bar or group. busy_days holds every shift of the day,
+  // so a day where the person is placed in the shown bar says nothing extra (the cell says "Satt opp").
+  function isBusy(person, day, placed) {
+    return person.busy_days.includes(day) && !placed.has(day);
   }
 
   function answerWord(answer) {
     return ANSWER_WORDS[answer] || '';
   }
 
-  const api = { fold, matchesPerson, visibleIds, hasActiveFilter, countText, cellMarker, isBusy, answerWord };
+  const api = { fold, matchesPerson, visibleIds, hasActiveFilter, countText, cellMarker, placedDays, isBusy, answerWord };
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof document === 'undefined') return;
 
@@ -169,8 +178,9 @@
         cell.prepend(note);
       }
     });
+    const placed = placedDays(state.data.shifts, person.volunteer_id);
     state.root.querySelectorAll('[data-week-grid] th[data-day]').forEach((head) => {
-      if (isBusy(person, head.dataset.day)) {
+      if (isBusy(person, head.dataset.day, placed)) {
         const note = node('span', 'week-busy', 'Opptatt');
         note.setAttribute('data-busy-note', '');
         head.append(note);

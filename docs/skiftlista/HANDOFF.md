@@ -6,14 +6,15 @@ the codebase again.
 
 ## Start here
 
-Update by hand at the end of every session. Last updated 2026-11-02 (night, after L1a).
+Update by hand at the end of every session. Last updated 2026-11-02 (night, after L1b).
 
 - **State** (2026-11-02 evening; replaces the earlier State text): Personal,
   branch `skiftlista/skiftplan`: S0 `b154264` (`app_service.py` split into
   mixins, pure move), S1 `d6df7c6` (wish calendar API, weekday rules retired in
   reads, "Har svart" on the board), S1d `af06d65` (calendar months start at the
-  semester start). L1a `19871a7` (the leader week page, see "Built 2026-11-02, L1a"). Docs
-  commits before these: `ba27207`, `80362cd`. Tests 1164 passed, 26 skipped; no migration; Alembic head `20261101_1200`. The app,
+  semester start). L1a `19871a7` (the leader week page, see "Built 2026-11-02, L1a"), L1b `0b2d0d1`
+  (search, filters, select a person, fold the panel; see "Built 2026-11-02, L1b"). Docs
+  commits before these: `ba27207`, `80362cd`. Tests 1180 passed, 26 skipped, plus 8 JS tests (`node --test tests/js/*.test.cjs`); no migration; Alembic head `20261101_1200`. The app,
   `kvarteret-internbevis` branch `feat/skiftlista-mobile`: A1 `f4772cd`, A1b
   `179797b`, A1c `ba5ec80`; Jest 398 passed; checked on an Android phone in
   Expo Go, **not checked on iOS**. Details under "Built 2026-11-02" in the
@@ -41,10 +42,8 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
 - **Next action** (decided 2026-11-02 evening; replaces the earlier list). The
   reasons and details are under "Changes after the design pass (2026-11-02
   evening)" in the package section:
-  (1) **L1b**, the rest of the new leader page layout (client side search and
-  filters in the people panel, "Vis hvem" polish, the data block read by
-  `shift-week.js`; L1a is built); (2) **L2**, selecting, popover,
-  "Vis andre", swap; (3) demo update 2; (4) conformance pass 2 (wider: pull
+  (1) **L1b** is built (see "Built 2026-11-02, L1b"); (2) **L2**, placing people
+  (click-to-place, drag and drop, the place popover), "Vis andre", swap; (3) demo update 2; (4) conformance pass 2 (wider: pull
   request history and review comments of the two repos, samfunnetibergen,
   org-level rules; public repos only); (5) Morten runs the Postgres e2e tests;
   (6) design pass 2 (read-only Opus: weekly planning and the dials turned into
@@ -144,7 +143,7 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
 | Data access | `app/domain/shifts/repository.py` |
 | Service | `app/domain/shifts/service.py` (`get_week_plan`, `assign`, `move`, `remove`) |
 | Leader page | `app/web/routes/shifts/pages.py` (`GET /shifts`), `app/templates/pages/shifts/shift_plan.html` |
-| Leader week page (L1a) | `GET /shifts/week` in `pages.py`, `app/domain/shifts/week_page.py` (loads), `week_view.py` (pure view model and JSON block), templates `shift_week.html` and `_week_*.html`, `app/static/js/shift-week.js`, styles at the end of `app/static/css/input.css`; tests `tests/unit/domain/test_shift_week_view.py`, `tests/web/test_shifts_week_web.py` |
+| Leader week page (L1a) | `GET /shifts/week` in `pages.py`, `app/domain/shifts/week_page.py` (loads), `week_view.py` (pure view model and JSON block), templates `shift_week.html` and `_week_*.html`, `app/static/js/shift-week.js` (print), `app/static/js/shift-week-people.js` (L1b: people panel and grid markers), styles at the end of `app/static/css/input.css`; tests `tests/unit/domain/test_shift_week_view.py`, `tests/web/test_shifts_week_web.py`, `tests/js/shift-week-people.test.cjs` |
 | Drag and drop | `app/web/routes/shifts/actions.py` (POST `/shifts/assignments`, `/{id}/move`, `/{id}/delete`), `app/static/js/shift-board.js` |
 | Setup (4b) | `app/domain/shifts/setup_service.py`, `generator.py`, `template_input.py`, `permissions.py`, `app/web/routes/shifts/setup_actions.py`, pages `shift_settings.html`, `shift_templates.html`, `shift_generate.html`, migration `20261030_1200_shift_closed_periods.py` |
 | Test data | `scripts/dev/seed_shifts.py` (run by `scripts/dev/bootstrap.py`; skipped when a real snapshot is used) |
@@ -1353,7 +1352,8 @@ unchanged.
   box, with the hidden text "Problem: svarte kan ikke".
 - **Not in L1a:** suggestions, "Fyll", copy last week, "Angre", "Sist endret
   av", deadline, note and maks, "0 helg", "Vis andre", selecting a person, the
-  place popover, drag and drop, search and filters (L1b, L2 and later).
+  place popover, drag and drop, search and filters (L1b, L2 and later). Selecting
+  a person, search and filters were built in L1b.
 
 #### L1a decisions and universal design (2026-11-02)
 
@@ -1384,7 +1384,66 @@ unchanged.
   widths; the table is usable at 200% zoom and 320px (it scrolls
   horizontally); colours as rendered; print preview (header and footer hidden,
   no blank pages, hidden text not printed); the print button after a boosted
+  navigation. **Status 2026-11-02:** Morten has checked the keyboard use of the
+  L1b controls by hand (search, filters, person buttons, "Fjern valg", Escape,
+  "Skjul folk"). **Still to do:** screen reader (NVDA or VoiceOver, including the
+  live count and the pressed states), 200% zoom, 320px reflow, forced colours,
+  print preview with a person selected, axe or Lighthouse, and hx-boost
   navigation.
+
+#### Built 2026-11-02, L1b (leader week page, `0b2d0d1`)
+
+Personal only; no migration, no server change; tests 1180 passed, 26 skipped,
+plus 8 JS tests; Alembic head unchanged. The page stays server rendered and
+read only. Behaviour is client side, from the markup and the `week-data` block;
+no inline handlers or scripts.
+- **Search** "Søk etter navn": live, case and accent insensitive, every typed
+  word must match; "ø" and "æ" stay distinct ("å" folds to "a").
+- **Three filter toggles** (`aria-pressed`, a check mark when on): "Bare
+  skiftledere", "Ikke svart", "Uten skift denne uka". They combine with each
+  other and with the search.
+- **Count** "Viser N av M" in a polite atomic live region, written only when the
+  text changes (300 ms pause while typing); "Nullstill" appears when a filter is
+  active and moves focus to the search box; "Ingen treff" sits in the live
+  region.
+- **Select a person:** each row has a real button (the name) with `aria-pressed`
+  and the whole row as click target; the row gets a thick border and the text
+  "Valgt"; the line "Viser: <name>" with "Fjern valg" shows above the grid.
+  Escape clears the selection when focus is in the panel or the grid (in a
+  non-empty search box Escape first belongs to the browser). After "Fjern valg"
+  focus goes to the person's button, else the search box, else the fold button.
+- **Grid markers:** a cell where the person is placed gets a 3px outline and the
+  label "Satt opp" (hidden text "Valgt person er satt opp her"); other cells show
+  the person's answer as the existing dot plus vil, kan or kan ikke, nothing when
+  there is no answer; the day header shows "Opptatt" (rule below). Print hides
+  all markers.
+- **"Skjul folk" / "Vis folk"** in the week bar: `aria-expanded`,
+  `aria-controls="week-people-panel"`; the panel gets `hidden` (also hidden to
+  assistive technology) and the grid takes the full width.
+- **Files:** `app/static/js/shift-week-people.js` (pure functions at the top,
+  delegated listeners bound once, state per page root in a WeakMap, so hx-boost
+  needs no re-init); node tests in `tests/js/shift-week-people.test.cjs`; the
+  DOM layer itself has no automated test. The HTML is covered in
+  `tests/web/test_shifts_week_web.py`.
+- **Checked by hand:** Morten ran the eight manual checks in the browser
+  (2026-11-02) with a good result.
+
+Decisions:
+- Filtering affects the people panel only; it never changes the grid.
+- The people panel's minimum height is 30rem beside the grid and 32rem stacked
+  (the header now holds the search and filters).
+- **"Opptatt"** is shown for the selected person only on days where they have a
+  shift elsewhere (another bar or group) and are not placed in the shown bar that
+  day. On a day where they are placed here the header shows nothing extra, since
+  the cells say "Satt opp". It is based on `busy_days`, which today means "has a
+  shift that day in any group", because the `week-data` block has no absence
+  data. Real absence data comes with the absence dial (see "Dials and absences").
+- State (search, filters, selection, fold) lives only in the page; it is not
+  stored and does not survive a reload.
+- Colours: all new pairs measured at 7.2:1 or better; see the comments in
+  `input.css`.
+- Known small items: "Opptatt" in a collapsed (2.5rem) day column uses 10px text;
+  without JavaScript the new controls are visible but inert.
 
 #### Changes after the design pass (2026-11-02 evening)
 

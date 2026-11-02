@@ -48,9 +48,22 @@ test('cell marker: placed, answer or nothing', () => {
   assert.deepEqual(api.cellMarker(shift, 9), {placed: false, answer: null});
 });
 
-test('busy day and answer words', () => {
-  assert.equal(api.isBusy(people[0], '2026-11-02'), true);
-  assert.equal(api.isBusy(people[0], '2026-11-03'), false);
+test('busy day: shown only for a shift elsewhere, not on a day the person is placed here', () => {
+  const shifts = [
+    {day: '2026-11-02', places: [{volunteer_id: 1}], answers: {}},
+    {day: '2026-11-04', places: [{volunteer_id: 7}], answers: {}},
+  ];
+  const placed = api.placedDays(shifts, 1);
+  assert.deepEqual([...placed], ['2026-11-02']);
+  // busy on the 2nd (placed here, also counted in busy_days) and on the 3rd (a shift elsewhere).
+  const person = {volunteer_id: 1, busy_days: ['2026-11-02', '2026-11-03']};
+  assert.equal(api.isBusy(person, '2026-11-02', placed), false);
+  assert.equal(api.isBusy(person, '2026-11-03', placed), true);
+  assert.equal(api.isBusy(person, '2026-11-05', placed), false);
+  assert.equal(api.isBusy(person, '2026-11-02', new Set()), true);
+});
+
+test('answer words', () => {
   assert.equal(api.answerWord('nei'), 'kan ikke');
   assert.equal(api.answerWord('vil'), 'vil');
   assert.equal(api.answerWord('x'), '');
