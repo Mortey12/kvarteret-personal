@@ -6,14 +6,14 @@ the codebase again.
 
 ## Start here
 
-Update by hand at the end of every session. Last updated 2026-11-02 (evening).
+Update by hand at the end of every session. Last updated 2026-11-02 (night, after L1a).
 
 - **State** (2026-11-02 evening; replaces the earlier State text): Personal,
   branch `skiftlista/skiftplan`: S0 `b154264` (`app_service.py` split into
   mixins, pure move), S1 `d6df7c6` (wish calendar API, weekday rules retired in
   reads, "Har svart" on the board), S1d `af06d65` (calendar months start at the
-  semester start). Docs commits before these: `ba27207`, `80362cd`. Tests 1111
-  passed, 26 skipped; no migration; Alembic head `20261101_1200`. The app,
+  semester start). L1a `19871a7` (the leader week page, see "Built 2026-11-02, L1a"). Docs
+  commits before these: `ba27207`, `80362cd`. Tests 1164 passed, 26 skipped; no migration; Alembic head `20261101_1200`. The app,
   `kvarteret-internbevis` branch `feat/skiftlista-mobile`: A1 `f4772cd`, A1b
   `179797b`, A1c `ba5ec80`; Jest 398 passed; checked on an Android phone in
   Expo Go, **not checked on iOS**. Details under "Built 2026-11-02" in the
@@ -41,7 +41,9 @@ Update by hand at the end of every session. Last updated 2026-11-02 (evening).
 - **Next action** (decided 2026-11-02 evening; replaces the earlier list). The
   reasons and details are under "Changes after the design pass (2026-11-02
   evening)" in the package section:
-  (1) **L1**, the new leader page layout; (2) **L2**, selecting, popover,
+  (1) **L1b**, the rest of the new leader page layout (client side search and
+  filters in the people panel, "Vis hvem" polish, the data block read by
+  `shift-week.js`; L1a is built); (2) **L2**, selecting, popover,
   "Vis andre", swap; (3) demo update 2; (4) conformance pass 2 (wider: pull
   request history and review comments of the two repos, samfunnetibergen,
   org-level rules; public repos only); (5) Morten runs the Postgres e2e tests;
@@ -142,6 +144,7 @@ Update by hand at the end of every session. Last updated 2026-11-02 (evening).
 | Data access | `app/domain/shifts/repository.py` |
 | Service | `app/domain/shifts/service.py` (`get_week_plan`, `assign`, `move`, `remove`) |
 | Leader page | `app/web/routes/shifts/pages.py` (`GET /shifts`), `app/templates/pages/shifts/shift_plan.html` |
+| Leader week page (L1a) | `GET /shifts/week` in `pages.py`, `app/domain/shifts/week_page.py` (loads), `week_view.py` (pure view model and JSON block), templates `shift_week.html` and `_week_*.html`, `app/static/js/shift-week.js`, styles at the end of `app/static/css/input.css`; tests `tests/unit/domain/test_shift_week_view.py`, `tests/web/test_shifts_week_web.py` |
 | Drag and drop | `app/web/routes/shifts/actions.py` (POST `/shifts/assignments`, `/{id}/move`, `/{id}/delete`), `app/static/js/shift-board.js` |
 | Setup (4b) | `app/domain/shifts/setup_service.py`, `generator.py`, `template_input.py`, `permissions.py`, `app/web/routes/shifts/setup_actions.py`, pages `shift_settings.html`, `shift_templates.html`, `shift_generate.html`, migration `20261030_1200_shift_closed_periods.py` |
 | Test data | `scripts/dev/seed_shifts.py` (run by `scripts/dev/bootstrap.py`; skipped when a real snapshot is used) |
@@ -1307,6 +1310,65 @@ build and demo session.
    in Expo Go. **Not checked on iOS:** the NativeTabs bar placement of the
    answer bar is unverified.
 
+#### Built 2026-11-02, L1a (leader week page, `19871a7`)
+
+Personal only; no migration; tests 1164 passed, 26 skipped; Alembic head
+unchanged.
+- **Route** `GET /shifts/week` (query `group`, `week`), next to the old board,
+  which is untouched except the link "Ny ukevisning" (and "Gammel skiftplan"
+  back). Same scope and permissions as the old board; a group outside the
+  scope is 403 before anything is read; bar tabs list only bars in scope.
+- **Modules:** `week_page.py` reuses `get_week_plan` (shifts, pool with place
+  tokens, status, banners) and reads the rest with existing repository
+  methods; `week_view.py` is the pure builder (no I/O) and makes the JSON
+  block `<script type="application/json" id="week-data">`. `service.py` and
+  `repository.py` are unchanged.
+- **Grid rows** are positions in the day within the bar (1., 2., 3. shift,
+  rooms merged, start-time order); the row label is the most common title and
+  time of that position in the week (tie: earliest day); Monday to Sunday
+  always; days without that shift are greyed.
+- **`shift-week.js`** only handles the print button (delegated click). The
+  button may not work after an `hx-boost` navigation until a full reload
+  (unchecked in a browser).
+- **`return_to`** on `POST /shifts/weeks/status`: optional; `safe_return_path`
+  in `actions.py` accepts only `/shifts` or `/shifts/...` (no scheme, host,
+  fragment, backslash, control character, `..` or leading `//`); anything else
+  falls back to `/shifts`. The new page's status buttons and banner send it.
+- **Not in L1a:** suggestions, "Fyll", copy last week, "Angre", "Sist endret
+  av", deadline, note and maks, "0 helg", "Vis andre", selecting a person, the
+  place popover, drag and drop, search and filters (L1b, L2 and later).
+
+#### L1a decisions and universal design (2026-11-02)
+
+- **Week status badge:** published is "Publisert"; an open week with people
+  placed is "Utkast: ikke synlig i appen"; an open week with nobody placed is
+  "Åpen for ønsker". "Endret etter publisering" comes with L4.
+- **"Har begynt N av M"** is interim (until the weekly "Ferdig" in S2): members
+  of the bar in the leader's pool with at least one `shift_wishes` row on a
+  shift of that bar in the shown week. "Vis hvem" lists the rest.
+- **Counts across all groups** (shifts per day, per week) follow the old board,
+  also for groups outside the leader's scope. **The month** for "denne
+  måneden" and the week strip follows the Thursday rule (`week_month`).
+- **Status buttons have no confirm dialog** yet, as on the old board; a confirm
+  on "Publiser uka" is a later option (`hx-confirm` needs htmx on the form).
+- **Universal design (decided):** WCAG 2.1 AA is the target for everything
+  Skiftlista builds (the week page, the app calendar). L1a was built to it
+  (table with caption and scopes, text markers "Problem:" and "Advarsel:",
+  `details` instead of tooltips, focus outlines, checked contrast, labelled
+  scroll region). The next big Opus check includes a code-level universal
+  design audit. **Morten checks by hand before the pilot:** TalkBack on
+  Android for the app calendar; keyboard only and a screen reader (NVDA or
+  VoiceOver) for the leader page; 200% zoom and 320px reflow; forced colors;
+  print preview; axe or Lighthouse on `/shifts/week`. Checklist for the leader
+  page (cannot be verified without a browser): tab order and visible focus,
+  also inside open `details`; the screen reader reads caption, headers,
+  "Ingen skift", "Problem:" and "Advarsel:", and skips the decorative "!";
+  the `details` lists are not clipped by the grid's scroll box at narrow
+  widths; the table is usable at 200% zoom and 320px (it scrolls
+  horizontally); colours as rendered; print preview (header and footer hidden,
+  no blank pages, hidden text not printed); the print button after a boosted
+  navigation.
+
 #### Changes after the design pass (2026-11-02 evening)
 
 Decisions made on the evening of 2026-11-02 after the build and demo session.
@@ -2133,6 +2195,21 @@ Known gaps, deliberately left to later steps:
    5a2 covers it),
    semester-end data cleanup. (The per-person "tar ikke opplæring" is gone;
    see 5d.)
+
+## Universal design: found outside Skiftlista (do nothing, list for Kvarteret)
+
+Rule: findings in shared Kvarteret code that Skiftlista does not own are listed
+here and not changed. This is an accessibility note, not a security finding.
+- The global `.app-button` (red background, cream text) has 3.21 to 1
+  contrast, which fails WCAG AA for normal-size text. The new week page has a
+  scoped fix (`.week-page .app-button`, ink text, 5.7 to 1); the global style
+  is unchanged, so the old board and other pages still have it.
+- Flash notices (`flash_notice` in `ui_macros.html`) use `red-700`, `emerald-700`
+  and `stone-700` text on 50-level fills; not measured.
+- The app-wide `select.app-input` and `.group-combobox-input` remove the
+  outline on focus and rely on a border colour change; not measured.
+- Light cell dividers (stone-300, 1.49 to 1) on the week grid are decorative
+  and were kept; the headers carry the table structure.
 
 ## Security review: open items
 
