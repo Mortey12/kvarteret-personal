@@ -55,10 +55,9 @@ def month_of(moment: datetime) -> date:
 
 
 def month_options(today: date) -> list[date]:
-    """The months a person may switch to: this month through the month of the wish window end."""
+    """The months a person may open: the first month of this semester through the month of the wish window end."""
     last = wish_window_end(today)
-    current = date(today.year, today.month, 1)
-    months = [current]
+    months = [date(today.year, 1 if today.month <= 6 else 7, 1)]
     while months[-1] < date(last.year, last.month, 1):
         months.append(add_months(months[-1], 1))
     return months

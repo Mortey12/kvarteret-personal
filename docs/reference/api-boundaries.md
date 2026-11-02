@@ -70,7 +70,7 @@ Trial and review sessions are not volunteers: `GET /config` answers
 | `POST`/`DELETE /assignments/{id}/swap-request` | Ask for / cancel a swap |
 | `POST`/`DELETE /assignments/{id}/cannot-attend` | "Kan ikke i dag" on the day / undo |
 | `GET /wishes`, `PUT /wishes/shifts/{id}` | Weeks that take wishes and per-shift answers (`rules` is always `[]`) |
-| `GET /wishes/calendar?month=YYYY-MM` | One month of shifts in the person's groups: answer, `accepts_wishes`, `past`, per-group `has_answered`, own published shifts (`mine`), the months to switch to. `deadline`, `days_left`, `note` and `max_shifts` are `null` until they are built |
+| `GET /wishes/calendar?month=YYYY-MM` | One month of shifts in the person's groups: answer, `accepts_wishes`, `past`, per-group `has_answered`, own published shifts (`mine`), the months to open (the first month of the current semester through the month of the wish window end; earlier months of the semester are read only, other months give 404; the default is the current month). `deadline`, `days_left`, `note` and `max_shifts` are `null` until they are built |
 | `PUT /wishes/answers` | Batch of 1 to 400 answers (`null` clears), all or nothing: one refused shift writes nothing (`409`, first reason and the count). Duplicate `shift_id` is `422`. Returns the calendar for the month of the first item |
 | `PUT /wishes/weekdays/{0-6}` | Deprecated. Weekday rules are retired: still stored, never read |
 | `GET /courses`, `POST`/`DELETE /courses/sessions/{id}/signup` | Brann-/barkurs status, dates and sign-up |

@@ -134,7 +134,7 @@ class WishesMixin:
         person = await self._require_wishes(volunteer_id)
         today = self._now().astimezone(OSLO).date()
         options = month_options(today)
-        first = options[0] if month is None else parse_month(month)
+        first = date(today.year, today.month, 1) if month is None else parse_month(month)
         if first is None or first not in options:
             raise ShiftNotFoundError("Finner ikke måneden.")
         return await self._month_view(person, first)

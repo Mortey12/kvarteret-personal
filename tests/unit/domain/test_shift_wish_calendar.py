@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.domain.shifts.app_models import WishAnswerItem, WishAnswersRequest
 from app.domain.shifts.errors import ShiftNotFoundError, ShiftPlacementError
-from app.domain.shifts.tables import shift_week_status, shift_wishes
+from app.domain.shifts.tables import shift_assignments, shift_week_status, shift_wishes
 from app.domain.shifts.wish_calendar import month_options, parse_month, refusal_reason, refusal_text
 from tests.unit.domain.test_shift_app_service import (  # noqa: F401  (world is a fixture)
     HALVTIMEN,
@@ -45,9 +45,21 @@ async def stored(world: World, volunteer_id: int = SANDER) -> dict[int, str]:
 # ---------------------------------------------------------------- pure
 
 
-def test_months_run_from_this_month_to_the_end_of_the_wish_window() -> None:
-    assert [m.isoformat() for m in month_options(date(2026, 11, 2))] == ["2026-11-01", "2026-12-01"]
-    assert [m.month for m in month_options(date(2026, 3, 10))] == [3, 4, 5, 6]
+def test_months_run_from_the_start_of_the_semester_to_the_end_of_the_wish_window() -> None:
+    def keys(today: date) -> list[str]:
+        return [m.isoformat()[:7] for m in month_options(today)]
+
+    # Start of the autumn semester.
+    assert keys(date(2026, 7, 1)) == ["2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"]
+    # Mid semester: back to July, forward to December.
+    assert keys(date(2026, 11, 2)) == ["2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"]
+    assert keys(date(2026, 3, 10)) == ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"]
+    # December: the window reaches into January, the semester start stays July.
+    assert keys(date(2026, 12, 15)) == [
+        "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-01",
+    ]  # fmt: skip
+    # January: a new semester, so December is no longer listed.
+    assert keys(date(2027, 1, 5)) == ["2027-01", "2027-02", "2027-03", "2027-04", "2027-05", "2027-06"]
 
 
 def test_parse_month() -> None:
@@ -80,7 +92,9 @@ def test_request_refuses_duplicates_and_bad_sizes() -> None:
 async def test_month_view_lists_shifts_groups_and_months(world: World) -> None:
     view = await world.service.get_wish_calendar(SANDER, "2026-11")
     assert view.month == "2026-11" and view.month_label == "November 2026"
-    assert [m.month for m in view.months] == ["2026-11", "2026-12"]
+    assert [m.month for m in view.months] == [
+        "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12",
+    ]  # fmt: skip
     assert view.note is None and view.max_shifts is None
     # Sander is a member of Stjerne only; Halvtimen's shift is not his.
     assert [s.shift_id for s in view.shifts] == [world.shift_ids["tue"], world.shift_ids["thu"]]
@@ -98,9 +112,27 @@ async def test_month_view_lists_shifts_groups_and_months(world: World) -> None:
 
 async def test_month_defaults_to_this_month_and_refuses_months_out_of_range(world: World) -> None:
     assert (await world.service.get_wish_calendar(SANDER)).month == "2026-11"
-    for month in ("2026-10", "2027-01", "nonsense"):
+    for month in ("2026-06", "2027-01", "nonsense"):
         with pytest.raises(ShiftNotFoundError):
             await world.service.get_wish_calendar(SANDER, month)
+
+
+async def test_past_month_of_this_semester_is_read_only_with_answers_and_own_assignments(world: World) -> None:
+    started, slot = await add_stjerne_shift(world, oslo(date(2026, 10, 6), 11), oslo(date(2026, 10, 6), 17))
+    await world.session.execute(
+        shift_wishes.insert().values(volunteer_id=SANDER, shift_id=started, answer="vil")
+    )
+    await world.session.execute(
+        shift_assignments.insert().values(slot_id=slot, volunteer_id=SANDER, swap_requested=False)
+    )
+    view = await world.service.get_wish_calendar(SANDER, "2026-10")
+    assert view.month == "2026-10" and view.month_label == "Oktober 2026"
+    [shift] = view.shifts
+    assert (shift.shift_id, shift.past, shift.accepts_wishes, shift.answer) == (started, True, False, "vil")
+    assert [(m.shift_id, m.kind, m.day) for m in view.mine] == [(started, "skjenker", date(2026, 10, 6))]
+    assert view.groups[0].has_answered
+    # Someone who was not on the shift sees the shift but no assignment.
+    assert (await world.service.get_wish_calendar(SIGRID, "2026-10")).mine == []
 
 
 async def test_started_shifts_are_past_and_do_not_take_wishes(world: World) -> None:
