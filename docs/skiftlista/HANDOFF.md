@@ -10,14 +10,17 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
 
 - **State** (2026-11-02 night, after L2a and demo update 2; replaces the earlier State text): Personal,
   branch `skiftlista/skiftplan`, with L2a (placing by clicking, see "Built 2026-11-02, L2a")
-  committed as `93c6123`, merged into the demo as `4e30a59`. Commits
+  committed as `93c6123`, merged into the demo as `4e30a59`. On top of it, **not committed**: the
+  stale-state fix for the people panel (see "Stale state after a boosted navigation" in the L2a
+  section; from L1b, found on the hosted demo). Commits
   since the first slice: S0 `b154264`, S1 `d6df7c6`, S1d `af06d65`, L1a `19871a7`, L1a
   polish `fa7166f` and `6a7eb10` (collapsed empty days, panel breakpoint), L1b `0b2d0d1`,
   L1b fixes `8c72f8a` (Opptatt only when busy elsewhere) and `4f0d452` (compact filters and
   warning chip), week bar `8f70fe2`, L2a `93c6123`. Docs commits before these: `ba27207`, `80362cd`, `f0077d7`,
   `8ec8c1f`. **Tests:** before L2a 1184 passed, 26 skipped, plus 8 JS tests (`node --test
   tests/js/*.test.cjs`; this file said 1180 for L1b, which was out of date); after L2a 1233
-  passed, 26 skipped, plus 14 JS tests. No migration; Alembic head `20261101_1200`. The app,
+  passed, 26 skipped, plus 14 JS tests; after the stale-state fix (below, uncommitted) 1238 passed,
+  26 skipped, plus 15 JS tests. No migration; Alembic head `20261101_1200`. The app,
   `kvarteret-internbevis` branch `feat/skiftlista-mobile`: A1 `f4772cd`, A1b
   `179797b`, A1c `ba5ec80`; Jest 398 passed; checked on an Android phone in
   Expo Go, **not checked on iOS**. Details under "Built 2026-11-02" in the package
@@ -1514,8 +1517,29 @@ routes (additive, 254 lines).
   9. 200% zoom and 320px width (the dialog fits, nothing is clipped), forced colours, print preview with
      a person selected (no buttons or markers printed), axe or Lighthouse, an hx-boost navigation to
      the page and back (the buttons still work).
+  10. Stale state (found on the hosted demo): with a filter on ("Bare SL") press a bar tab, then a week
+     arrow; then use "Bare SL", "Nullstill" and select someone. The list must show names, the count must
+     match, and the selected person must show answer markers and "Sett inn <fornavn>" in the new week.
   Cannot be checked without a browser or screen reader: focus order and focus return, the modal's
   focus trap, live region announcements, rendered colours and contrast, click target sizes, reflow.
+
+- **Stale state after a boosted navigation (bug from L1b `0b2d0d1`, found 2026-11-02 on the hosted
+  demo; fixed after L2a, not committed).** Symptoms: after switching bar or week and using "Bare SL" or
+  "Nullstill" the panel said "Viser 9 av 9" with no names; after a week change a selected person got
+  no answer markers and no "Sett inn". Cause: `<body>` has `hx-boost` with `innerMorph`, so a week
+  arrow, bar tab or strip link morphs new content into the same `[data-week-root]` element, and
+  `shift-week-people.js` kept its state in a `WeakMap` keyed by that element, so `state.people`,
+  `state.byId`, `state.shifts` and `place_state` still described the previous bar or week (rows were
+  hidden by the wrong people ids; markers looked up the wrong shifts). A full reload hid the problem.
+  Fix: `stateKey(data)` (bar id and week start) is stored in the state; `stateFor` and an
+  `htmx:after:settle` listener call `resync`, which reads the new `week-data` when the key differs,
+  keeps the search text and filters (re-applied), keeps the selection only if that person is in the new
+  pool, and redraws markers; and the root now has the id `week-root-<bar>-<week>` so the morph replaces
+  it instead of reusing it. `shift-week-place.js` holds no week data (it reads `data-group-id` and
+  `data-week-start` from the root at click time), so it needed no change. Tests: `stateKey` in
+  `tests/js/shift-week-people.test.cjs`, the root id in `tests/web/test_shifts_week_place_web.py`;
+  the DOM behaviour itself (resync, selection, markers) is covered only by the manual step 10 and by a
+  throwaway jsdom check run outside the repo (no jsdom dependency is added).
 
 #### L1a decisions and universal design (2026-11-02)
 

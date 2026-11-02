@@ -2,7 +2,7 @@
 {% from "components/shared/ui_macros.html" import flash_notice %}
 
 {% block page_content %}
-  <section class="week-page grid gap-3" data-week-root data-group-id="{{ view.bar_id if view else '' }}" data-week-start="{{ view.week_start.isoformat() if view else '' }}">
+  <section class="week-page grid gap-3"{% if view %} id="week-root-{{ view.bar_id }}-{{ view.week_start.isoformat() }}"{% endif %} data-week-root data-group-id="{{ view.bar_id if view else '' }}" data-week-start="{{ view.week_start.isoformat() if view else '' }}">
     {% if page.plan %}{% include "pages/shifts/_week_banners.html" %}{% endif %}
 
     <div class="noprint flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">

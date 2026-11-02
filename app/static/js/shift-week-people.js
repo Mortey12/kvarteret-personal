@@ -78,7 +78,12 @@
     return { ok: false, label: 'Ledig', lines: [{ text: entry.why || 'Passer ikke', level: '' }] };
   }
 
-  const api = { fold, matchesPerson, visibleIds, hasActiveFilter, countText, cellMarker, placedDays, isBusy, answerWord, firstName, placeOffer };
+  // Which bar and week a week-data block describes. A state built for one key is stale for another.
+  function stateKey(data) {
+    return data ? `${data.bar_id}:${data.week_start}` : '';
+  }
+
+  const api = { stateKey, fold, matchesPerson, visibleIds, hasActiveFilter, countText, cellMarker, placedDays, isBusy, answerWord, firstName, placeOffer };
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof document === 'undefined') return;
   window.shiftWeekPeople = api; // for shift-week-place.js, which is loaded after this file
@@ -97,22 +102,45 @@
     }
   }
 
+  // The data under the state: people, their lookup and the shifts of the week now in the page.
+  function loadData(state, data) {
+    state.key = stateKey(data);
+    state.data = data;
+    state.people = data.people;
+    state.byId = new Map(data.people.map((person) => [person.volunteer_id, person]));
+    state.shifts = new Map(data.shifts.map((shift) => [String(shift.shift_id), shift]));
+  }
+
   function getState(root) {
     if (!states.has(root)) {
       const data = readData(root);
-      states.set(root, data && {
+      const state = data && {
         root,
-        data,
-        people: data.people,
-        byId: new Map(data.people.map((person) => [person.volunteer_id, person])),
-        shifts: new Map(data.shifts.map((shift) => [String(shift.shift_id), shift])),
         selected: null,
         folded: false,
         filters: { query: '', sl: false, unanswered: false, noShift: false },
         countTimer: null,
-      });
+      };
+      if (state) loadData(state, data);
+      states.set(root, state);
     }
     return states.get(root);
+  }
+
+  // A boosted navigation (week arrows, bar tabs, the week strip) can morph new content into the same
+  // root element. The state then describes the previous bar or week: rows would be hidden by the wrong
+  // people and the markers would look up the wrong shifts. When the key of the week-data in the page no
+  // longer matches, read the data again; keep the search text and the filters (and re-apply them), keep
+  // the selection only if that person is in the new pool, and redraw the markers.
+  function resync(state) {
+    const data = readData(state.root);
+    if (!data || stateKey(data) === state.key) return false;
+    loadData(state, data);
+    const search = state.root.querySelector('[data-people-search]');
+    if (search) search.value = state.filters.query;
+    applyFilters(state, 0);
+    select(state, state.byId.has(state.selected) ? state.selected : null);
+    return true;
   }
 
   // A browser may restore the search text when the user comes back to the page; follow it.
@@ -302,6 +330,7 @@
     const fresh = !states.has(root);
     const state = getState(root);
     if (state && fresh) syncRestoredSearch(state);
+    else if (state) resync(state);
     return state;
   }
 
@@ -368,12 +397,17 @@
     if (!state) return;
     const data = readData(root);
     if (!data) return;
-    state.data = data;
-    state.people = data.people;
-    state.byId = new Map(data.people.map((person) => [person.volunteer_id, person]));
-    state.shifts = new Map(data.shifts.map((shift) => [String(shift.shift_id), shift]));
+    loadData(state, data);
     applyFilters(state, 0);
     select(state, state.byId.has(state.selected) ? state.selected : null);
+  }
+
+  // After any htmx swap (a boosted navigation morphs the page): bring every known state up to date.
+  function onSettled() {
+    document.querySelectorAll('[data-week-root]').forEach((root) => {
+      const state = states.get(root);
+      if (state) resync(state);
+    });
   }
 
   if (!window.shiftWeekPeopleBound) {
@@ -382,5 +416,6 @@
     document.addEventListener('input', onInput);
     document.addEventListener('keydown', onKeydown);
     document.addEventListener('week:refreshed', onRefreshed);
+    document.addEventListener('htmx:after:settle', onSettled);
   }
 })();
