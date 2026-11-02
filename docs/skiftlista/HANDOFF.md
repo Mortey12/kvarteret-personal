@@ -6,25 +6,26 @@ the codebase again.
 
 ## Start here
 
-Update by hand at the end of every session. Last updated 2026-11-02 (night, after L1b).
+Update by hand at the end of every session. Last updated 2026-11-02 (night, after L2a and demo update 2).
 
-- **State** (2026-11-02 night, after L2a; replaces the earlier State text): Personal,
-  branch `skiftlista/skiftplan`, head `8f70fe2` (week bar always has two rows). Built on
-  it, **not committed**: L2a (placing by clicking, see "Built 2026-11-02, L2a"). Commits
+- **State** (2026-11-02 night, after L2a and demo update 2; replaces the earlier State text): Personal,
+  branch `skiftlista/skiftplan`, with L2a (placing by clicking, see "Built 2026-11-02, L2a")
+  committed as `93c6123`, merged into the demo as `4e30a59`. Commits
   since the first slice: S0 `b154264`, S1 `d6df7c6`, S1d `af06d65`, L1a `19871a7`, L1a
   polish `fa7166f` and `6a7eb10` (collapsed empty days, panel breakpoint), L1b `0b2d0d1`,
   L1b fixes `8c72f8a` (Opptatt only when busy elsewhere) and `4f0d452` (compact filters and
-  warning chip), week bar `8f70fe2`. Docs commits before these: `ba27207`, `80362cd`, `f0077d7`,
+  warning chip), week bar `8f70fe2`, L2a `93c6123`. Docs commits before these: `ba27207`, `80362cd`, `f0077d7`,
   `8ec8c1f`. **Tests:** before L2a 1184 passed, 26 skipped, plus 8 JS tests (`node --test
   tests/js/*.test.cjs`; this file said 1180 for L1b, which was out of date); after L2a 1233
   passed, 26 skipped, plus 14 JS tests. No migration; Alembic head `20261101_1200`. The app,
   `kvarteret-internbevis` branch `feat/skiftlista-mobile`: A1 `f4772cd`, A1b
   `179797b`, A1c `ba5ec80`; Jest 398 passed; checked on an Android phone in
   Expo Go, **not checked on iOS**. Details under "Built 2026-11-02" in the package
-  section. **Demo:** the branch `skiftlista/demo` is at `57dc99a`, a merge of skiftplan up to
-  `8f70fe2` (it has L1a and L1b, not L2a). `57dc99a` is pushed: `origin/skiftlista/demo` is at
-  `57dc99a` (checked by Morten, 2026-11-02). The last confirmed update of Render and Neon was on
-  2026-11-02 (merge `644be17`, pushed to the fork, `/health` ok). On Neon
+  section. **Demo (update 2 done, 2026-11-02):** the branch `skiftlista/demo` is at merge `4e30a59`
+  (L2a included, no migration), pushed to the fork; Render deployed it. Morten checked the hosted
+  week page the same day: the page loads, answers and "ikke svart" show, search, filters and "Skjul
+  folk" work, and placing and removing a person works. The earlier update was merge `644be17`
+  (`57dc99a` before this one). On Neon
   production: Alembic at `20261101_1200`, `seed_demo.py` added 1110 wishes,
   week status has explicit rows only for 2026-11-02 and 2026-11-09. New Neon
   rollback branch `before-wishcalendar-2026-11-02` (never expires); the older
@@ -48,9 +49,10 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
   reasons and details are under "Changes after the design pass (2026-11-02
   evening)" in the package section:
   (1) **L1b** is built (see "Built 2026-11-02, L1b"); (2) **L2a** (placing by
-  clicking) is built but **not committed**: Morten runs the manual checks under "Built
-  2026-11-02, L2a", then commits it; next **L2b** (drag and drop, no new placing rules) and
-  "Vis andre"; (3) demo update 2; (4) conformance pass 2 (wider: pull
+  clicking) is built and committed (`93c6123`); Morten still runs the manual checks under "Built
+  2026-11-02, L2a" that the hosted check did not cover (keyboard, screen reader, zoom, print); next the
+  "L2a polish" list in that section, then **L2b** (drag and drop, no new placing rules) and
+  "Vis andre"; (3) demo update 2 is done (see State); (4) conformance pass 2 (wider: pull
   request history and review comments of the two repos, samfunnetibergen,
   org-level rules; public repos only); (5) Morten runs the Postgres e2e tests;
   (6) design pass 2 (read-only Opus: weekly planning and the dials turned into
@@ -150,7 +152,7 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
 | Data access | `app/domain/shifts/repository.py` |
 | Service | `app/domain/shifts/service.py` (`get_week_plan`, `assign`, `move`, `remove`) |
 | Leader page | `app/web/routes/shifts/pages.py` (`GET /shifts`), `app/templates/pages/shifts/shift_plan.html` |
-| Leader week page (L1a) | `GET /shifts/week` in `pages.py`, `app/domain/shifts/week_page.py` (loads), `week_view.py` (pure view model and JSON block), templates `shift_week.html` and `_week_*.html`, `app/static/js/shift-week.js` (print), `app/static/js/shift-week-people.js` (L1b: people panel and grid markers), styles at the end of `app/static/css/input.css`; L2a (placing by clicking, not committed): `week_picker.py`, `week_place_data.py`, `week_placing.py`, `app/web/routes/shifts/week_actions.py`, `app/static/js/shift-week-place.js`; tests `tests/unit/domain/test_shift_week_view.py`, `tests/web/test_shifts_week_web.py`, `tests/js/shift-week-people.test.cjs` |
+| Leader week page (L1a) | `GET /shifts/week` in `pages.py`, `app/domain/shifts/week_page.py` (loads), `week_view.py` (pure view model and JSON block), templates `shift_week.html` and `_week_*.html`, `app/static/js/shift-week.js` (print), `app/static/js/shift-week-people.js` (L1b: people panel and grid markers), styles at the end of `app/static/css/input.css`; L2a (placing by clicking, `93c6123`): `week_picker.py`, `week_place_data.py`, `week_placing.py`, `app/web/routes/shifts/week_actions.py`, `app/static/js/shift-week-place.js`; tests `tests/unit/domain/test_shift_week_view.py`, `tests/web/test_shifts_week_web.py`, `tests/js/shift-week-people.test.cjs` |
 | Drag and drop | `app/web/routes/shifts/actions.py` (POST `/shifts/assignments`, `/{id}/move`, `/{id}/delete`), `app/static/js/shift-board.js` |
 | Setup (4b) | `app/domain/shifts/setup_service.py`, `generator.py`, `template_input.py`, `permissions.py`, `app/web/routes/shifts/setup_actions.py`, pages `shift_settings.html`, `shift_templates.html`, `shift_generate.html`, migration `20261030_1200_shift_closed_periods.py` |
 | Test data | `scripts/dev/seed_shifts.py` (run by `scripts/dev/bootstrap.py`; skipped when a real snapshot is used) |
@@ -1396,7 +1398,7 @@ off. Warnings only for hand placement. Buttons: "Lag forslag", "Godta
 forslag", "Forkast", "Fyll", "Angre". Stored in its own table (S2 migration,
 with an Opus review before Neon).
 
-#### Built 2026-11-02, L2a (placing by clicking; **built, not committed**)
+#### Built 2026-11-02, L2a (placing by clicking; committed as `93c6123`)
 
 Personal only; no migration, no `tables.py` change, no new dependency; Alembic head
 `20261101_1200`. Tests 1233 passed, 26 skipped (before: 1184), plus 14 JS tests (before: 8).
@@ -1486,6 +1488,11 @@ routes (additive, 254 lines).
   the shown bar's members only (the pool), not other bars: "Vis andre" is later. (e) The banner for
   an unpublished week is not refreshed by an action; reload the page. (f) Without JavaScript the
   place buttons are inert and the forms fall back to a redirect.
+- **L2a polish (decided 2026-11-02, not built).** Both go before or with L2b:
+  (a) the whole place square is the click target, for "Ledig" and for a filled place, while the real
+  button stays inside it for keyboard and screen reader users (one tab stop, the same accessible name),
+  and the click target gets larger; (b) the picker dialog is centred on the screen instead of placed
+  next to the place.
 - **Manual checks Morten still has to do** (needs a browser; nothing below was run in one):
   1. Place first, mouse: click "Ledig", the picker opens with the search box focused; pick a person; the
      grid shows the person, the chips and "Folk denne uka" counts change, the green or yellow
