@@ -420,6 +420,38 @@
   /* "Opptatt" in the day header: #78350f on #fef3c7 8.2:1, border on the grey collapsed header 7.2:1. */
   .week-busy { display: block; margin-top: .25rem; border: 1px solid #78350f; background: #fef3c7; padding: 0 .2rem; font-size: .75rem; font-weight: 600; color: #78350f; }
   .week-collapsed .week-busy { padding: 0; font-size: .625rem; text-align: center; overflow-wrap: anywhere; }
+  /* L2a, placing by clicking. Contrast (WCAG relative luminance, computed): ink on white 19.9:1 (button
+     text, picker text; the existing figure), ink on #ecfdf3 18.9:1 and on #f5f5f4 18.2:1; stone-700
+     #44403c on white 10.3:1 ("Ledig", reasons); red-800 #991b1b on white 8.3:1 and on #fef2f2 7.6:1 (red
+     warnings); amber-900 #78350f on white 9.1:1 and on #fffbeb 8.7:1 (yellow warnings); live message
+     #78350f on #fffbeb 8.7:1 and #7f1d1d on #fef2f2 9.2:1; 1px and 2px component borders #78716c on
+     white 4.8:1 and ink on white 19.9:1 (3:1 needed); the 4px row edges #991b1b and #78350f on white
+     8.3:1 and 9.1:1. */
+  .week-place-btn { display: block; box-sizing: border-box; width: 100%; min-height: 1.5rem; padding: 0; text-align: left; color: var(--color-stone-700); cursor: pointer; }
+  .week-place-btn[data-offer-volunteer] { border: 2px solid var(--color-kvarteret-ink); background: white; padding: .15rem .35rem; font-weight: 600; color: var(--color-kvarteret-ink); }
+  .week-place-btn:hover { text-decoration: underline; }
+  .week-place-edit { display: inline-block; width: auto; min-height: 1.5rem; margin-top: .2rem; border: 1px solid var(--color-kvarteret-ink); padding: 0 .4rem; font-size: .75rem; font-weight: 600; color: var(--color-kvarteret-ink); text-decoration: none; }
+  .week-place-menu { display: grid; gap: .25rem; margin-top: .25rem; border-top: 1px solid #78716c; padding-top: .25rem; }
+  .week-place-menu[hidden] { display: none; }
+  .week-place-action { display: block; box-sizing: border-box; width: 100%; min-height: 1.75rem; border: 2px solid var(--color-kvarteret-ink); background: white; padding: 0 .4rem; text-align: left; font-size: .75rem; font-weight: 600; color: var(--color-kvarteret-ink); cursor: pointer; }
+  .week-offer-red { margin-top: .15rem; font-weight: 600; color: #991b1b; }
+  .week-offer-yellow { margin-top: .15rem; font-weight: 600; color: #78350f; }
+  .week-offer-reason { margin-top: .15rem; color: var(--color-stone-700); }
+  .week-live { margin: 0; border: 2px solid var(--color-kvarteret-ink); background: #ecfdf3; padding: .4rem .75rem; font-size: .9375rem; color: var(--color-kvarteret-ink); }
+  .week-live:empty { display: none; }
+  .week-live[data-level="warn"] { border-color: #78350f; background: #fffbeb; color: #78350f; }
+  .week-live[data-level="error"] { border-color: #7f1d1d; background: #fef2f2; color: #7f1d1d; }
+  .week-picker { box-sizing: border-box; width: min(34rem, calc(100vw - 2rem)); max-height: min(36rem, calc(100vh - 2rem)); overflow: hidden; border: 2px solid var(--color-kvarteret-ink); background: white; padding: 0; color: var(--color-kvarteret-ink); }
+  .week-picker[open] { display: block; }
+  .week-picker::backdrop { background: rgb(0 0 0 / .45); }
+  .week-picker [data-picker-content] { display: grid; max-height: min(36rem, calc(100vh - 2rem)); grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; gap: .5rem; padding: .75rem; }
+  .week-pick-note { margin: 0; border: 2px solid #78350f; background: #fffbeb; padding: .35rem .5rem; font-size: .875rem; color: #78350f; }
+  .week-pick-list { display: grid; min-height: 0; margin: 0; list-style: none; gap: .25rem; overflow-y: auto; padding: 0; align-content: start; }
+  .week-pick-row[hidden] { display: none; }
+  .week-pick { box-sizing: border-box; display: block; width: 100%; min-height: 2.75rem; border: 1px solid #78716c; border-left-width: 4px; background: white; padding: .3rem .5rem; text-align: left; font-size: .875rem; color: var(--color-kvarteret-ink); cursor: pointer; }
+  .week-pick:hover { background: #f5f5f4; }
+  .week-pick-red .week-pick { border-left-color: #991b1b; background: #fef2f2; }
+  .week-pick-yellow .week-pick { border-left-color: #78350f; background: #fffbeb; }
 }
 
 /* Print the week grid only: everything else is marked noprint, and the page shell is hidden. */
@@ -436,4 +468,7 @@
   /* The selected person's markers are a screen aid; the print stays as it was. */
   .week-select-note, .week-busy { display: none !important; }
   .week-cell-placed { outline: none; }
+  /* L2a: the place buttons print as the plain word "Ledig"; their extras and the picker do not print. */
+  .week-place-btn { border: 0 !important; padding: 0 !important; font-weight: 400 !important; }
+  [data-place-offer], [data-place-extra], .week-live, .week-picker { display: none !important; }
 }
