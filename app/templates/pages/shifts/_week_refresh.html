@@ -1,0 +1,10 @@
+{# The answer to a place action (see week_actions.py): the live message and the parts of the week that changed.
+   The page's JavaScript swaps each part into the page by its data attribute and keeps its own state. #}
+<div data-week-refresh data-level="{{ level }}" data-focus-slot="{{ focus_slot }}" data-focus-volunteer="{{ focus_volunteer }}">
+  <p data-live-text>{{ message }}</p>
+  {% include "pages/shifts/_week_grid.html" %}
+  {% include "pages/shifts/_week_status_badge.html" %}
+  {% include "pages/shifts/_week_chips.html" %}
+  {% include "pages/shifts/_week_people_list.html" %}
+  <script type="application/json" id="week-data">{{ view.data | tojson }}</script>
+</div>

@@ -1,0 +1,40 @@
+{# The content of the place picker dialog (see week_actions.py). Real forms: a row is one button that places that person. #}
+{% set action = "/shifts/week/replace" if picker.replace_assignment_id else "/shifts/week/place" %}
+<div data-picker-content>
+  <h2 class="text-lg font-semibold" id="week-picker-title" data-picker-title>{{ picker.title }}</h2>
+  {% if picker.absent_name %}
+    <p class="week-pick-note" data-picker-absent>{{ picker.absent_name }} har meldt kan ikke i dag. Den som settes inn tar over plassen, og {{ picker.absent_name }} tas av.</p>
+  {% endif %}
+  <div class="grid gap-0.5">
+    <label class="text-sm font-semibold" for="week-picker-search">Søk etter navn</label>
+    <input class="week-search" id="week-picker-search" type="search" autocomplete="off" spellcheck="false" data-picker-search>
+  </div>
+  <p class="text-sm" aria-live="polite" aria-atomic="true" data-picker-count><span data-picker-count-text>{{ picker.rows | length }} {{ 'person' if picker.rows | length == 1 else 'personer' }} passer</span><span data-picker-none hidden> Ingen treff</span></p>
+  {% if not picker.rows %}<p class="text-sm" data-picker-empty>Ingen i listen passer denne plassen.</p>{% endif %}
+  <ul class="week-pick-list" data-picker-list>
+    {% for row in picker.rows %}
+      <li class="week-pick-row {% if row.level %}week-pick-{{ row.level }}{% endif %}" data-picker-row data-volunteer-id="{{ row.volunteer_id }}" data-name="{{ row.name | lower }}">
+        <form action="{{ action }}" method="post" hx-boost="false" data-place-form>
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <input type="hidden" name="slot_id" value="{{ picker.slot_id }}">
+          <input type="hidden" name="volunteer_id" value="{{ row.volunteer_id }}">
+          {% if picker.replace_assignment_id %}<input type="hidden" name="assignment_id" value="{{ picker.replace_assignment_id }}">{% endif %}
+          <input type="hidden" name="group" value="{{ picker.group_id }}">
+          <input type="hidden" name="week" value="{{ picker.week_start.isoformat() }}">
+          <button class="week-pick" type="submit">
+            <span class="flex flex-wrap items-baseline gap-x-2">
+              <span class="font-medium">{{ row.name }}</span>
+              {% if row.is_sl %}<span class="text-xs font-semibold"><span aria-hidden="true">SL</span><span class="sr-only">godkjent skiftleder</span></span>{% endif %}
+              {% if row.answer_word %}<span class="week-answer" data-answer="{{ row.answer }}"><span class="week-dot week-dot-{{ row.answer }}" aria-hidden="true"></span><span class="sr-only">Svar: </span>{{ row.answer_word }}</span>{% endif %}
+              <span class="text-xs"><span aria-hidden="true">{{ row.week_count }} uka · {{ row.month_count }} mnd</span><span class="sr-only">{{ row.week_count }} denne uka, {{ row.month_count }} denne måneden</span></span>
+            </span>
+            {% for warning in row.warnings %}
+              <span class="block text-xs font-semibold {{ 'text-red-800' if warning.level == 'red' else 'text-amber-900' }}" data-problem="{{ warning.level }}"><span class="sr-only">{{ 'Problem' if warning.level == 'red' else 'Advarsel' }}: </span><span aria-hidden="true">! </span>{{ warning.text }}</span>
+            {% endfor %}
+          </button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+  <button class="app-button-secondary min-h-11 px-4 text-sm" type="button" data-picker-close>Lukk</button>
+</div>

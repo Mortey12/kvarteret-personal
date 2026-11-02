@@ -63,9 +63,25 @@
     return ANSWER_WORDS[answer] || '';
   }
 
-  const api = { fold, matchesPerson, visibleIds, hasActiveFilter, countText, cellMarker, placedDays, isBusy, answerWord };
+  // L2a, person first: the first word of the name ("Sett inn Ada").
+  function firstName(name) {
+    return String(name || '').trim().split(/\s+/)[0] || '';
+  }
+
+  // What an empty place says for the selected person. ``entry`` is place_state[person][slot] from the
+  // server: {ok: 1, w: [[text, level], ...]} or {ok: 0, why: text}. The server decides; this only words it.
+  function placeOffer(entry, first) {
+    if (!entry) return null;
+    if (entry.ok) {
+      return { ok: true, label: `Sett inn ${first}`, lines: (entry.w || []).map(([text, level]) => ({ text, level })) };
+    }
+    return { ok: false, label: 'Ledig', lines: [{ text: entry.why || 'Passer ikke', level: '' }] };
+  }
+
+  const api = { fold, matchesPerson, visibleIds, hasActiveFilter, countText, cellMarker, placedDays, isBusy, answerWord, firstName, placeOffer };
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof document === 'undefined') return;
+  window.shiftWeekPeople = api; // for shift-week-place.js, which is loaded after this file
 
   // ---- DOM part ----
   const states = new WeakMap();
@@ -142,7 +158,58 @@
     return element;
   }
 
+  // Empty places back to "Ledig" (the person-first offer is removed).
+  function clearPlaceOffers(state) {
+    state.root.querySelectorAll('[data-place-open]').forEach((button) => {
+      delete button.dataset.offerVolunteer;
+      const offer = button.querySelector('[data-place-offer]');
+      const standard = button.querySelector('[data-place-default]');
+      if (offer) { offer.hidden = true; offer.textContent = ''; }
+      if (standard) standard.hidden = false;
+    });
+    state.root.querySelectorAll('[data-place-extra]').forEach((extra) => { extra.textContent = ''; });
+  }
+
+  // Person first: every empty place says "Sett inn <fornavn>" with its warnings, or "Ledig" with the
+  // reason. The button keeps its own click (opening the picker) when the place does not fit.
+  function markPlaces(state, person) {
+    const first = firstName(person.name);
+    const table = (state.data.place_state || {})[String(person.volunteer_id)] || {};
+    state.root.querySelectorAll('[data-week-grid] [data-place-open]').forEach((button) => {
+      const offer = placeOffer(table[button.dataset.slotId], first);
+      if (!offer) return;
+      const extra = button.parentElement.querySelector('[data-place-extra]');
+      if (offer.ok) {
+        button.dataset.offerVolunteer = String(person.volunteer_id);
+        const slot = button.querySelector('[data-place-offer]');
+        slot.textContent = '';
+        const visible = node('span', '', offer.label);
+        visible.setAttribute('aria-hidden', 'true');
+        slot.append(visible, node('span', 'sr-only', `Sett inn ${person.name} som ${button.dataset.placeDesc}`));
+        slot.hidden = false;
+        button.querySelector('[data-place-default]').hidden = true;
+      }
+      if (extra) {
+        extra.textContent = '';
+        offer.lines.forEach((line) => {
+          const item = node('span', `block ${line.level === 'red' ? 'week-offer-red' : line.level === 'yellow' ? 'week-offer-yellow' : 'week-offer-reason'}`);
+          if (line.level) {
+            item.append(node('span', 'sr-only', line.level === 'red' ? 'Problem: ' : 'Advarsel: '));
+            const bang = node('span', '', '! ');
+            bang.setAttribute('aria-hidden', 'true');
+            item.append(bang);
+          } else {
+            item.append(node('span', 'sr-only', 'Passer ikke: '));
+          }
+          item.append(document.createTextNode(line.text));
+          extra.append(item);
+        });
+      }
+    });
+  }
+
   function clearGridMarks(state) {
+    clearPlaceOffers(state);
     state.root.querySelectorAll('[data-select-note], [data-busy-note]').forEach((item) => item.remove());
     state.root.querySelectorAll('.week-cell-placed').forEach((cell) => cell.classList.remove('week-cell-placed'));
   }
@@ -151,6 +218,7 @@
     clearGridMarks(state);
     const person = state.byId.get(state.selected);
     if (!person) return;
+    markPlaces(state, person);
     state.root.querySelectorAll('[data-week-grid] [data-cell]').forEach((cell) => {
       const shift = state.shifts.get(cell.dataset.shiftId);
       if (!shift) return;
@@ -284,9 +352,28 @@
     const state = stateFor(event);
     if (!state || state.selected === null) return;
     if (!event.target.closest('[data-people-panel], [data-week-grid]')) return;
+    // An open place menu takes Escape first (shift-week-place.js closes it).
+    if (event.target.closest('[data-place-menu], [data-place-menu-toggle][aria-expanded="true"]')) return;
     if (event.target.matches('[data-people-search]') && event.target.value) return;
     event.preventDefault();
     clearSelection(state, { moveFocus: false });
+  }
+
+  // The place actions (shift-week-place.js) swap new grid, chips and list into the page and then say so.
+  // The selection, the search text, the filters and the fold stay as they were; only the data under them
+  // is read again.
+  function onRefreshed(event) {
+    const root = event.target.closest && event.target.closest('[data-week-root]');
+    const state = root && states.get(root);
+    if (!state) return;
+    const data = readData(root);
+    if (!data) return;
+    state.data = data;
+    state.people = data.people;
+    state.byId = new Map(data.people.map((person) => [person.volunteer_id, person]));
+    state.shifts = new Map(data.shifts.map((shift) => [String(shift.shift_id), shift]));
+    applyFilters(state, 0);
+    select(state, state.byId.has(state.selected) ? state.selected : null);
   }
 
   if (!window.shiftWeekPeopleBound) {
@@ -294,5 +381,6 @@
     document.addEventListener('click', onClick);
     document.addEventListener('input', onInput);
     document.addEventListener('keydown', onKeydown);
+    document.addEventListener('week:refreshed', onRefreshed);
   }
 })();

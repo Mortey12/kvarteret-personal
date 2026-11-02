@@ -53,7 +53,12 @@
                       <li class="week-place {% if place.is_open %}week-place-open{% endif %} {% if place.level %}week-place-{{ place.level }}{% endif %}" data-place data-slot-id="{{ place.slot_id }}" data-kind="{{ place.kind }}" data-token="{{ place.token }}"{% if place.volunteer_id %} data-volunteer-id="{{ place.volunteer_id }}" data-assignment-id="{{ place.assignment_id }}"{% endif %}{% if place.level %} data-level="{{ place.level }}"{% endif %}>
                         <span class="block text-[11px] uppercase tracking-wide text-stone-700">{{ place.kind_label }}</span>
                         {% if place.is_open %}
-                          <span class="block text-stone-700">Ledig</span>
+                          {# Place first: a button that opens the picker. Person first: the page's JavaScript turns it into "Sett inn <fornavn>". #}
+                          <button class="week-place-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-describedby="place-extra-{{ cell.shift_id }}-{{ loop.index }}" data-place-open data-slot-id="{{ place.slot_id }}" data-place-desc="{{ place.kind_label | lower }}, {{ cell.day_label }}">
+                            <span data-place-default>Ledig<span class="sr-only">: sett inn en person som {{ place.kind_label | lower }}, {{ cell.day_label }}</span></span>
+                            <span data-place-offer hidden></span>
+                          </button>
+                          <span class="noprint block text-xs" id="place-extra-{{ cell.shift_id }}-{{ loop.index }}" data-place-extra></span>
                         {% else %}
                           <span class="week-name block font-medium leading-tight">{{ place.name }}</span>
                           {% if place.answer %}<span class="week-answer" data-answer="{{ place.answer }}"><span class="week-dot week-dot-{{ place.answer }}" aria-hidden="true"></span><span class="sr-only">Svar: </span>{% if place.answer == 'nei' %}<span aria-hidden="true">! </span>{% endif %}{{ place.answer_word }}</span>{% endif %}
@@ -66,6 +71,19 @@
                               <span class="block text-xs font-semibold {{ 'text-red-800' if problem.level == 'red' else 'text-amber-900' }}" data-problem="{{ problem.level }}"><span class="sr-only">{{ 'Problem' if problem.level == 'red' else 'Advarsel' }}: </span><span aria-hidden="true">! </span>{{ short }}</span>
                             {% endif %}
                           {% endfor %}
+                          {# Change or remove: a disclosure with two actions, both real buttons. #}
+                          <button class="week-place-btn week-place-edit noprint" type="button" aria-expanded="false" aria-controls="place-menu-{{ place.assignment_id }}" data-place-menu-toggle>Endre<span class="sr-only"> plassen til {{ place.name }}, {{ place.kind_label | lower }}, {{ cell.day_label }}</span></button>
+                          <div class="week-place-menu noprint" id="place-menu-{{ place.assignment_id }}" data-place-menu hidden>
+                            <button class="week-place-action" type="button" aria-haspopup="dialog" aria-expanded="false" data-place-swap data-slot-id="{{ place.slot_id }}" data-assignment-id="{{ place.assignment_id }}">Bytt person<span class="sr-only"> for {{ place.name }}</span></button>
+                            <form action="/shifts/week/remove" method="post" hx-boost="false" data-place-form>
+                              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                              <input type="hidden" name="assignment_id" value="{{ place.assignment_id }}">
+                              <input type="hidden" name="slot_id" value="{{ place.slot_id }}">
+                              <input type="hidden" name="group" value="{{ view.bar_id }}">
+                              <input type="hidden" name="week" value="{{ view.week_start.isoformat() }}">
+                              <button class="week-place-action" type="submit">Fjern fra plassen<span class="sr-only">: {{ place.name }}</span></button>
+                            </form>
+                          </div>
                         {% endif %}
                       </li>
                     {% endfor %}

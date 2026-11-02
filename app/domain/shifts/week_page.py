@@ -1,6 +1,6 @@
 """Loads what the leader's week page needs (``GET /shifts/week``) and hands it to ``week_view``.
 
-It reuses ``ShiftsService.get_week_plan`` for the shifts, the placed people, the bar's pool
+For L2a it also builds the person-first state of every open place (``week_picker``). It reuses ``ShiftsService.get_week_plan`` for the shifts, the placed people, the bar's pool
 (with each person's place tokens), the week status and the unpublished-week banners. The
 repository is read for the rest: the pool's answers per shift, shifts per person and day in every
 group, shifts this month, who has begun answering this week and the statuses of the month's
@@ -17,6 +17,14 @@ from app.domain.shifts.errors import ShiftForbiddenError
 from app.domain.shifts.models import ShiftGroupOption, WeekPlan, WeekStatusView
 from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.planning import OSLO
+from app.domain.shifts.week_picker import build_place_state
+from app.domain.shifts.week_place_data import (
+    birth_dates_if_needed,
+    eligibility_for_people,
+    make_candidates,
+    open_place_facts,
+    swap_requesters,
+)
 from app.domain.shifts.week_status import leader_status
 from app.domain.shifts.week_view import MemberInput, WeekInput, WeekView, build_week_view, month_weeks
 from app.domain.shifts.wish_calendar import month_bounds, week_month
@@ -87,6 +95,17 @@ async def load_week_page(
         for monday in mondays
     }
     status = next((item for item in plan.statuses if item.group_id == selected.group_id), None)
+    places = open_place_facts(plan.days)
+    candidates = make_candidates(
+        plan.pool,
+        await eligibility_for_people(service, member_ids),
+        bar_id=selected.group_id,
+        answers=answers,
+        shifts_per_day=shifts_per_day,
+        month_counts=month_counts,
+        birth_dates=await birth_dates_if_needed(service, member_ids, places),
+        swap_requests=swap_requesters(plan.days),
+    )
 
     view = build_week_view(
         WeekInput(
@@ -102,6 +121,7 @@ async def load_week_page(
             status=status.status if status else leader_status(strip_statuses.get(week_start, "open")),
             strip_statuses=strip_statuses,
             approved_skiftleder_token=f"{selected.group_id}:skiftleder:0",
+            place_state=build_place_state(candidates, places),
         )
     )
     return WeekPage(bars=bars, selected=selected, plan=plan, view=view, status=status)

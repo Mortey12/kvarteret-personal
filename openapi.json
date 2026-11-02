@@ -1326,6 +1326,98 @@
         "title": "Body_volunteer_upload_photo_volunteers__volunteer_id__photo_post",
         "type": "object"
       },
+      "Body_week_place_shifts_week_place_post": {
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "integer"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          },
+          "week": {
+            "format": "date",
+            "title": "Week",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot_id",
+          "volunteer_id",
+          "group",
+          "week"
+        ],
+        "title": "Body_week_place_shifts_week_place_post",
+        "type": "object"
+      },
+      "Body_week_remove_shifts_week_remove_post": {
+        "properties": {
+          "assignment_id": {
+            "title": "Assignment Id",
+            "type": "integer"
+          },
+          "group": {
+            "title": "Group",
+            "type": "integer"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "week": {
+            "format": "date",
+            "title": "Week",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "slot_id",
+          "group",
+          "week"
+        ],
+        "title": "Body_week_remove_shifts_week_remove_post",
+        "type": "object"
+      },
+      "Body_week_replace_shifts_week_replace_post": {
+        "properties": {
+          "assignment_id": {
+            "title": "Assignment Id",
+            "type": "integer"
+          },
+          "group": {
+            "title": "Group",
+            "type": "integer"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          },
+          "week": {
+            "format": "date",
+            "title": "Week",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "slot_id",
+          "volunteer_id",
+          "group",
+          "week"
+        ],
+        "title": "Body_week_replace_shifts_week_replace_post",
+        "type": "object"
+      },
       "BookingEventPrefill": {
         "additionalProperties": false,
         "properties": {
@@ -10212,6 +10304,168 @@
           }
         },
         "summary": "Shifts Week Page"
+      }
+    },
+    "/shifts/week/picker": {
+      "get": {
+        "description": "The people who fit one place, as the content of the picker dialog.",
+        "operationId": "week_picker_shifts_week_picker_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "slot_id",
+            "required": true,
+            "schema": {
+              "title": "Slot Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "replace",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replace"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Week Picker"
+      }
+    },
+    "/shifts/week/place": {
+      "post": {
+        "operationId": "week_place_shifts_week_place_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_week_place_shifts_week_place_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Week Place"
+      }
+    },
+    "/shifts/week/remove": {
+      "post": {
+        "operationId": "week_remove_shifts_week_remove_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_week_remove_shifts_week_remove_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Week Remove"
+      }
+    },
+    "/shifts/week/replace": {
+      "post": {
+        "operationId": "week_replace_shifts_week_replace_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_week_replace_shifts_week_replace_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Week Replace"
       }
     },
     "/shifts/weeks/status": {

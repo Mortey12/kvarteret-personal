@@ -8,18 +8,23 @@ the codebase again.
 
 Update by hand at the end of every session. Last updated 2026-11-02 (night, after L1b).
 
-- **State** (2026-11-02 evening; replaces the earlier State text): Personal,
-  branch `skiftlista/skiftplan`: S0 `b154264` (`app_service.py` split into
-  mixins, pure move), S1 `d6df7c6` (wish calendar API, weekday rules retired in
-  reads, "Har svart" on the board), S1d `af06d65` (calendar months start at the
-  semester start). L1a `19871a7` (the leader week page, see "Built 2026-11-02, L1a"), L1b `0b2d0d1`
-  (search, filters, select a person, fold the panel; see "Built 2026-11-02, L1b"). Docs
-  commits before these: `ba27207`, `80362cd`. Tests 1180 passed, 26 skipped, plus 8 JS tests (`node --test tests/js/*.test.cjs`); no migration; Alembic head `20261101_1200`. The app,
+- **State** (2026-11-02 night, after L2a; replaces the earlier State text): Personal,
+  branch `skiftlista/skiftplan`, head `8f70fe2` (week bar always has two rows). Built on
+  it, **not committed**: L2a (placing by clicking, see "Built 2026-11-02, L2a"). Commits
+  since the first slice: S0 `b154264`, S1 `d6df7c6`, S1d `af06d65`, L1a `19871a7`, L1a
+  polish `fa7166f` and `6a7eb10` (collapsed empty days, panel breakpoint), L1b `0b2d0d1`,
+  L1b fixes `8c72f8a` (Opptatt only when busy elsewhere) and `4f0d452` (compact filters and
+  warning chip), week bar `8f70fe2`. Docs commits before these: `ba27207`, `80362cd`, `f0077d7`,
+  `8ec8c1f`. **Tests:** before L2a 1184 passed, 26 skipped, plus 8 JS tests (`node --test
+  tests/js/*.test.cjs`; this file said 1180 for L1b, which was out of date); after L2a 1233
+  passed, 26 skipped, plus 14 JS tests. No migration; Alembic head `20261101_1200`. The app,
   `kvarteret-internbevis` branch `feat/skiftlista-mobile`: A1 `f4772cd`, A1b
   `179797b`, A1c `ba5ec80`; Jest 398 passed; checked on an Android phone in
-  Expo Go, **not checked on iOS**. Details under "Built 2026-11-02" in the
-  package section. **Demo:** `skiftlista/demo` was updated on 2026-11-02 (merge
-  commit `644be17`, pushed to the fork, Render deployed, `/health` ok). On Neon
+  Expo Go, **not checked on iOS**. Details under "Built 2026-11-02" in the package
+  section. **Demo:** the branch `skiftlista/demo` is at `57dc99a`, a merge of skiftplan up to
+  `8f70fe2` (it has L1a and L1b, not L2a). `57dc99a` is pushed: `origin/skiftlista/demo` is at
+  `57dc99a` (checked by Morten, 2026-11-02). The last confirmed update of Render and Neon was on
+  2026-11-02 (merge `644be17`, pushed to the fork, `/health` ok). On Neon
   production: Alembic at `20261101_1200`, `seed_demo.py` added 1110 wishes,
   week status has explicit rows only for 2026-11-02 and 2026-11-09. New Neon
   rollback branch `before-wishcalendar-2026-11-02` (never expires); the older
@@ -42,10 +47,10 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
 - **Next action** (decided 2026-11-02 evening; replaces the earlier list). The
   reasons and details are under "Changes after the design pass (2026-11-02
   evening)" in the package section:
-  (1) **L1b** is built (see "Built 2026-11-02, L1b"); (2) **L2a**, placing by
-  clicking (see "L2 plan"; start from a clean repo with the demo branch merged;
-  one prompt for the first half and one for the second half), then **L2b** (drag
-  and drop) and "Vis andre"; (3) demo update 2; (4) conformance pass 2 (wider: pull
+  (1) **L1b** is built (see "Built 2026-11-02, L1b"); (2) **L2a** (placing by
+  clicking) is built but **not committed**: Morten runs the manual checks under "Built
+  2026-11-02, L2a", then commits it; next **L2b** (drag and drop, no new placing rules) and
+  "Vis andre"; (3) demo update 2; (4) conformance pass 2 (wider: pull
   request history and review comments of the two repos, samfunnetibergen,
   org-level rules; public repos only); (5) Morten runs the Postgres e2e tests;
   (6) design pass 2 (read-only Opus: weekly planning and the dials turned into
@@ -145,7 +150,7 @@ Update by hand at the end of every session. Last updated 2026-11-02 (night, afte
 | Data access | `app/domain/shifts/repository.py` |
 | Service | `app/domain/shifts/service.py` (`get_week_plan`, `assign`, `move`, `remove`) |
 | Leader page | `app/web/routes/shifts/pages.py` (`GET /shifts`), `app/templates/pages/shifts/shift_plan.html` |
-| Leader week page (L1a) | `GET /shifts/week` in `pages.py`, `app/domain/shifts/week_page.py` (loads), `week_view.py` (pure view model and JSON block), templates `shift_week.html` and `_week_*.html`, `app/static/js/shift-week.js` (print), `app/static/js/shift-week-people.js` (L1b: people panel and grid markers), styles at the end of `app/static/css/input.css`; tests `tests/unit/domain/test_shift_week_view.py`, `tests/web/test_shifts_week_web.py`, `tests/js/shift-week-people.test.cjs` |
+| Leader week page (L1a) | `GET /shifts/week` in `pages.py`, `app/domain/shifts/week_page.py` (loads), `week_view.py` (pure view model and JSON block), templates `shift_week.html` and `_week_*.html`, `app/static/js/shift-week.js` (print), `app/static/js/shift-week-people.js` (L1b: people panel and grid markers), styles at the end of `app/static/css/input.css`; L2a (placing by clicking, not committed): `week_picker.py`, `week_place_data.py`, `week_placing.py`, `app/web/routes/shifts/week_actions.py`, `app/static/js/shift-week-place.js`; tests `tests/unit/domain/test_shift_week_view.py`, `tests/web/test_shifts_week_web.py`, `tests/js/shift-week-people.test.cjs` |
 | Drag and drop | `app/web/routes/shifts/actions.py` (POST `/shifts/assignments`, `/{id}/move`, `/{id}/delete`), `app/static/js/shift-board.js` |
 | Setup (4b) | `app/domain/shifts/setup_service.py`, `generator.py`, `template_input.py`, `permissions.py`, `app/web/routes/shifts/setup_actions.py`, pages `shift_settings.html`, `shift_templates.html`, `shift_generate.html`, migration `20261030_1200_shift_closed_periods.py` |
 | Test data | `scripts/dev/seed_shifts.py` (run by `scripts/dev/bootstrap.py`; skipped when a real snapshot is used) |
@@ -1361,7 +1366,7 @@ unchanged.
   place popover, drag and drop, search and filters (L1b, L2 and later). Selecting
   a person, search and filters were built in L1b.
 
-#### L2 plan (decided in chat 2026-11-02, not built)
+#### L2 plan (decided in chat 2026-11-02; L2a built, L2b and the rest not built)
 
 L2a is placing by clicking, including "Bytt person" (swap). L2b is drag and drop
 and "Vis andre"; drag and drop adds no new placing rules and comes after L2a. The mockup was approved in chat. L2a decisions:
@@ -1390,6 +1395,120 @@ own maks, agreed number and bar max, the rest rule, absences, recurring days
 off. Warnings only for hand placement. Buttons: "Lag forslag", "Godta
 forslag", "Forkast", "Fyll", "Angre". Stored in its own table (S2 migration,
 with an Opus review before Neon).
+
+#### Built 2026-11-02, L2a (placing by clicking; **built, not committed**)
+
+Personal only; no migration, no `tables.py` change, no new dependency; Alembic head
+`20261101_1200`. Tests 1233 passed, 26 skipped (before: 1184), plus 14 JS tests (before: 8).
+`service.py` and `repository.py` are **unchanged**. `openapi.json` gained the four new
+routes (additive, 254 lines).
+- **What it does:** on `GET /shifts/week` a leader puts a person into a place, swaps
+  the person or removes them, by clicking. Each action saves at once (one placement per
+  request) and the page shows the refreshed week with a live message. Published
+  weeks may be changed (the marker "Endret etter publisering" comes later). Drag and
+  drop is L2b.
+- **Rules (reused, not copied):** put is `ShiftsService.assign`, remove is
+  `ShiftsService.remove`, with the same pool check, row lock, reload under the lock,
+  hard rules and warning rules. The swap (`week_placing.replace_person`) is built from the
+  same pieces (`_require_in_pool`, `_lock`, `_load_slot`, `_check`, `_take_place`): the old person is
+  taken out of the place in memory, every check runs, and only then is the old assignment removed
+  and the new one added, in one request. A refused swap leaves the old person in place.
+- **Hard (refused, never only a warning):** shift closed; the same person twice on a shift;
+  a full place (also "Ingen ledig plass til opplæring"); a person not in the leader's pool
+  or not eligible for the place (qualification and area: "Kun for godkjente
+  skiftledere / skjenkere / kokker", "Kun for medlemmer av gruppa", "I opplæring: bruk
+  opplæringsplassen", "Kun for de som er i opplæring i gruppen"); under 20 on Halvtimen; a group
+  outside the leader's scope (403). **Warnings (shown, never block):** more than one shift
+  in the week ("skift nummer N denne uka", yellow), unknown birth date on Halvtimen (yellow),
+  and on the page only: answered kan ikke ("svarte kan ikke", red), a shift the same day
+  ("to skift samme dag", red), "ønsker bytte" (yellow, a swap request elsewhere in the shown
+  week). The page's problem texts on a placed person also show "kan ikke i dag" (red). There
+  is no maks, agreed number or bar-max warning yet (the dials are not built).
+- **"Kan ikke i dag" places** count as open: they show as "Ledig" in the grid and in the picker,
+  the picker says who comes off ("X har meldt kan ikke i dag ... X tas av"), and putting someone
+  there takes the absent person off through the existing `_take_place`.
+- **Two ways to start, same result.** Place first: "Ledig" is a button that opens the picker
+  (`<dialog>`): title "Sett inn som <type>, <dag og dato>, <skift>" ("Bytt ut <navn> som ..." for a
+  swap), the search "Søk etter navn" (client side), the people who fit the place. Order: answer
+  for the shift (vil, kan, ikke svart, kan ikke last), inside each group fewer shifts this
+  week, then fewer this month, then name. Each row: name, SL mark, dot and word (not for ikke svart),
+  "N uka · N mnd" and warnings as text with a tint (red for kan ikke and two shifts the same day,
+  yellow for the rest). A skiftleder place lists only approved skiftledere. "Ingen treff" when the
+  search matches nobody. Person first: with a person selected in the people panel (L1b) every
+  empty place that fits says "Sett inn <fornavn>" with the warning text visible before the click
+  (one click places); places that do not fit say "Ledig" with the reason as text, and still open
+  the picker. The server decides fit and warnings for every person and open place and embeds
+  them in the `week-data` block (`place_state`); JavaScript only words them.
+- **Filled places:** a button "Endre" opens a small disclosure with "Bytt person" (opens the
+  picker; choosing replaces in one request) and "Fjern fra plassen". No confirm dialog.
+- **The L1b state survives:** the answer swaps only the grid, the status badge, the chips and the
+  people list (and the `week-data` JSON); the search box, filters, fold, the selection line and the
+  panel header are not replaced. `shift-week-place.js` dispatches `week:refreshed`;
+  `shift-week-people.js` then reads the new data, re-applies the filters and the selection
+  (so the markers and the "Sett inn" offers come back). The same person can be placed in several
+  places in a row without selecting them again.
+- **Routes** (all `require_management_user`, `scope.require` through the service, CSRF by the
+  global middleware, `log_admin_activity` only after a success):
+  `GET /shifts/week/picker?slot_id=&replace=` (HTML fragment for the dialog; 409 JSON `detail`
+  if the place is full, closed or gone), `POST /shifts/week/place` (`slot_id`, `volunteer_id`,
+  `group`, `week`; action `shift.assign`), `POST /shifts/week/replace` (`assignment_id`,
+  `slot_id`, `volunteer_id`, `group`, `week`; action `shift.replace`), `POST /shifts/week/remove`
+  (`assignment_id`, `slot_id`, `group`, `week`; action `shift.unassign`). With the header
+  `X-Week-Fragment` they answer with the refreshed week as HTML (200, or 409 for a refused rule or a
+  place taken meanwhile, with "Ikke lagret: <reason>"); without it (no JavaScript) they redirect
+  (303) to `/shifts/week?week=&group=&notice=` or `&error=`. 403 for a group outside the scope.
+  The router is registered in `app/web/routes/__init__.py`.
+- **Modules:** `app/domain/shifts/week_picker.py` (pure: hard rules, warnings, sort, picker rows,
+  `build_place_state`, `live_message`), `week_place_data.py` (reads: eligibility for many people,
+  candidates, the picker), `week_placing.py` (the swap), `app/web/routes/shifts/week_actions.py`;
+  `week_page.py` and `week_view.py` carry the new state (`place_state`, `CellView.day_label`); templates
+  `_week_picker.html`, `_week_refresh.html` and the extracted `_week_chips.html`,
+  `_week_status_badge.html`, `_week_people_list.html`; `app/static/js/shift-week-place.js`, and
+  additions to `shift-week-people.js` (offers, refresh); styles at the end of the week section of
+  `input.css`. Tests: `tests/web/test_shifts_week_place_web.py` (real `ShiftsService` on the in-memory
+  `tests/support/week_placing.py`), `tests/unit/domain/test_week_picker.py`,
+  `tests/js/shift-week-place.test.cjs`. The old `FakeService` in `test_shifts_week_web.py` got the
+  few members the page now reads.
+- **Universal design:** triggers are buttons with text; the picker is a labelled modal dialog
+  (`aria-haspopup="dialog"` and `aria-expanded` on the trigger, focus to the search box on open,
+  Escape closes and returns focus to the trigger); after an action focus goes to the changed
+  place; a polite live message (`role="status"`) says the result in words ("... er satt opp som ...
+  Advarsel: ..."; errors start with "Ikke lagret:"); warnings and reasons are text (colour never
+  the only signal); targets at least 1.5rem, the row buttons 2.75rem. Colours: the new pairs are
+  listed in the comment in `input.css` (all text at least 7.6:1, component edges at least 4.8:1).
+  Print is unchanged (the new controls carry `noprint`; an empty place prints as "Ledig").
+- **Decisions and surprises:** (a) The swap is built in a new module with the service's underscore
+  helpers, because `service.py` is near its cap; if the helpers move, move it with them. (b) The
+  live message replaces the service's "Merk: ..." tail with "Advarsel: ..." built from the placed
+  person's problems on the refreshed grid, so the texts match the grid ("2 skift denne uka") and not
+  the picker ("skift nummer 2 denne uka"). (c) The existing refusal "Fann ikke personen i gruppa." (a
+  person outside the leader's pool) is Nynorsk in a Bokmål service; left as is. (d) The picker lists
+  the shown bar's members only (the pool), not other bars: "Vis andre" is later. (e) The banner for
+  an unpublished week is not refreshed by an action; reload the page. (f) Without JavaScript the
+  place buttons are inert and the forms fall back to a redirect.
+- **Manual checks Morten still has to do** (needs a browser; nothing below was run in one):
+  1. Place first, mouse: click "Ledig", the picker opens with the search box focused; pick a person; the
+     grid shows the person, the chips and "Folk denne uka" counts change, the green or yellow
+     message appears.
+  2. Keyboard only: Tab to "Ledig", Enter, type in the search box, Tab to a row, Enter; focus is on
+     the placed person's "Endre" button. Open the picker again and press Escape: focus returns to
+     "Ledig". Same with "Endre", Bytt person, Escape.
+  3. Person first: select a person in the panel, then click "Sett inn <fornavn>" in an empty place; place
+     the same person in a second place without selecting again; the selection, the search text, the
+     filters and "Skjul folk" are as before. Check that places that do not fit say why.
+  4. Swap and remove: "Endre", "Bytt person", choose someone; "Endre", "Fjern fra plassen".
+  5. Warnings: place someone who answered kan ikke, or someone with a shift the same day: placed anyway,
+     red text in the grid and in the message. Place under 20 on Halvtimen: refused with a message.
+  6. A place taken in another browser tab meanwhile: friendly message and the refreshed grid.
+  7. A "kan ikke i dag" place (the demo seed has two): the place is "Ledig", the picker says who comes
+     off, and that person is gone afterwards.
+  8. Screen reader (NVDA or VoiceOver): the dialog is announced with its title, the live message is
+     read after an action, warnings are read as text, "Endre" says whose place it is.
+  9. 200% zoom and 320px width (the dialog fits, nothing is clipped), forced colours, print preview with
+     a person selected (no buttons or markers printed), axe or Lighthouse, an hx-boost navigation to
+     the page and back (the buttons still work).
+  Cannot be checked without a browser or screen reader: focus order and focus return, the modal's
+  focus trap, live region announcements, rendered colours and contrast, click target sizes, reflow.
 
 #### L1a decisions and universal design (2026-11-02)
 
@@ -1627,6 +1746,17 @@ counting.
   template). The banner names the group with an unpublished week regardless of
   the selected bar tab (same as the old board, left as is on purpose).
 - On the demo, Grøndahls' current week is an explicit "open" row.
+- L2a: the place buttons and forms need JavaScript (the forms fall back to a redirect); the
+  unpublished-week banner is not refreshed by an action; the picker lists the shown bar's members only.
+- L2a: `week_placing.py` and `week_place_data.py` use private helpers of `ShiftsService` (`_check`,
+  `_lock`, `_load_slot`, `_eligibility_rules`, `_message`). Move the swap into a public
+  `ShiftsService.replace` the next time `service.py` is touched.
+- L2a: the live message says "2 skift denne uka" (the grid's wording) while the picker says "skift
+  nummer 2 denne uka".
+- L2a: the scope group of every place action comes from the place's own shift (the assignment's shift
+  for swap and remove), never from the request's `group` or `week`; those only choose what is
+  refreshed. Swap and remove refuse an assignment that is not on the given `slot_id` ("Plassen er
+  endret. Oppdater siden.").
 
 ## Step 1 (API for the app): done
 

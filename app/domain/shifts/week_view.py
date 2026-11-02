@@ -61,6 +61,8 @@ class WeekInput:
     # Leader status of each week in the shown month, keyed by Monday.
     strip_statuses: dict[date, str]
     approved_skiftleder_token: str = ""
+    # Person first (L2a): ``build_place_state`` output, embedded as is in the data block.
+    place_state: dict = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -102,6 +104,8 @@ class CellView:
     vil: int
     kan: int
     open_places: int
+    # "tirsdag 3. nov.", for the texts of the place buttons.
+    day_label: str = ""
 
 
 @dataclass(slots=True)
@@ -173,6 +177,11 @@ class WeekView:
 
 def short_date(day: date) -> str:
     return f"{day.day}. {MONTHS_SHORT[day.month - 1]}"
+
+
+def day_label(day: date) -> str:
+    """"tirsdag 3. nov."""
+    return f"{WEEKDAYS_NO[day.weekday()].lower()} {short_date(day)}."
 
 
 def week_label(week_start: date) -> str:
@@ -317,6 +326,7 @@ def _cell(
         vil=answers.count("vil"),
         kan=answers.count("kan"),
         open_places=shift.open_places,
+        day_label=day_label(day),
     )
 
 
@@ -434,6 +444,7 @@ def week_data_block(data: WeekInput, rows: list[RowView], people: list[PersonRow
         "bar_id": data.bar_id,
         "week_start": data.week_start.isoformat(),
         "shifts": shifts,
+        "place_state": data.place_state,
         "people": [
             {
                 "volunteer_id": person.volunteer_id,

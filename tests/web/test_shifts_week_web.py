@@ -12,6 +12,8 @@ from app.auth.roles import UserRole
 from app.dependencies import get_shifts_service
 from app.domain.shifts.models import (
     AssignedPerson,
+    MemberRole,
+    QualificationRecord,
     PoolPerson,
     ShiftGroupOption,
     ShiftRecord,
@@ -21,7 +23,7 @@ from app.domain.shifts.models import (
     WeekStatusView,
 )
 from app.domain.shifts.permissions import ALL_GROUPS, NO_GROUPS, GroupScope
-from app.domain.shifts.planning import format_week, group_into_days, monday_of
+from app.domain.shifts.planning import format_week, group_into_days, group_rules, monday_of
 from app.main import create_app
 from tests.support.helpers import csrf_headers, make_authenticated_user, override_authenticated_user, prime_csrf
 
@@ -48,6 +50,20 @@ class FakeRepository:
 
     async def get_week_statuses(self, group_ids, weeks):
         return {(7, date(2026, 11, 9)): "published"}
+
+    # Read by the place state (eligibility for every person of the pool).
+    async def list_shift_members(self, semester, group_ids):
+        return [MemberRole(3, "Sander Skjenker", 7, "Stjerne", None), MemberRole(4, "Tora Tilgjengelig", 7, "Stjerne", None)]
+
+    async def list_qualifications(self, volunteer_ids):
+        return [
+            QualificationRecord(3, "skjenker", "approved", 7, None, False, None, None),
+            QualificationRecord(4, "skjenker", "approved", 7, None, False, None, None),
+            QualificationRecord(4, "skiftleder", "approved", 7, None, False, None, None),
+        ]
+
+    async def get_birth_dates(self, volunteer_ids):
+        return {}
 
     @staticmethod
     def record(shift_id: int, day: int, hour: int) -> ShiftRecord:
@@ -88,6 +104,12 @@ class FakeService:
 
     async def manageable_scope(self, role, auth_user_id) -> GroupScope:
         return self.scope
+
+    def _now(self):
+        return datetime(2026, 11, 2, 12, tzinfo=UTC)
+
+    async def _eligibility_rules(self):
+        return frozenset({7}), {7: None}, group_rules(frozenset({7}), {7: None}, {})
 
     async def get_week_plan(self, week, group_id=None, *, scope):
         self.plan_calls.append((week, group_id))
@@ -183,6 +205,7 @@ def test_week_page_has_no_inline_event_handlers_or_inline_scripts_of_its_own() -
         '<script type="application/json" id="week-data">',
         re.findall(r'<script defer src="[^"]*shift-week\.js[^"]*">', html)[0],
         re.findall(r'<script defer src="[^"]*shift-week-people\.js[^"]*">', html)[0],
+        re.findall(r'<script defer src="[^"]*shift-week-place\.js[^"]*">', html)[0],
     ]
 
 
