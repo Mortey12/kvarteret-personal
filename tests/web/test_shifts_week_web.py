@@ -84,13 +84,14 @@ class FakeService:
         self.plan_calls: list[tuple] = []
         self.banners: list[WeekBanner] = []
         self.can_open = True
+        self.shift_days = [2, 3]
 
     async def manageable_scope(self, role, auth_user_id) -> GroupScope:
         return self.scope
 
     async def get_week_plan(self, week, group_id=None, *, scope):
         self.plan_calls.append((week, group_id))
-        records = [FakeRepository.record(1, 2, 11), FakeRepository.record(2, 3, 11)]
+        records = [FakeRepository.record(i + 1, day, 11) for i, day in enumerate(self.shift_days)]
         week_start = monday_of(week)
         return WeekPlan(
             week_start=week_start,
@@ -499,3 +500,32 @@ def test_status_buttons_sit_in_the_week_bar_before_the_print_button() -> None:
 
     assert bar.index("data-week-status") < bar.index("data-print-week")
     assert "ml-auto" in bar
+
+
+def _grid_head(shift_days: list[int]) -> str:
+    client, service = _client()
+    service.shift_days = shift_days
+    html = client.get("/shifts/week?week=2026-11-02&group=7").text
+    return _grid(html)
+
+
+def test_days_without_any_shift_collapse_but_keep_their_columns() -> None:
+    grid = _grid_head([2, 3, 4, 5, 6])  # Monday to Friday
+
+    assert grid.count('scope="col"') == 8
+    assert grid.count('data-collapsed="true"') == 4  # two headers and two empty cells
+    assert re.search(r'data-day="2026-11-07"[^>]*data-collapsed="true">.*?>Lø</span>.*?<span class="sr-only">Lørdag 7. nov</span>', grid, re.S)
+    assert re.search(r'data-day="2026-11-08"[^>]*data-collapsed="true">.*?>Sø</span>.*?<span class="sr-only">Søndag 8. nov</span>', grid, re.S)
+    assert len(re.findall(r'data-cell-empty data-collapsed="true"><span class="sr-only">Ingen skift</span>', grid)) == 2
+    assert 'data-used-days="5"' in grid
+    # Days with shifts keep the full header.
+    assert '<span class="block font-semibold">Mandag</span>' in grid and 'data-day="2026-11-06"' in grid
+    assert len(re.findall(r"<col[ >]", grid)) == 8
+
+
+def test_a_bar_with_all_seven_days_has_no_collapsed_column() -> None:
+    grid = _grid_head([2, 3, 4, 5, 6, 7, 8])
+
+    assert "data-collapsed" not in grid
+    assert 'data-used-days="7"' in grid and grid.count('scope="col"') == 8
+    assert 'scope="row"' in grid

@@ -354,12 +354,27 @@
   .week-dot-vil { background: radial-gradient(circle, #3E9B53 0 56%, #14532d 60% 100%); }
   .week-dot-kan { background: radial-gradient(circle, #E9B824 0 56%, #78350f 60% 100%); }
   .week-dot-nei { background: radial-gradient(circle, #7F2E2E 0 56%, #3f1212 60% 100%); }
-  /* People panel. Stacked under the grid it is a 24rem scroll box. From 1100px it sits beside the grid
+  /* Grid minimum width: label column 5.5rem + 6.5rem per day with a shift + 2.5rem per collapsed day
+     = 23rem + 4rem x used days (7 used: 51rem = 816px). It scrolls sideways only below that. */
+  .week-grid-table { min-width: 23rem; }
+  .week-grid-table[data-used-days="0"] { min-width: 23rem; }
+  .week-grid-table[data-used-days="1"] { min-width: 27rem; }
+  .week-grid-table[data-used-days="2"] { min-width: 31rem; }
+  .week-grid-table[data-used-days="3"] { min-width: 35rem; }
+  .week-grid-table[data-used-days="4"] { min-width: 39rem; }
+  .week-grid-table[data-used-days="5"] { min-width: 43rem; }
+  .week-grid-table[data-used-days="6"] { min-width: 47rem; }
+  .week-grid-table[data-used-days="7"] { min-width: 51rem; }
+  /* People panel. Stacked under the grid it is a 24rem scroll box. From 1180px it sits beside the grid
      and its box is taken out of the flow (absolute, inset 0 in a relative wrapper), so its height is
      the height of the grid row (at least 22rem) and never the number of people. The header stays
      above the scrolling list. */
   .week-people { max-height: 24rem; }
-  @media (min-width: 1100px) {
+  /* ONE BREAKPOINT, 1180px (also min-[1180px] in shift_week.html). Worst case is a bar with all seven days
+     used: grid 51rem (816px) + its 2px borders (4px) + gap-3 (12px) + panel 16.25rem (260px) = 1092px of
+     content. The page adds px-8 on each side from 1024px (64px) and the viewport width includes a classic
+     scrollbar (about 15px): 1092 + 64 + 15 = 1171px, rounded up to 1180px. */
+  @media (min-width: 1180px) {
     .week-people-wrap { position: relative; min-height: 22rem; }
     .week-people { position: absolute; inset: 0; max-height: none; }
   }

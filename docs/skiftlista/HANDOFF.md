@@ -1334,6 +1334,23 @@ unchanged.
   in `actions.py` accepts only `/shifts` or `/shifts/...` (no scheme, host,
   fragment, backslash, control character, `..` or leading `//`); anything else
   falls back to `/shifts`. The new page's status buttons and banner send it.
+- **Polish after browser checks** (`fa7166f`, then L1a-polish-4; tests 1172
+  passed, 26 skipped). Decisions that replace the L1a brief where they differ:
+  (a) a place box shows the person's answer as a round dot plus the word, only
+  when the person has answered; unanswered persons show nothing in the grid
+  and "ikke svart" only in the people panel (changes brief item 2d); problems
+  tint the box (red or yellow) and are separate from answers. (b) The people
+  panel's height follows the grid row (22rem minimum), its list scrolls inside
+  (header outside the scroll), and below the breakpoint **1180px** it is
+  stacked under the grid in a 24rem box (calculation in `input.css`: 7-day
+  grid 51rem + borders 4px + gap 12px + panel 260px + page padding 64px +
+  scrollbar 15px). (c) The grid keeps all seven columns; a day with no shift at
+  any position collapses to a 2.5rem column ("Ma" and the date number, full
+  name as hidden text), the others share the width, and no horizontal scroll
+  is needed while the panel is beside the grid. (d) The status buttons sit on
+  the same row as the week navigation when there is room, "Skriv ut" on the
+  right. (e) "svarte kan ikke" shows as "!" plus the word "kan ikke" in the
+  box, with the hidden text "Problem: svarte kan ikke".
 - **Not in L1a:** suggestions, "Fyll", copy last week, "Angre", "Sist endret
   av", deadline, note and maks, "0 helg", "Vis andre", selecting a person, the
   place popover, drag and drop, search and filters (L1b, L2 and later).
@@ -1510,6 +1527,10 @@ counting.
 - The green and yellow dot colours are literals in `wishDotStyle.ts`; move them
   to `global.css` later.
 - A batch is not split at 400 items.
+- Week page: the chip's problem list says "to skift samme dag" while the place
+  box says "2 skift samme dag" (the wording in `week_view.py` differs from the
+  template). The banner names the group with an unpublished week regardless of
+  the selected bar tab (same as the old board, left as is on purpose).
 - On the demo, Grøndahls' current week is an explicit "open" row.
 
 ## Step 1 (API for the app): done
@@ -2208,6 +2229,10 @@ here and not changed. This is an accessibility note, not a security finding.
   and `stone-700` text on 50-level fills; not measured.
 - The app-wide `select.app-input` and `.group-combobox-input` remove the
   outline on focus and rely on a border colour change; not measured.
+- The shared base layer forces `border-radius: 0 !important` on everything, so
+  round shapes need a gradient and `clip-path` workaround (a general styling
+  note, not an accessibility finding). In Windows forced-colours mode the
+  answer dots may not show; the word beside them always does.
 - Light cell dividers (stone-300, 1.49 to 1) on the week grid are decorative
   and were kept; the headers carry the table structure.
 
