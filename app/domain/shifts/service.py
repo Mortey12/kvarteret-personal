@@ -76,8 +76,12 @@ class ShiftsServiceProtocol(Protocol):
     async def get_week_plan(
         self, week: date, group_id: int | None = None, *, scope: GroupScope
     ) -> WeekPlan: ...
-    async def assign(self, *, slot_id: int, volunteer_id: int, scope: GroupScope) -> PlacementResult: ...
-    async def move(self, *, assignment_id: int, slot_id: int, scope: GroupScope) -> PlacementResult: ...
+    async def assign(
+        self, *, slot_id: int, volunteer_id: int, scope: GroupScope, allow_unqualified: bool = False
+    ) -> PlacementResult: ...
+    async def move(
+        self, *, assignment_id: int, slot_id: int, scope: GroupScope, allow_unqualified: bool = False
+    ) -> PlacementResult: ...
     async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult: ...
     async def remove_shift(self, *, shift_id: int, scope: GroupScope) -> str: ...
     async def set_shift_closed(self, *, shift_id: int, closed: bool, scope: GroupScope) -> str: ...
@@ -405,10 +409,14 @@ class ShiftsService:
         *,
         moving_assignment_id: int | None = None,
         eligibility: EligibilityContext | None = None,
+        allow_unqualified: bool = False,
     ) -> list[str]:
         """Raise when the placement breaks a rule; return warnings otherwise.
 
         ``eligibility`` is the person's context when the caller has already built it.
+        ``allow_unqualified`` skips only the qualification and membership rule, for a leader who
+        confirmed the big warning. A closed shift, a person already on the shift, the venue's
+        minimum age and a full place are never skipped.
         """
         if shift.is_closed:
             raise ShiftPlacementError("Skiftet er stengt.")
@@ -426,7 +434,7 @@ class ShiftsService:
                 item.people = [p for p in item.people if p.assignment_id != moving_assignment_id]
         context = eligibility or await self.eligibility_for(volunteer_id)
         problem = context.problem(slot.kind, shift.group_id, open_for_everyone(slot))
-        if problem:
+        if problem and not allow_unqualified:
             raise ShiftPlacementError(problem + ".")
         warnings: list[str] = []
         if shift.venue in VENUE_MIN_AGE:
@@ -460,7 +468,7 @@ class ShiftsService:
         return f"{slot_kind(slot.kind).label.lower()}, {shift.title.lower()} {day}"
 
     async def assign(
-        self, *, slot_id: int, volunteer_id: int, scope: GroupScope
+        self, *, slot_id: int, volunteer_id: int, scope: GroupScope, allow_unqualified: bool = False
     ) -> PlacementResult:
         # First of all, so a leader cannot probe for people outside their pool: the same
         # answer whether the person is outside it or does not exist.
@@ -472,7 +480,7 @@ class ShiftsService:
         name = await self.repository.get_volunteer_name(volunteer_id)
         if name is None:
             raise ShiftPlacementError(NOT_IN_POOL)
-        warnings = await self._check(shift, slot, volunteer_id)
+        warnings = await self._check(shift, slot, volunteer_id, allow_unqualified=allow_unqualified)
         await self._take_place(shift, slot)
         await self.repository.add_assignment(slot_id, volunteer_id)
         return PlacementResult(_message(f"{name} er satt opp som {self._describe(shift, slot)}.", warnings))
@@ -496,7 +504,7 @@ class ShiftsService:
             await self.repository.remove_assignment(absent.assignment_id)
 
     async def move(
-        self, *, assignment_id: int, slot_id: int, scope: GroupScope
+        self, *, assignment_id: int, slot_id: int, scope: GroupScope, allow_unqualified: bool = False
     ) -> PlacementResult:
         assignment = await self.repository.get_assignment(assignment_id)
         if assignment is None:
@@ -513,7 +521,11 @@ class ShiftsService:
         await self._load_slot(assignment.slot_id, scope)
         shift, slot = await self._load_slot(slot_id, scope)
         warnings = await self._check(
-            shift, slot, assignment.volunteer_id, moving_assignment_id=assignment_id
+            shift,
+            slot,
+            assignment.volunteer_id,
+            moving_assignment_id=assignment_id,
+            allow_unqualified=allow_unqualified,
         )
         await self._take_place(shift, slot)
         await self.repository.move_assignment(assignment_id, slot_id)

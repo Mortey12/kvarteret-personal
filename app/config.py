@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     app_secret_key: str = Field(default="change-me")
     legacy_admin_login_enabled: bool = Field(default=True)
     app_public_base_url: str | None = Field(default=None)
+    # Origins (scheme and host, no path) that may send cookie-authenticated writes to the
+    # leader API from a browser, comma separated. Empty means no leader app may write.
+    leader_app_origins: str = Field(default="")
     website_base_url: str = Field(default="https://www.samfunnetibergen.no")
     # One key signs every website -> Personal request; the previous key is
     # accepted during zero-downtime rotation.
@@ -226,7 +229,32 @@ def _signing_secrets(*secrets: str | None) -> tuple[str, ...]:
     return tuple(dict.fromkeys(secret for secret in secrets if secret))
 
 
+def parse_origins(value: str) -> tuple[str, ...]:
+    """"https://a.example, http://localhost:3190/" -> ("https://a.example", "http://localhost:3190")."""
+    return tuple(dict.fromkeys(part.strip().rstrip("/") for part in value.split(",") if part.strip()))
+
+
+def _check_leader_app_origins(settings: Settings) -> None:
+    for origin in parse_origins(settings.leader_app_origins):
+        parts = urlsplit(origin)
+        plain = (
+            parts.netloc
+            and parts.username is None
+            and parts.password is None
+            and parts.path == ""
+            and not parts.query
+            and not parts.fragment
+        )
+        if parts.scheme not in {"http", "https"} or not plain:
+            msg = f"LEADER_APP_ORIGINS must hold plain origins like https://host, got {origin!r}."
+            raise ValueError(msg)
+        if settings.app_env == "production" and parts.scheme != "https":
+            msg = "LEADER_APP_ORIGINS must be HTTPS origins in production."
+            raise ValueError(msg)
+
+
 def validate_production_secrets(settings: Settings) -> Settings:
+    _check_leader_app_origins(settings)
     if settings.app_env is None:
         msg = "APP_ENV must be explicitly set to development, test, or production."
         raise ValueError(msg)

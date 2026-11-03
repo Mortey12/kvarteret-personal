@@ -2808,6 +2808,25 @@
         "title": "MobileDiagnosticRequest",
         "type": "object"
       },
+      "MoveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot_id"
+        ],
+        "title": "MoveRequest",
+        "type": "object"
+      },
       "MyShift": {
         "additionalProperties": false,
         "properties": {
@@ -3579,6 +3598,30 @@
         "title": "PlaceDetailResponse",
         "type": "object"
       },
+      "PlaceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot_id",
+          "volunteer_id"
+        ],
+        "title": "PlaceRequest",
+        "type": "object"
+      },
       "PublicVolunteerProspectResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3627,6 +3670,30 @@
           "text"
         ],
         "title": "QuotaSummary",
+        "type": "object"
+      },
+      "ReplaceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot_id",
+          "volunteer_id"
+        ],
+        "title": "ReplaceRequest",
         "type": "object"
       },
       "Requirement": {
@@ -4329,6 +4396,24 @@
         "title": "StatusMessageRequest",
         "type": "object"
       },
+      "StatusRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "open",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StatusRequest",
+        "type": "object"
+      },
       "Suggestion": {
         "additionalProperties": false,
         "properties": {
@@ -4346,6 +4431,30 @@
           "why"
         ],
         "title": "Suggestion",
+        "type": "object"
+      },
+      "SwapRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment_a": {
+            "title": "Assignment A",
+            "type": "integer"
+          },
+          "assignment_b": {
+            "title": "Assignment B",
+            "type": "integer"
+          },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "assignment_a",
+          "assignment_b"
+        ],
+        "title": "SwapRequest",
         "type": "object"
       },
       "UserRole": {
@@ -5033,6 +5142,32 @@
           "accepts_wishes"
         ],
         "title": "WishWeek",
+        "type": "object"
+      },
+      "WriteResult": {
+        "additionalProperties": false,
+        "properties": {
+          "board": {
+            "$ref": "#/components/schemas/WeekBoard"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "message",
+          "warnings",
+          "board"
+        ],
+        "title": "WriteResult",
         "type": "object"
       }
     },
@@ -5960,6 +6095,572 @@
         ]
       }
     },
+    "/api/v1/leader/shifts/placements": {
+      "post": {
+        "description": "Put a person on an empty place. `confirmed` is needed when they lack what the place needs.",
+        "operationId": "placeLeaderShiftsPerson",
+        "parameters": [
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The week the leader is looking at (any day in it).",
+            "in": "query",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "The week the leader is looking at (any day in it).",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Place Person",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/placements/swap": {
+      "post": {
+        "description": "Two placed people change places, all or nothing.",
+        "operationId": "swapLeaderShiftsPeople",
+        "parameters": [
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The week the leader is looking at (any day in it).",
+            "in": "query",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "The week the leader is looking at (any day in it).",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Swap Placed People",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/placements/{assignment_id}": {
+      "delete": {
+        "description": "Take a person off a place.",
+        "operationId": "removeLeaderShiftsPerson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The place the page showed.",
+            "in": "query",
+            "name": "slot_id",
+            "required": true,
+            "schema": {
+              "description": "The place the page showed.",
+              "title": "Slot Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The week the leader is looking at (any day in it).",
+            "in": "query",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "The week the leader is looking at (any day in it).",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Placed Person",
+        "tags": [
+          "leader-shifts"
+        ]
+      },
+      "put": {
+        "description": "Another person takes the place of the one on it.",
+        "operationId": "replaceLeaderShiftsPerson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The week the leader is looking at (any day in it).",
+            "in": "query",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "The week the leader is looking at (any day in it).",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace Placed Person",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/placements/{assignment_id}/move": {
+      "post": {
+        "description": "Move a placed person to another empty place.",
+        "operationId": "moveLeaderShiftsPerson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The week the leader is looking at (any day in it).",
+            "in": "query",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "The week the leader is looking at (any day in it).",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Move Placed Person",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
     "/api/v1/leader/shifts/weeks/{week_start}": {
       "get": {
         "description": "One bar and one week: the grid, the people, and for every person which open places fit.",
@@ -6059,6 +6760,114 @@
           }
         },
         "summary": "Get Week",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/status": {
+      "put": {
+        "description": "Publish the week, or make it a draft again (only a coming week can be reopened).",
+        "operationId": "setLeaderShiftsWeekStatus",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Week Status",
         "tags": [
           "leader-shifts"
         ]

@@ -342,3 +342,37 @@ def test_production_requires_posthog_token_for_observability() -> None:
     assert settings.posthog_observability_enabled
     with pytest.raises(ValueError, match="POSTHOG_PROJECT_TOKEN"):
         validate_production_secrets(settings)
+
+
+def test_parse_origins_trims_and_drops_trailing_slashes_and_duplicates() -> None:
+    from app.config import parse_origins
+
+    assert parse_origins("") == ()
+    assert parse_origins(" https://a.example/ , http://localhost:3190,https://a.example ") == (
+        "https://a.example",
+        "http://localhost:3190",
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["https://a.example/path", "ftp://a.example", "a.example", "https://user:pw@a.example", "https://a.example?x=1"],
+)
+def test_leader_app_origins_must_be_plain_origins(value: str) -> None:
+    settings = Settings(app_env="development", leader_app_origins=value)
+
+    with pytest.raises(ValueError, match="LEADER_APP_ORIGINS"):
+        validate_production_secrets(settings)
+
+
+def test_leader_app_origins_may_be_http_outside_production_but_not_in_production() -> None:
+    validate_production_secrets(Settings(app_env="development", leader_app_origins="http://localhost:3190"))
+
+    production = Settings(
+        app_env="production",
+        app_secret_key="a-production-secret-with-32-characters",
+        email_dispatch_enabled=False,
+        leader_app_origins="http://leader.example",
+    )
+    with pytest.raises(ValueError, match="HTTPS origins in production"):
+        validate_production_secrets(production)

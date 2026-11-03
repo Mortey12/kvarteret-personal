@@ -156,3 +156,45 @@ class WeekBoard(_Model):
     fit: dict[str, dict[str, FitOk | FitRefused]]
     strip: list[WeekStripItem]
     last_changed: LastChanged | None = None
+
+
+# ---- writes -----------------------------------------------------------------------------------
+# Every write carries `group_id` and `week_start` as query parameters (which bar and week the
+# leader is looking at) and the board's `version` as the `If-Match` header. A stale version is a
+# 409; so is any rule that refuses the change. The answer is `WriteResult`.
+
+
+class PlaceRequest(_Model):
+    slot_id: int
+    volunteer_id: int
+    # The leader accepted the big warning for a person who lacks the qualification or membership.
+    confirmed: bool = False
+
+
+class ReplaceRequest(_Model):
+    # The place the page showed, so a place that changed meanwhile is refused.
+    slot_id: int
+    volunteer_id: int
+    confirmed: bool = False
+
+
+class MoveRequest(_Model):
+    slot_id: int
+    confirmed: bool = False
+
+
+class SwapRequest(_Model):
+    assignment_a: int
+    assignment_b: int
+    confirmed: bool = False
+
+
+class StatusRequest(_Model):
+    status: Literal["open", "published"]
+
+
+class WriteResult(_Model):
+    message: str
+    # The placed person's problems on the refreshed board, worded by the server.
+    warnings: list[Note]
+    board: WeekBoard

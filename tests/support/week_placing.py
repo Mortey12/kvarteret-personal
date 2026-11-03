@@ -62,6 +62,7 @@ class PlacingRepository:
         self.events: list[tuple] = []
         self.admin_group_ids = [7]
         self.member_reads = 0
+        self.statuses: dict[tuple[int, date], str] = {}
 
     # ---- test helpers
     def shift_of(self, slot_id: int) -> ShiftRecord:
@@ -145,7 +146,12 @@ class PlacingRepository:
         return {7: {SANDER}}
 
     async def get_week_statuses(self, group_ids, weeks):
-        return {}
+        return {key: value for key, value in self.statuses.items() if key[0] in group_ids and key[1] in weeks}
+
+    async def set_week_statuses(self, group_id, weeks, status):
+        self.events.append(("status", group_id, status))
+        for week in weeks:
+            self.statuses[(group_id, week)] = status
 
     async def get_volunteer_name(self, volunteer_id):
         if volunteer_id in self.outsiders:
@@ -171,6 +177,22 @@ class PlacingRepository:
         for shift in self.shifts.values():
             for slot in shift.slots:
                 slot.people = [p for p in slot.people if p.assignment_id != ref.assignment_id]
+
+    async def move_assignment(self, assignment_id, slot_id):
+        self.events.append(("move", assignment_id, slot_id))
+        ref = self.assignments[assignment_id]
+        person = None
+        for shift in self.shifts.values():
+            for slot in shift.slots:
+                found = [p for p in slot.people if p.assignment_id == assignment_id]
+                if found:
+                    person = found[0]
+                    slot.people = [p for p in slot.people if p.assignment_id != assignment_id]
+        target = self.shift_of(slot_id)
+        person.swap_requested = False
+        person.cannot_attend = False
+        next(x for x in target.slots if x.slot_id == slot_id).people.append(person)
+        self.assignments[assignment_id] = AssignmentRef(assignment_id, slot_id, target.shift_id, ref.volunteer_id)
 
     async def lock_shift(self, shift_id):
         self.events.append(("lock", shift_id))
