@@ -550,6 +550,22 @@ class ShiftsRepository(SqlAlchemyRepository):
     async def remove_assignment(self, assignment_id: int) -> None:
         await self.execute(delete(shift_assignments).where(shift_assignments.c.id == assignment_id))
 
+    async def set_slot_count(self, slot_id: int, count: int) -> None:
+        await self.execute(update(shift_slots).where(shift_slots.c.id == slot_id).values(count=count))
+
+    async def add_slot(self, shift_id: int, kind: str, count: int, sort_order: int) -> int:
+        """A new place group on one shift. Never open for samfunnettjeneste (a leader opens that on the template)."""
+        return await self.fetch_scalar(
+            insert(shift_slots)
+            .values(shift_id=shift_id, kind=kind, count=count, open_for_samf=False, sort_order=sort_order)
+            .returning(shift_slots.c.id)
+        )
+
+    async def delete_slot(self, slot_id: int) -> None:
+        """Delete a place group. The caller makes sure nobody is placed on it."""
+        await self.execute(delete(shift_assignments).where(shift_assignments.c.slot_id == slot_id))
+        await self.execute(delete(shift_slots).where(shift_slots.c.id == slot_id))
+
     # ------------------------------------------------------------ closed periods
 
     async def list_closed_periods(self, group_ids: list[int] | None = None) -> list[ClosedPeriod]:

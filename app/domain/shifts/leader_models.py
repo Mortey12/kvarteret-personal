@@ -171,6 +171,11 @@ class PlaceRequest(_Model):
     confirmed: bool = False
 
 
+class AddPlaceRequest(_Model):
+    # One of Personal's place kinds: skiftleder, skjenker, bartender, kokk, opplaering, garderobe.
+    kind: str
+
+
 class ReplaceRequest(_Model):
     # The place the page showed, so a place that changed meanwhile is refused.
     slot_id: int

@@ -57,6 +57,7 @@ from app.domain.shifts.planning import (
     person_eligibility,
     slot_kind,
 )
+from app.domain.shifts.template_input import SLOT_COUNT_MAX
 from app.domain.shifts.repository import ShiftsRepository
 from app.domain.shifts.week_status import (
     BANNER_DAYS,
@@ -99,6 +100,11 @@ class ShiftsServiceProtocol(Protocol):
     async def set_week_status(
         self, *, group_id: int, week: date, status: str, whole_month: bool, scope: GroupScope
     ) -> str: ...
+
+
+# Kinds "+" may add: the bars' skjenker and the kitchen's kokk. More roles are added here when decided.
+LEADER_ADDABLE_KINDS = ("skjenker", "kokk")
+ONE_SKIFTLEDER = "Et skift har én skiftleder. Den legges ikke til eller fjernes her."
 
 
 def _week_bounds(day: date) -> tuple[datetime, datetime]:
@@ -561,6 +567,47 @@ class ShiftsService:
         await self.repository.delete_shift(shift_id)
         day = format_day(shift.starts_at.astimezone(OSLO).date()).lower()
         return f"Skiftet «{shift.title}» {day} for {shift.group_name} er fjernet."
+
+    async def add_place(self, *, shift_id: int, kind: str, scope: GroupScope) -> str:
+        """One more place of ``kind`` on this shift ("+"): a new seat in the slot of that kind, or a new slot."""
+        if kind == "skiftleder":
+            raise ShiftPlacementError(ONE_SKIFTLEDER)
+        if kind == "opplaering":
+            raise ShiftPlacementError("Opplæring er ikke en egen type plass. Legg til en skjenker i stedet.")
+        if kind not in LEADER_ADDABLE_KINDS:
+            raise ShiftPlacementError("Denne typen plass kan ikke legges til her.")
+        shift = await self._load_shift(shift_id, scope)
+        await self._lock(shift_id)
+        shift = await self._load_shift(shift_id, scope)
+        if shift.is_closed:
+            raise ShiftPlacementError("Skiftet er stengt.")
+        existing = next((slot for slot in shift.slots if slot.kind == kind), None)
+        if existing is not None:
+            if existing.count >= SLOT_COUNT_MAX:
+                raise ShiftPlacementError(f"Det kan ikke være flere enn {SLOT_COUNT_MAX} plasser av samme type.")
+            await self.repository.set_slot_count(existing.slot_id, existing.count + 1)
+        else:
+            order = max((slot.sort_order for slot in shift.slots), default=-1) + 1
+            await self.repository.add_slot(shift_id, kind, 1, order)
+        day = format_day(shift.starts_at.astimezone(OSLO).date()).lower()
+        return f"Ny plass som {slot_kind(kind).label.lower()}, {shift.title.lower()} {day}."
+
+    async def remove_place(self, *, slot_id: int, scope: GroupScope) -> str:
+        """One place less ("−"). Only an empty seat goes; a person is never taken off by this."""
+        shift, _ = await self._load_slot(slot_id, scope)
+        await self._lock(shift.shift_id)
+        shift, slot = await self._load_slot(slot_id, scope)
+        if slot.kind == "skiftleder":
+            raise ShiftPlacementError(ONE_SKIFTLEDER)
+        if shift.is_closed:
+            raise ShiftPlacementError("Skiftet er stengt.")
+        if len(slot.people) >= slot.count:
+            raise ShiftPlacementError("Alle plassene av denne typen er i bruk. Ta personen av først.")
+        if slot.count > 1:
+            await self.repository.set_slot_count(slot_id, slot.count - 1)
+        else:
+            await self.repository.delete_slot(slot_id)
+        return f"Plassen er fjernet, {self._describe(shift, slot)}."
 
     async def set_shift_closed(self, *, shift_id: int, closed: bool, scope: GroupScope) -> str:
         shift = await self._load_shift(shift_id, scope)

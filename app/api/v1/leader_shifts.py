@@ -26,6 +26,7 @@ from app.dependencies import get_shift_scope, get_shifts_service, require_manage
 from app.domain.shifts.errors import ShiftForbiddenError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.leader_board import to_board
 from app.domain.shifts.leader_models import (
+    AddPlaceRequest,
     LeaderBar,
     LeaderMe,
     MoveRequest,
@@ -360,6 +361,61 @@ async def remove_placed_person(
         action="shift.remove", subject_type="shift_assignment", subject_id=assignment_id,
         details={"slot_id": slot_id, "via": "leader-app"},
         run=lambda: remove_from_place(shifts_service, assignment_id=assignment_id, slot_id=slot_id, scope=scope),
+    )
+
+
+@router.post(
+    "/shifts/{shift_id}/places",
+    response_model=WriteResult,
+    operation_id="addLeaderShiftsPlace",
+    dependencies=[Depends(require_leader_write)],
+    responses=_WRITE_ERRORS,
+)
+async def add_place(
+    request: Request,
+    shift_id: int,
+    group_id: GroupId,
+    week_start: WeekStart,
+    if_match: IfMatch,
+    body: Annotated[AddPlaceRequest, Body()],
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+) -> JSONResponse:
+    """One more place of a kind on a shift ("+"). Refused on a closed shift and above 20 of a kind."""
+    return await _write(
+        request, shifts_service, scope, current_user,
+        group_id=group_id, week_start=week_start, if_match=if_match,
+        action="shift.place.add", subject_type="shift", subject_id=shift_id,
+        details={"kind": body.kind, "via": "leader-app"},
+        run=lambda: shifts_service.add_place(shift_id=shift_id, kind=body.kind, scope=scope),
+    )
+
+
+@router.delete(
+    "/slots/{slot_id}/seat",
+    response_model=WriteResult,
+    operation_id="removeLeaderShiftsPlace",
+    dependencies=[Depends(require_leader_write)],
+    responses=_WRITE_ERRORS,
+)
+async def remove_place(
+    request: Request,
+    slot_id: int,
+    group_id: GroupId,
+    week_start: WeekStart,
+    if_match: IfMatch,
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+) -> JSONResponse:
+    """One place less ("−"): removes one EMPTY seat of the slot, never a person."""
+    return await _write(
+        request, shifts_service, scope, current_user,
+        group_id=group_id, week_start=week_start, if_match=if_match,
+        action="shift.place.remove", subject_type="shift_slot", subject_id=slot_id,
+        details={"via": "leader-app"},
+        run=lambda: shifts_service.remove_place(slot_id=slot_id, scope=scope),
     )
 
 

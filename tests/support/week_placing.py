@@ -194,6 +194,21 @@ class PlacingRepository:
         next(x for x in target.slots if x.slot_id == slot_id).people.append(person)
         self.assignments[assignment_id] = AssignmentRef(assignment_id, slot_id, target.shift_id, ref.volunteer_id)
 
+    async def set_slot_count(self, slot_id, count):
+        self.events.append(("slot_count", slot_id, count))
+        next(x for s in self.shifts.values() for x in s.slots if x.slot_id == slot_id).count = count
+
+    async def add_slot(self, shift_id, kind, count, sort_order):
+        self.events.append(("add_slot", shift_id, kind, count))
+        self._next += 1
+        self.shifts[shift_id].slots.append(SlotRecord(self._next, kind, count, False, sort_order, []))
+        return self._next
+
+    async def delete_slot(self, slot_id):
+        self.events.append(("delete_slot", slot_id))
+        for shift in self.shifts.values():
+            shift.slots = [x for x in shift.slots if x.slot_id != slot_id]
+
     async def lock_shift(self, shift_id):
         self.events.append(("lock", shift_id))
 

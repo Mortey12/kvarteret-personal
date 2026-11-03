@@ -329,3 +329,123 @@ def test_a_week_that_has_started_cannot_be_reopened(writer):
     )
     assert response.status_code == 409
     assert "kan ikke åpnes" in response.json()["detail"]
+
+
+# ---- plus and minus on the number of places ------------------------------------------------------
+
+
+def _counts(repo: PlacingRepository, shift_id: int = 1) -> dict[str, int]:
+    return {slot.kind: slot.count for slot in repo.shifts[shift_id].slots}
+
+
+def _boxes(board: dict, shift_id: int = 1, kind: str | None = None) -> int:
+    shift = next(s for s in board["shifts"] if s["shift_id"] == shift_id)
+    return len([p for p in shift["places"] if kind is None or p["kind"] == kind])
+
+
+def test_plus_adds_a_seat_to_the_slot_of_that_kind(writer, audit):
+    w, repo = writer
+    response = w.send("POST", "/shifts/1/places", json={"kind": "skjenker"})
+    assert response.status_code == 200
+    assert _counts(repo) == {"skiftleder": 1, "skjenker": 3}
+    assert "Ny plass som skjenker" in response.json()["message"]
+    assert _boxes(response.json()["board"], kind="skjenker") == 3
+    assert audit[-1]["action"] == "shift.place.add" and audit[-1]["details"] == {"kind": "skjenker", "via": "leader-app"}
+
+
+def test_plus_for_a_kind_the_shift_lacks_makes_a_new_slot(writer):
+    w, repo = writer
+    response = w.send("POST", "/shifts/1/places", json={"kind": "kokk"})
+    assert response.status_code == 200
+    assert _counts(repo) == {"skiftleder": 1, "skjenker": 2, "kokk": 1}
+    assert [s.sort_order for s in repo.shifts[1].slots] == [0, 1, 2]
+    assert _boxes(response.json()["board"], kind="kokk") == 1
+
+
+def test_plus_refuses_an_unknown_kind_a_closed_shift_and_more_than_twenty(writer):
+    w, repo = writer
+    for kind in ("dj", "garderobe", "bartender"):
+        assert w.send("POST", "/shifts/1/places", json={"kind": kind}).status_code == 409
+    repo.shifts[1].is_closed = True
+    closed = w.send("POST", "/shifts/1/places", json={"kind": "skjenker"})
+    assert closed.status_code == 409 and closed.json()["detail"] == "Skiftet er stengt."
+    repo.shifts[1].is_closed = False
+    next(s for s in repo.shifts[1].slots if s.kind == "skjenker").count = 20
+    full = w.send("POST", "/shifts/1/places", json={"kind": "skjenker"})
+    assert full.status_code == 409 and "20" in full.json()["detail"]
+    assert _counts(repo)["skjenker"] == 20
+
+
+def test_minus_removes_one_empty_seat_and_deletes_a_slot_at_zero(writer, audit):
+    w, repo = writer
+    assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat").status_code == 200
+    assert _counts(repo) == {"skiftleder": 1, "skjenker": 1}
+    assert audit[-1]["action"] == "shift.place.remove"
+    response = w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat")
+    assert response.status_code == 200
+    assert _counts(repo) == {"skiftleder": 1}
+    assert _boxes(response.json()["board"], kind="skjenker") == 0
+
+
+def test_minus_never_takes_a_person_off(writer):
+    w, repo = writer
+    repo.place(SKJENKER_SLOT, SANDER)
+    repo.place(SKJENKER_SLOT, UNDINE)  # both seats taken
+    response = w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat")
+    assert response.status_code == 409
+    assert "i bruk" in response.json()["detail"]
+    assert repo.who(SKJENKER_SLOT) == [SANDER, UNDINE] and _counts(repo)["skjenker"] == 2
+    next(s for s in repo.shifts[1].slots if s.kind == "skjenker").count = 3  # one empty seat again
+    assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat").status_code == 200
+    assert repo.who(SKJENKER_SLOT) == [SANDER, UNDINE] and _counts(repo)["skjenker"] == 2
+    assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat").status_code == 409
+
+
+def test_skiftleder_is_never_added_or_removed_with_plus_and_minus(writer):
+    w, repo = writer
+    added = w.send("POST", "/shifts/1/places", json={"kind": "skiftleder"})
+    assert added.status_code == 409 and added.json()["detail"].startswith("Et skift har én skiftleder")
+    removed = w.send("DELETE", f"/slots/{SKIFTLEDER_SLOT}/seat")  # empty, still refused
+    assert removed.status_code == 409 and removed.json()["detail"].startswith("Et skift har én skiftleder")
+    assert _counts(repo)["skiftleder"] == 1
+
+
+def test_opplaering_is_not_a_kind_to_add(writer):
+    w, repo = writer
+    response = w.send("POST", "/shifts/1/places", json={"kind": "opplaering"})
+    assert response.status_code == 409 and "skjenker" in response.json()["detail"]
+    assert "opplaering" not in _counts(repo)
+
+
+def test_minus_on_a_closed_shift_is_refused(writer):
+    w, repo = writer
+    repo.shifts[1].is_closed = True
+    assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat").status_code == 409
+    assert _counts(repo)["skjenker"] == 2
+
+
+def test_plus_then_minus_gives_the_same_board(writer):
+    w, repo = writer
+    before = w.version()
+    assert w.send("POST", "/shifts/1/places", json={"kind": "skjenker"}).status_code == 200
+    assert w.version() != before
+    assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat").status_code == 200
+    assert w.version() == before
+
+
+def test_plus_and_minus_need_the_safety_layer(writer):
+    w, repo = writer
+    assert w.send("POST", "/shifts/1/places", json={"kind": "skjenker"}, Origin="https://evil.example").status_code == 403
+    assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat", **{"X-CSRF-Token": "forged"}).status_code == 403
+    assert w.send("POST", "/shifts/1/places", json={"kind": "skjenker"}, **{"If-Match": "old"}).status_code == 409
+    assert _counts(repo) == {"skiftleder": 1, "skjenker": 2}
+
+
+def test_plus_and_minus_cannot_reach_a_bar_outside_the_scope(monkeypatch, audit):
+    repo = PlacingRepository()
+    repo.admin_group_ids = [8]  # the kitchen only
+    client, repo, token = make(monkeypatch, UserRole.GROUP_ADMIN, repo)
+    w = Writer(client, token)
+    assert w.send("POST", "/shifts/1/places", json={"kind": "skjenker"}, **{"If-Match": "x"}).status_code == 403
+    assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat", **{"If-Match": "x"}).status_code == 403
+    assert _counts(repo) == {"skiftleder": 1, "skjenker": 2}
