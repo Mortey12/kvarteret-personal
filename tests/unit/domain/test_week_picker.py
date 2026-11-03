@@ -124,3 +124,34 @@ def test_live_message_replaces_the_services_hint_with_the_pages_warnings() -> No
     assert live_message(base, []) == base
     assert live_message(f"{base} Merk: har allerede 1 skift denne uka.", []) == base
     assert live_message(base, ["svarte kan ikke", "2 skift denne uka"]) == f"{base} Advarsel: svarte kan ikke, 2 skift denne uka."
+
+
+def test_lenient_turns_a_missing_qualification_into_a_red_warning_to_confirm() -> None:
+    p = person(1, "Ada Lie", BAR)
+    fit = evaluate(p, place("skiftleder"), lenient=True)
+    assert fit.ok and fit.needs_confirmation
+    assert fit.warnings[0] == Warn("Kun for godkjente skiftledere", "red")
+    # Not lenient (the old page): still a hard refusal.
+    assert not evaluate(p, place("skiftleder")).ok
+
+
+def test_lenient_keeps_closed_already_on_shift_and_age_hard() -> None:
+    p = person(1, "Ada Lie", BAR)
+    assert evaluate(p, place(is_closed=True), lenient=True).reason == CLOSED_REASON
+    assert evaluate(p, place(on_shift=frozenset({1})), lenient=True).reason == ALREADY_ON_SHIFT_REASON
+    young = person(2, "Ung", BAR, birth_date=date(2010, 1, 1))
+    assert evaluate(young, place(venue="Halvtimen"), lenient=True).reason == "Halvtimen krever 20 år"
+
+
+def test_a_qualified_person_needs_no_confirmation_even_when_lenient() -> None:
+    fit = evaluate(person(1, "Ada Lie", BAR, SL), place("skiftleder"), lenient=True)
+    assert fit.ok and not fit.needs_confirmation
+
+
+def test_place_state_marks_the_places_to_confirm() -> None:
+    state = build_place_state(
+        [person(1, "Ada Lie", BAR)], [place("skiftleder", slot_id=10), place(slot_id=11)], lenient=True
+    )
+    assert state["1"]["10"]["c"] == 1 and "c" not in state["1"]["11"]
+    only_sl = build_place_state([person(1, "Ada Lie", BAR)], [place("skiftleder")], lenient=True)
+    assert only_sl["1"]["11"] == {"ok": 1, "w": [["Kun for godkjente skiftledere", "red"]], "c": 1}

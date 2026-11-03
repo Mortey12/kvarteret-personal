@@ -31,6 +31,54 @@
         "title": "AccessCodeRequest",
         "type": "object"
       },
+      "Assignment": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment_id": {
+            "title": "Assignment Id",
+            "type": "integer"
+          },
+          "cannot_attend": {
+            "title": "Cannot Attend",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "swap_requested": {
+            "title": "Swap Requested",
+            "type": "boolean"
+          },
+          "training": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training"
+          },
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "volunteer_id",
+          "cannot_attend",
+          "swap_requested",
+          "problems"
+        ],
+        "title": "Assignment",
+        "type": "object"
+      },
       "Body_admin_account_create_admin_accounts_post": {
         "properties": {
           "display_name": {
@@ -1806,6 +1854,20 @@
         "title": "CrewMember",
         "type": "object"
       },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
       "EventStatisticsAccessResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1900,6 +1962,54 @@
           "message"
         ],
         "title": "FeedbackRequest",
+        "type": "object"
+      },
+      "FitOk": {
+        "additionalProperties": false,
+        "properties": {
+          "needs_confirmation": {
+            "default": false,
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          },
+          "ok": {
+            "const": true,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "warnings"
+        ],
+        "title": "FitOk",
+        "type": "object"
+      },
+      "FitRefused": {
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "const": false,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "reason"
+        ],
+        "title": "FitRefused",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2031,6 +2141,80 @@
           "label"
         ],
         "title": "LabeledValue",
+        "type": "object"
+      },
+      "LastChanged": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at"
+        ],
+        "title": "LastChanged",
+        "type": "object"
+      },
+      "LeaderBar": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "LeaderBar",
+        "type": "object"
+      },
+      "LeaderMe": {
+        "additionalProperties": false,
+        "properties": {
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderBar"
+            },
+            "title": "Bars",
+            "type": "array"
+          },
+          "csrf_token": {
+            "title": "Csrf Token",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "Admin",
+              "Gruppeadmin"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "role",
+          "csrf_token",
+          "bars"
+        ],
+        "title": "LeaderMe",
         "type": "object"
       },
       "MobileCardResponse": {
@@ -2850,6 +3034,29 @@
         "title": "MyShiftsResponse",
         "type": "object"
       },
+      "Note": {
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "enum": [
+              "red",
+              "yellow"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "level"
+        ],
+        "title": "Note",
+        "type": "object"
+      },
       "NowPlayingStateResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3167,6 +3374,142 @@
         "title": "OpenShiftsResponse",
         "type": "object"
       },
+      "Person": {
+        "additionalProperties": false,
+        "properties": {
+          "answer_status": {
+            "enum": [
+              "ikke_svart",
+              "paabegynt",
+              "ferdig"
+            ],
+            "title": "Answer Status",
+            "type": "string"
+          },
+          "busy_days": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Busy Days",
+            "type": "array"
+          },
+          "is_skiftleder": {
+            "title": "Is Skiftleder",
+            "type": "boolean"
+          },
+          "max_shifts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Shifts"
+          },
+          "month_shifts": {
+            "title": "Month Shifts",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          },
+          "week_minutes": {
+            "title": "Week Minutes",
+            "type": "integer"
+          },
+          "week_shifts": {
+            "title": "Week Shifts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "volunteer_id",
+          "name",
+          "is_skiftleder",
+          "week_shifts",
+          "month_shifts",
+          "week_minutes",
+          "answer_status",
+          "busy_days",
+          "tags"
+        ],
+        "title": "Person",
+        "type": "object"
+      },
+      "Place": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Assignment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "needed": {
+            "default": false,
+            "title": "Needed",
+            "type": "boolean"
+          },
+          "seat": {
+            "title": "Seat",
+            "type": "integer"
+          },
+          "slot_id": {
+            "title": "Slot Id",
+            "type": "integer"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Suggestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "slot_id",
+          "seat",
+          "kind"
+        ],
+        "title": "Place",
+        "type": "object"
+      },
       "PlaceDetailResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3348,6 +3691,99 @@
           "text"
         ],
         "title": "SamfProgress",
+        "type": "object"
+      },
+      "Shift": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "enum": [
+                "vil",
+                "kan",
+                "nei"
+              ],
+              "type": "string"
+            },
+            "title": "Answers",
+            "type": "object"
+          },
+          "closed": {
+            "title": "Closed",
+            "type": "boolean"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "duration_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Minutes"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/Place"
+            },
+            "title": "Places",
+            "type": "array"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "shift_id": {
+            "title": "Shift Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "time_label": {
+            "title": "Time Label",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shift_id",
+          "day",
+          "position",
+          "title",
+          "time_label",
+          "closed",
+          "places",
+          "answers"
+        ],
+        "title": "Shift",
         "type": "object"
       },
       "ShiftActionResponse": {
@@ -3893,6 +4329,25 @@
         "title": "StatusMessageRequest",
         "type": "object"
       },
+      "Suggestion": {
+        "additionalProperties": false,
+        "properties": {
+          "volunteer_id": {
+            "title": "Volunteer Id",
+            "type": "integer"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "volunteer_id",
+          "why"
+        ],
+        "title": "Suggestion",
+        "type": "object"
+      },
       "UserRole": {
         "enum": [
           "Admin",
@@ -3960,6 +4415,166 @@
           "currentSemesterVolunteers"
         ],
         "title": "VolunteerStatsResponse",
+        "type": "object"
+      },
+      "WeekBoard": {
+        "additionalProperties": false,
+        "properties": {
+          "bar": {
+            "$ref": "#/components/schemas/LeaderBar"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "fit": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FitOk"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FitRefused"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "title": "Fit",
+            "type": "object"
+          },
+          "last_changed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastChanged"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/Person"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/WeekRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/Shift"
+            },
+            "title": "Shifts",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "strip": {
+            "items": {
+              "$ref": "#/components/schemas/WeekStripItem"
+            },
+            "title": "Strip",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "week_number": {
+            "title": "Week Number",
+            "type": "integer"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bar",
+          "week_start",
+          "week_number",
+          "version",
+          "status",
+          "rows",
+          "shifts",
+          "people",
+          "fit",
+          "strip"
+        ],
+        "title": "WeekBoard",
+        "type": "object"
+      },
+      "WeekRow": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "time_label": {
+            "title": "Time Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "label",
+          "time_label"
+        ],
+        "title": "WeekRow",
+        "type": "object"
+      },
+      "WeekStripItem": {
+        "additionalProperties": false,
+        "properties": {
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start",
+          "number",
+          "status"
+        ],
+        "title": "WeekStripItem",
         "type": "object"
       },
       "WeekdayRule": {
@@ -5300,6 +5915,152 @@
         "summary": "Submit Feedback",
         "tags": [
           "feedback"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/me": {
+      "get": {
+        "description": "Who is signed in, the CSRF token for later writes, and the bars they may plan.",
+        "operationId": "getLeaderShiftsMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaderMe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          }
+        },
+        "summary": "Get Me",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}": {
+      "get": {
+        "description": "One bar and one week: the grid, the people, and for every person which open places fit.",
+        "operationId": "getLeaderShiftsWeek",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar. Default: the first bar in scope.",
+            "in": "query",
+            "name": "group_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The bar. Default: the first bar in scope.",
+              "title": "Group Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekBoard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No bar in the caller's scope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Skiftlista is not set up yet."
+          }
+        },
+        "summary": "Get Week",
+        "tags": [
+          "leader-shifts"
         ]
       }
     },

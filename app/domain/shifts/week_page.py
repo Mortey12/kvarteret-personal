@@ -9,7 +9,7 @@ weeks. Every read is one query. Scope is checked on the group before anything is
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from app.domain.shifts.app_rules import effective_answer, effective_week_status
@@ -39,6 +39,10 @@ class WeekPage:
     plan: WeekPlan | None = None
     view: WeekView | None = None
     status: WeekStatusView | None = None
+    # shift id -> (starts_at, ends_at) for the shifts of the shown week, in every group.
+    times: dict[int, tuple[datetime, datetime]] = field(default_factory=dict)
+    # volunteer id -> planned minutes this week on shifts they are coming to, in every group.
+    week_minutes: dict[int, int] = field(default_factory=dict)
 
 
 def _bounds(first_day: date, days: int) -> tuple[datetime, datetime]:
@@ -55,6 +59,7 @@ async def load_week_page(
     group_id: int | None,
     scope: GroupScope,
     today: date | None = None,
+    allow_unqualified: bool = False,
 ) -> WeekPage:
     """``service`` is a ``ShiftsService``; only ``get_week_plan`` and ``repository`` are used."""
     repository = service.repository
@@ -83,10 +88,19 @@ async def load_week_page(
         key: answer for key, wish in wishes.items() if (answer := effective_answer(wish)) is not None
     }
     shifts_per_day: dict[tuple[int, date], int] = {}
+    times: dict[int, tuple[datetime, datetime]] = {}
+    week_minutes: dict[int, int] = {}
     for record in await repository.list_shifts_between(week_from, week_before):
         day = record.starts_at.astimezone(OSLO).date()
+        times[record.shift_id] = (record.starts_at, record.ends_at)
+        minutes = int((record.ends_at - record.starts_at).total_seconds() // 60)
         for volunteer_id in {person.volunteer_id for slot in record.slots for person in slot.people}:
             shifts_per_day[(volunteer_id, day)] = shifts_per_day.get((volunteer_id, day), 0) + 1
+        coming = {
+            person.volunteer_id for slot in record.slots for person in slot.people if not person.cannot_attend
+        }
+        for volunteer_id in coming:
+            week_minutes[volunteer_id] = week_minutes.get(volunteer_id, 0) + minutes
     month_counts = await repository.count_shifts_by_volunteer(month_from, month_before)
     answered = await repository.list_answered_volunteers([selected.group_id], week_from, week_before)
     stored = await repository.get_week_statuses([selected.group_id], mondays)
@@ -121,8 +135,10 @@ async def load_week_page(
             status=status.status if status else leader_status(strip_statuses.get(week_start, "open")),
             strip_statuses=strip_statuses,
             approved_skiftleder_token=f"{selected.group_id}:skiftleder:0",
-            place_state=build_place_state(candidates, places),
+            place_state=build_place_state(candidates, places, lenient=allow_unqualified),
         )
     )
-    return WeekPage(bars=bars, selected=selected, plan=plan, view=view, status=status)
+    return WeekPage(
+        bars=bars, selected=selected, plan=plan, view=view, status=status, times=times, week_minutes=week_minutes
+    )
 

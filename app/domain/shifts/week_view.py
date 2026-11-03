@@ -85,6 +85,7 @@ class PlaceView:
     answer: str = ""
     answer_word: str = ""
     cannot_attend: bool = False
+    swap_requested: bool = False
     problems: list[Problem] = field(default_factory=list)
 
     @property
@@ -291,6 +292,7 @@ def _places(
                     # Only people in the leader's pool have their answers read.
                     answer_word=(ANSWER_WORDS.get(answer, NO_ANSWER_WORD) if person.volunteer_id in member_ids else ""),
                     cannot_attend=person.cannot_attend,
+                    swap_requested=person.swap_requested,
                     problems=_problems(
                         person,
                         answer,

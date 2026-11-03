@@ -74,6 +74,9 @@ class Fit:
     ok: bool
     reason: str = ""
     warnings: tuple[Warn, ...] = ()
+    # The leader may place the person anyway, but only after confirming a big warning
+    # (the person lacks the qualification the place needs). Only with ``lenient``.
+    needs_confirmation: bool = False
 
     @property
     def level(self) -> str:
@@ -81,16 +84,27 @@ class Fit:
         return RED if RED in levels else (YELLOW if YELLOW in levels else "")
 
 
-def hard_problem(person: Candidate, place: PlaceFacts) -> str | None:
-    """The hard rule the person breaks for this place, in the order ``ShiftsService._check`` uses."""
+def hard_problem(person: Candidate, place: PlaceFacts, *, lenient: bool = False) -> str | None:
+    """The hard rule the person breaks for this place, in the order ``ShiftsService._check`` uses.
+
+    With ``lenient`` the qualification rule is not hard (see ``qualification_problem``): a
+    leader may place anyone after confirming a big warning. Closed shifts, a person already
+    on the shift and the venue's minimum age stay hard.
+    """
     if place.is_closed:
         return CLOSED_REASON
     if person.volunteer_id in place.on_shift:
         return ALREADY_ON_SHIFT_REASON
-    problem = person.eligibility.problem(place.kind, place.group_id, place.open_for_samf)
-    if problem:
-        return problem
+    if not lenient:
+        problem = person.eligibility.problem(place.kind, place.group_id, place.open_for_samf)
+        if problem:
+            return problem
     return age_problem(place.venue, person.birth_date, place.day)
+
+
+def qualification_problem(person: Candidate, place: PlaceFacts) -> str | None:
+    """The qualification or membership rule alone, as the text a leader reads before confirming."""
+    return person.eligibility.problem(place.kind, place.group_id, place.open_for_samf)
 
 
 def warnings_for(person: Candidate, place: PlaceFacts) -> tuple[Warn, ...]:
@@ -109,11 +123,16 @@ def warnings_for(person: Candidate, place: PlaceFacts) -> tuple[Warn, ...]:
     return tuple(sorted(found, key=lambda item: item.level != RED))
 
 
-def evaluate(person: Candidate, place: PlaceFacts) -> Fit:
-    reason = hard_problem(person, place)
+def evaluate(person: Candidate, place: PlaceFacts, *, lenient: bool = False) -> Fit:
+    reason = hard_problem(person, place, lenient=lenient)
     if reason:
         return Fit(False, reason)
-    return Fit(True, "", warnings_for(person, place))
+    warnings = warnings_for(person, place)
+    if lenient:
+        missing = qualification_problem(person, place)
+        if missing:
+            return Fit(True, "", (Warn(missing, RED), *warnings), needs_confirmation=True)
+    return Fit(True, "", warnings)
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,22 +186,28 @@ def picker_rows(people: list[Candidate], place: PlaceFacts) -> list[PickerRow]:
     return sorted(rows, key=sort_key)
 
 
-def build_place_state(people: list[Candidate], places: list[PlaceFacts]) -> dict[str, dict[str, dict]]:
+def build_place_state(
+    people: list[Candidate], places: list[PlaceFacts], *, lenient: bool = False
+) -> dict[str, dict[str, dict]]:
     """Person first: for every person and open place, whether the place fits and what to warn about.
 
     ``{volunteer id: {slot id: {"ok": 1, "w": [[text, level], ...]} or {"ok": 0, "why": text}}}``.
-    The page's JavaScript only shows it.
+    With ``lenient`` a place the person lacks the qualification for is ``ok`` with a red warning and
+    ``"c": 1`` (needs confirmation). The page's JavaScript only shows it.
     """
     state: dict[str, dict[str, dict]] = {}
     for person in people:
         per_slot: dict[str, dict] = {}
         for place in places:
-            fit = evaluate(person, place)
-            per_slot[str(place.slot_id)] = (
+            fit = evaluate(person, place, lenient=lenient)
+            entry: dict = (
                 {"ok": 1, "w": [[item.text, item.level] for item in fit.warnings]}
                 if fit.ok
                 else {"ok": 0, "why": fit.reason}
             )
+            if fit.needs_confirmation:
+                entry["c"] = 1
+            per_slot[str(place.slot_id)] = entry
         state[str(person.volunteer_id)] = per_slot
     return state
 
