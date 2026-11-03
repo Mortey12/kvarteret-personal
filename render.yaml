@@ -10,7 +10,8 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    branch: skiftlista/demo
+    # skiftlista/leader-api holds the leader app's API (and everything in skiftlista/demo).
+    branch: skiftlista/leader-api
     # uv and bun are installed in the build; only the CSS is built here
     # (i18n catalogs, compiled emails and JS are committed).
     buildCommand: >-
@@ -45,6 +46,10 @@ services:
         value: "false"
       # The service's own https://<name>.onrender.com URL, no trailing slash.
       - key: APP_PUBLIC_BASE_URL
+        sync: false
+      # The leader app's address (https, no path, no trailing slash), for example
+      # https://skiftlista-spike.vercel.app. Writes from any other origin are refused.
+      - key: LEADER_APP_ORIGINS
         sync: false
       # postgresql+asyncpg://...?ssl=require (the demo database, never a real one).
       - key: DATABASE_URL
