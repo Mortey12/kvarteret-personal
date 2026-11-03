@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 from app.domain.shifts.leader_models import (
     Assignment,
     FitOk,
     FitRefused,
+    LastChanged,
     LeaderBar,
     Note,
     Person,
@@ -33,6 +34,11 @@ _STATUSES = {"open", "published"}
 def _status(value: str) -> str:
     # Leaders only know open and published here; anything else counts as open.
     return value if value in _STATUSES else "open"
+
+
+def _status_of(value: str, week: date, changes: dict[date, tuple[datetime, str]]) -> str:
+    status = _status(value)
+    return "changed_after_publish" if status == "published" and week in changes else status
 
 
 def _place(place: PlaceView, seat: int, *, closed: bool) -> Place:
@@ -87,7 +93,10 @@ def to_board(
     *,
     times: dict[int, tuple[datetime, datetime]] | None = None,
     week_minutes: dict[int, int] | None = None,
+    changes: dict[date, tuple[datetime, str]] | None = None,
 ) -> WeekBoard:
+    """``changes``: Monday -> (when, by whom) for published weeks changed after publishing."""
+    changes = changes or {}
     times = times or {}
     week_minutes = week_minutes or {}
     answers_by_shift = {item["shift_id"]: item["answers"] for item in view.data["shifts"]}
@@ -126,7 +135,7 @@ def to_board(
         week_start=view.week_start.isoformat(),
         week_number=view.week_start.isocalendar().week,
         version="",
-        status=_status(view.status),
+        status=_status_of(view.status, view.week_start, changes),
         rows=[WeekRow(position=row.position, label=row.title, time_label=row.time_label) for row in view.rows],
         shifts=shifts,
         people=[
@@ -148,9 +157,14 @@ def to_board(
             for volunteer_id, per_slot in view.data["place_state"].items()
         },
         strip=[
-            WeekStripItem(week_start=item.week_start.isoformat(), number=item.number, status=_status(item.status))
+            WeekStripItem(week_start=item.week_start.isoformat(), number=item.number, status=_status_of(item.status, item.week_start, changes))
             for item in view.strip
         ],
+        last_changed=(
+            LastChanged(by=changes[view.week_start][1], at=changes[view.week_start][0].astimezone(OSLO).isoformat())
+            if view.week_start in changes and view.status == "published"
+            else None
+        ),
     )
     return board.model_copy(update={"version": _version(board)})
 

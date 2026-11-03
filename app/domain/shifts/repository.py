@@ -153,6 +153,42 @@ class ShiftsRepository(SqlAlchemyRepository):
         )
         return {(row["group_id"], _as_date(row["week_start"])): row["status"] for row in rows}
 
+    async def get_week_changes(
+        self, group_id: int, weeks: list[date]
+    ) -> dict[date, tuple[datetime, str]]:
+        """Monday -> (when, by whom) for published weeks a leader changed after publishing."""
+        if not weeks:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(
+                shift_week_status.c.week_start,
+                shift_week_status.c.changed_after_publish_at,
+                shift_week_status.c.changed_after_publish_by,
+            ).where(
+                shift_week_status.c.group_id == group_id,
+                shift_week_status.c.week_start.in_(weeks),
+                shift_week_status.c.status == "published",
+                shift_week_status.c.changed_after_publish_at.is_not(None),
+            )
+        )
+        return {
+            _as_date(row["week_start"]): (row["changed_after_publish_at"], row["changed_after_publish_by"] or "")
+            for row in rows
+        }
+
+    async def mark_week_changed(self, group_id: int, week: date, by: str) -> None:
+        """Flag a week as changed after publishing. Only an explicit published row is flagged; a week
+        without a row (or an open one) was never published, so there is nothing to be late about."""
+        await self.session.execute(
+            update(shift_week_status)
+            .where(
+                shift_week_status.c.group_id == group_id,
+                shift_week_status.c.week_start == week,
+                shift_week_status.c.status == "published",
+            )
+            .values(changed_after_publish_at=datetime.now(UTC), changed_after_publish_by=by)
+        )
+
     async def set_week_statuses(self, group_id: int, weeks: list[date], status: str) -> None:
         """Explicit rows, one per Monday in ``weeks``."""
         now = datetime.now(UTC)
@@ -160,7 +196,7 @@ class ShiftsRepository(SqlAlchemyRepository):
             result = await self.session.execute(
                 update(shift_week_status)
                 .where(shift_week_status.c.group_id == group_id, shift_week_status.c.week_start == week)
-                .values(status=status, updated_at=now)
+                .values(status=status, updated_at=now, changed_after_publish_at=None, changed_after_publish_by=None)
             )
             if result.rowcount == 0:
                 await self.session.execute(

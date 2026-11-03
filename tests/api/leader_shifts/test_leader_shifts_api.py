@@ -26,7 +26,10 @@ BARS = [
 @pytest.fixture
 def setup(monkeypatch):
     app = create_app()
-    service = SimpleNamespace(repository=SimpleNamespace(list_shift_groups=AsyncMock(return_value=BARS)))
+    service = SimpleNamespace(
+        repository=SimpleNamespace(list_shift_groups=AsyncMock(return_value=BARS)),
+        week_changes=AsyncMock(return_value={}),
+    )
     app.dependency_overrides[get_shifts_service] = lambda: service
     app.dependency_overrides[get_shift_scope] = lambda: ALL_GROUPS
     override_authenticated_user(app, make_authenticated_user(UserRole.ADMIN))

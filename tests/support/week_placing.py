@@ -63,6 +63,7 @@ class PlacingRepository:
         self.admin_group_ids = [7]
         self.member_reads = 0
         self.statuses: dict[tuple[int, date], str] = {}
+        self.changes: dict[tuple[int, date], tuple[datetime, str]] = {}
 
     # ---- test helpers
     def shift_of(self, slot_id: int) -> ShiftRecord:
@@ -152,6 +153,18 @@ class PlacingRepository:
         self.events.append(("status", group_id, status))
         for week in weeks:
             self.statuses[(group_id, week)] = status
+            self.changes.pop((group_id, week), None)
+
+    async def get_week_changes(self, group_id, weeks):
+        return {
+            week: self.changes[(group_id, week)]
+            for week in weeks
+            if (group_id, week) in self.changes and self.statuses.get((group_id, week)) == "published"
+        }
+
+    async def mark_week_changed(self, group_id, week, by):
+        if self.statuses.get((group_id, week)) == "published":
+            self.changes[(group_id, week)] = (datetime.now(UTC), by)
 
     async def get_volunteer_name(self, volunteer_id):
         if volunteer_id in self.outsiders:

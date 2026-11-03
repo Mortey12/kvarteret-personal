@@ -101,7 +101,9 @@ async def _board(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Skiftplanen er ikke satt opp ennå.") from None
     if page.view is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Du har ingen barer å planlegge skift for.")
-    return to_board(page.view, times=page.times, week_minutes=page.week_minutes)
+    weeks = [item.week_start for item in page.view.strip]
+    changes = await service.week_changes(page.view.bar_id, [page.view.week_start, *weeks])
+    return to_board(page.view, times=page.times, week_minutes=page.week_minutes, changes=changes)
 
 
 @router.get(
@@ -173,12 +175,15 @@ async def _write(
     run,
     targets=None,
     message_for=None,
+    marks_change: bool = True,
 ) -> JSONResponse:
     """The steps every write shares: the week must be the one the leader saw (else 409), the change
     runs under the service's own locks and rules, the audit log is written, and the answer is the
     refreshed week. ``run`` is a coroutine function returning a ``PlacementResult`` or a text;
     ``targets`` says which places to report problems for, as a function of the refreshed board;
-    ``message_for(board)`` replaces the service's sentence where the leader app words it differently."""
+    ``message_for(board)`` replaces the service's sentence where the leader app words it differently.
+    A change to an explicitly published week is flagged "changed after publishing" with the leader's
+    name (``marks_change`` is off for the status write itself, which publishes or reopens)."""
     before = await _board(service, scope, week=week_start, group_id=group_id)
     if before.version != if_match:
         raise HTTPException(status.HTTP_409_CONFLICT, STALE_WEEK)
@@ -188,6 +193,8 @@ async def _write(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except (ShiftNotFoundError, ShiftPlacementError) as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    if marks_change:
+        await service.mark_week_changed(group_id, week_start, user.display_name or user.username)
     log_admin_activity(
         request=request, user=user, action=action, subject_type=subject_type, subject_id=subject_id,
         details=details,
@@ -440,7 +447,7 @@ async def set_week_status(
     return await _write(
         request, shifts_service, scope, current_user,
         group_id=group_id, week_start=week_start, if_match=if_match,
-        action="shift.week_status", subject_type="shift_group", subject_id=group_id,
+        action="shift.week_status", subject_type="shift_group", subject_id=group_id, marks_change=False,
         details={"week": week_start.isoformat(), "status": body.status, "via": "leader-app"},
         run=lambda: shifts_service.set_week_status(
             group_id=group_id, week=week_start, status=body.status, whole_month=False, scope=scope

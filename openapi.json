@@ -4608,7 +4608,8 @@
           "status": {
             "enum": [
               "open",
-              "published"
+              "published",
+              "changed_after_publish"
             ],
             "title": "Status",
             "type": "string"
@@ -4682,7 +4683,8 @@
           "status": {
             "enum": [
               "open",
-              "published"
+              "published",
+              "changed_after_publish"
             ],
             "title": "Status",
             "type": "string"

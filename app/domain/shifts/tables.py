@@ -180,6 +180,11 @@ shift_week_status = Table(
     Column("week_start", Date, primary_key=True),
     Column("status", Text, nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    # Set when a leader changes a week that is explicitly published; cleared when the week is
+    # published again or opened. The status itself stays "published", so volunteers see no change.
+    Column("changed_after_publish_at", DateTime(timezone=True)),
+    # Who made the change, as the name they had then (a plain text snapshot, not a reference).
+    Column("changed_after_publish_by", Text),
 )
 
 # Weekday answers per semester: vil (gjerne) / kan (hvis nødvendig) / nei.

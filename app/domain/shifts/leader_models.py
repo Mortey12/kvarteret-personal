@@ -17,7 +17,8 @@ from pydantic import BaseModel, ConfigDict
 
 Answer = Literal["vil", "kan", "nei"]
 AnswerStatus = Literal["ikke_svart", "paabegynt", "ferdig"]
-WeekStatus = Literal["open", "published"]
+# "changed_after_publish" = published, then a leader changed it. Volunteers still see it as published.
+WeekStatus = Literal["open", "published", "changed_after_publish"]
 Level = Literal["red", "yellow"]
 
 

@@ -86,6 +86,8 @@ class ShiftsServiceProtocol(Protocol):
     async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult: ...
     async def remove_shift(self, *, shift_id: int, scope: GroupScope) -> str: ...
     async def set_shift_closed(self, *, shift_id: int, closed: bool, scope: GroupScope) -> str: ...
+    async def week_changes(self, group_id: int, weeks: list[date]) -> dict[date, tuple[datetime, str]]: ...
+    async def mark_week_changed(self, group_id: int, week: date, by: str) -> None: ...
     async def list_group_settings(self, scope: GroupScope) -> list[GroupSettingsView]: ...
     async def save_group_settings(
         self,
@@ -643,6 +645,13 @@ class ShiftsService:
         if any(is_past_week(w, today) for w in weeks):
             text += " Merk: uka er allerede over."
         return text
+
+    async def week_changes(self, group_id: int, weeks: list[date]) -> dict[date, tuple[datetime, str]]:
+        return await self.repository.get_week_changes(group_id, weeks)
+
+    async def mark_week_changed(self, group_id: int, week: date, by: str) -> None:
+        """Called after a leader's change went through; see ``mark_week_changed`` in the repository."""
+        await self.repository.mark_week_changed(group_id, monday_of(week), by)
 
     async def list_group_settings(self, scope: GroupScope) -> list[GroupSettingsView]:
         parents = await self.repository.list_group_parents()
