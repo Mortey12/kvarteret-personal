@@ -1,8 +1,0 @@
-<nav class="noprint flex flex-wrap items-center gap-2 text-sm" aria-label="Uker i {{ view.month_label | lower }}" data-week-strip>
-  <span class="text-stone-700">{{ view.month_label }}:</span>
-  {% for item in view.strip %}
-    <a class="week-strip-item" href="/shifts/week?week={{ item.week_start.isoformat() }}&amp;group={{ view.bar_id }}" data-strip-week="{{ item.week_start.isoformat() }}" data-status="{{ item.status }}" {% if item.is_shown %}aria-current="page"{% endif %}>
-      <span class="font-semibold">Uke {{ item.number }}</span> <span class="text-xs">{{ item.status_label }}</span>
-    </a>
-  {% endfor %}
-</nav>

@@ -22,7 +22,6 @@
 
     {% if not no_groups %}
       <p class="flex flex-wrap justify-center gap-x-5 gap-y-1 text-center text-sm">
-        <a href="/shifts/week?week={{ plan.week_start.isoformat() }}{% if plan.selected_group_id %}&amp;group={{ plan.selected_group_id }}{% endif %}" data-new-week-link>Ny ukevisning</a>
         <a href="/shifts/settings">Innstillinger og stengte perioder</a>
         <a href="/shifts/templates">Maler</a>
         <a href="/shifts/generate">Lag skift for semesteret</a>
