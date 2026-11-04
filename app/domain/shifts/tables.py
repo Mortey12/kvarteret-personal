@@ -225,7 +225,7 @@ shift_wishes = Table(
 )
 
 # What a person may do on shifts. Rows are per bar: a skiftleder or kokk row
-# is valid in its own group (see the HANDOFF decisions for the sibling rules).
+# is valid in its own group.
 # "training" rows count training shifts; "approved" rows are the qualification.
 volunteer_qualifications = Table(
     "volunteer_qualifications",
