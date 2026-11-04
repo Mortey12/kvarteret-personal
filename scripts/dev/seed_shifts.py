@@ -53,7 +53,7 @@ from app.domain.shifts.app_rules import STATUS_PUBLISHED, add_months, wish_windo
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 from seed_synthetic import FIRST_NAMES, LAST_NAMES
-from seed_target import CONFIRM_ENV, SeedRefused, check_database_target
+from seed_target import CONFIRM_ENV, SeedRefused, check_database_target, ensure_only_fake_people
 
 OSLO = ZoneInfo("Europe/Oslo")
 CHRISTMAS_BREAK_FROM = (12, 19)  # no shifts from this day to the end of the semester
@@ -222,6 +222,7 @@ async def seed_shifts(database_url: str) -> None:
 
     try:
         async with session_scope(runtime) as session:
+            await ensure_only_fake_people(session)
             if await session.scalar(select(shift_templates.c.id).limit(1)) is not None:
                 print("Shift data already seeded; skipping.")
                 return

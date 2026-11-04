@@ -34,12 +34,17 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from sqlalchemy import delete, func, insert, or_, select, update
+from sqlalchemy import delete, func, insert, select, update
 
 from app.auth.demo_login import DEMO_LEADER_EMAIL
 from app.auth.dev_auth import dev_auth_user_id
 from app.auth.roles import UserRole
-from seed_target import SeedRefused, check_database_target, database_host  # noqa: F401
+from seed_target import (  # noqa: F401
+    SeedRefused,
+    check_database_target,
+    database_host,
+    ensure_only_fake_people,
+)
 from app.config import Settings
 from app.db.session import build_database_runtime, session_scope
 from app.db.tables import (
@@ -86,21 +91,6 @@ DemoSeedRefused = SeedRefused  # the old name; tests and callers still use it
 
 # ------------------------------------------------------------------- safety
 # The host check (check_database_target) lives in seed_target.py, shared with the other seed scripts.
-
-
-async def ensure_only_fake_people(session) -> None:
-    """Refuse when any volunteer could be a real person: no email, or not @example.dev."""
-    email = func.lower(volunteer_records.c.email)
-    count = await session.scalar(
-        select(func.count())
-        .select_from(volunteer_records)
-        .where(or_(volunteer_records.c.email.is_(None), ~email.like(f"%{FAKE_DOMAIN}")))
-    )
-    if count:
-        raise DemoSeedRefused(
-            f"{count} volunteer(s) have no email or an email that does not end in {FAKE_DOMAIN}. "
-            "This script only runs on fake data."
-        )
 
 
 # --------------------------------------------------------------------- data

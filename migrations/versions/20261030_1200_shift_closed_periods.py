@@ -13,6 +13,15 @@ branch_labels = None
 depends_on = None
 
 
+def _lock_down(table_name: str) -> None:
+    """Row-level security on and no access for the public Supabase roles, like every other table
+    here. Postgres only: the roles exist in Supabase, and the unit tests run on SQLite."""
+    if op.get_bind().dialect.name != "postgresql":
+        return
+    op.execute(f"ALTER TABLE public.{table_name} ENABLE ROW LEVEL SECURITY")
+    op.execute(f"REVOKE ALL ON public.{table_name} FROM PUBLIC, anon, authenticated")
+
+
 def upgrade() -> None:
     op.create_table(
         "shift_closed_periods",
@@ -33,6 +42,7 @@ def upgrade() -> None:
         ["group_id"],
         schema="public",
     )
+    _lock_down("shift_closed_periods")
 
 
 def downgrade() -> None:

@@ -40,7 +40,7 @@ from app.db.tables import (
     volunteer_application_submissions,
     volunteer_records,
 )
-from seed_target import CONFIRM_ENV, SeedRefused, check_database_target
+from seed_target import CONFIRM_ENV, SeedRefused, check_database_target, ensure_only_fake_people
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 
@@ -135,6 +135,7 @@ async def seed(database_url: str) -> None:
 
     try:
         async with session_scope(runtime) as session:
+            await ensure_only_fake_people(session)
             existing = await session.scalar(select(groups.c.id).limit(1))
             if existing is not None:
                 print("Database already seeded; skipping (use make dev-reset to start over).")

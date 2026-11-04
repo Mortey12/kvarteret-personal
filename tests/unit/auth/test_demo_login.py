@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import BigInteger, Integer, insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.auth import demo_guard as demo_guard_module
 from app.auth.demo_guard import DemoDatabaseGuard
 from app.auth.demo_login import (
     DemoLoginRefused,
@@ -26,6 +27,12 @@ from app.domain.admin_accounts.tables import user_accounts
 from app.domain.mobile_card.errors import MobileCardInvalidAccessCodeError
 from app.domain.mobile_card.repository import MobileCardSnapshot
 from app.domain.mobile_card.service import MobileCardService
+from app.db.tables import (
+    email_deliveries,
+    volunteer_application_friend_invitations,
+    volunteer_application_invites,
+    volunteer_application_submissions,
+)
 from app.domain.volunteers.tables import volunteer_records
 from app.runtime import app_lifespan, check_demo_database
 
@@ -103,7 +110,14 @@ def test_a_twelve_character_code_is_accepted() -> None:
 
 @pytest.fixture
 async def runtime(monkeypatch):
-    tables = [volunteer_records, user_accounts]
+    tables = [
+        volunteer_records,
+        user_accounts,
+        volunteer_application_submissions,
+        volunteer_application_invites,
+        volunteer_application_friend_invitations,
+        email_deliveries,
+    ]
     for table in tables:
         for column in table.columns:
             if isinstance(column.type, BigInteger):
@@ -173,7 +187,7 @@ async def test_startup_refuses_a_database_with_a_real_email(runtime, add) -> Non
     await _add_volunteer(runtime, DEMO_EMAIL)
     await add(runtime)
     container = _container(runtime, _settings())
-    with pytest.raises(DemoLoginRefused, match="1 volunteer"):
+    with pytest.raises(DemoLoginRefused, match="1 stored email"):
         await check_demo_database(container)
     # The lifespan runs the same check, so the app does not start.
     app = SimpleNamespace(state=SimpleNamespace(container=container))
@@ -314,3 +328,75 @@ async def test_without_a_wired_guard_demo_login_stays_off() -> None:
     )
     with pytest.raises(MobileCardInvalidAccessCodeError):
         await service.create_session(DEMO_EMAIL, APP_CODE)
+
+
+# ----------------------------------------- more tables, and a pass that expires
+
+
+async def _add_invite(runtime, email: str) -> None:
+    async with session_scope(runtime) as db:
+        await db.execute(
+            insert(volunteer_application_invites).values(
+                token=uuid4().hex, email=email, source="web", status="open",
+                trial_shift_attended=False, created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        )
+
+
+async def _add_outgoing_email(runtime, email: str) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    async with session_scope(runtime) as db:
+        await db.execute(
+            insert(email_deliveries).values(
+                id=uuid4(),
+                template_key="t", template_version=1, recipient_email=email,
+                business_type="x", business_id="1", idempotency_key=uuid4().hex,
+                status="pending", next_attempt_at=now, created_at=now, updated_at=now,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "add",
+    [
+        lambda runtime: _add_invite(runtime, "applicant@gmail.test"),
+        lambda runtime: _add_outgoing_email(runtime, "someone@gmail.test"),
+    ],
+    ids=["application invite", "email outbox"],
+)
+async def test_a_real_address_in_any_checked_table_is_refused(runtime, add) -> None:
+    """The guard looks at every table that stores an email address, not only people and accounts."""
+    await _add_volunteer(runtime, DEMO_EMAIL)
+    await add(runtime)
+    with pytest.raises(DemoLoginRefused, match="1 stored email"):
+        await check_demo_database(_container(runtime, _settings()))
+
+
+async def test_fake_addresses_in_the_other_tables_are_fine(runtime) -> None:
+    await _add_invite(runtime, "applicant.1@example.dev")
+    await _add_outgoing_email(runtime, "demo.leder@example.dev")
+    container = _container(runtime, _settings())
+    await check_demo_database(container)
+    assert container.demo_guard._passed
+
+
+async def test_a_pass_is_trusted_for_a_minute_and_then_checked_again(runtime, monkeypatch) -> None:
+    now = [1000.0]
+    monkeypatch.setattr(demo_guard_module.time, "monotonic", lambda: now[0])
+    guard = DemoDatabaseGuard()
+    container = _container(runtime, _settings(), guard)
+    await check_demo_database(container)
+    assert guard._passed
+
+    # A real person arrives after startup (a public form is open on the demo host).
+    await _add_invite(runtime, "applicant@gmail.test")
+    now[0] += 30
+    async with session_scope(runtime):
+        await guard.ensure_only_fake_people()  # still inside the minute: trusted
+
+    now[0] += 31
+    assert not guard._passed
+    with pytest.raises(DemoLoginRefused, match="1 stored email"):
+        async with session_scope(runtime):
+            await guard.ensure_only_fake_people()
+    assert not guard._passed

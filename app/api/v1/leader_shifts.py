@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.api.v1.leader_write_guard import require_leader_write
 from app.auth.models import AuthenticatedUser
+from app.db.session import rollback_request_session
 from app.dependencies import get_shift_scope, get_shifts_service, require_management_user
 from app.domain.shifts.errors import ShiftForbiddenError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.leader_board import to_board
@@ -129,6 +130,8 @@ async def get_week(
 
 # ---- writes -----------------------------------------------------------------------------------
 
+NO_CHANGE = "Ingen endring"  # the service's own words for a request that asks for nothing new
+WRONG_WEEK = "Endringen hører ikke til denne uka og er ikke lagret. Last uka på nytt og prøv igjen."
 STALE_WEEK = "En annen leder har endret uka. Siden er oppdatert, prøv igjen."
 
 
@@ -203,6 +206,13 @@ async def _write(
     # The service puts its own hints after " Merk: "; the problems on the board say the same and more.
     message = message.partition(" Merk: ")[0].rstrip()
     after = await _board(service, scope, week=week_start, group_id=group_id)
+    if marks_change and after.version == before.version and not message.startswith(NO_CHANGE):
+        # The change ran, but the week the leader is looking at did not change: the place or
+        # person named in the request belongs to another bar or week. Undo it. This must be an
+        # explicit rollback: the request session commits on any normal response, and a
+        # deliberate 4xx from an endpoint is a normal response.
+        await rollback_request_session()
+        raise HTTPException(status.HTTP_409_CONFLICT, WRONG_WEEK)
     if message_for is not None:
         message = message_for(after)
     warnings = _problems_on(after, targets) if targets else []

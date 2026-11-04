@@ -22,4 +22,5 @@ def test_hosted_database_without_confirmation_is_refused(script: str) -> None:
     )
     assert done.returncode != 0
     assert "Refused" in done.stderr
-    assert "DEMO_SEED_CONFIRM=db.example.invalid" in done.stderr
+    assert "DEMO_SEED_CONFIRM=user@db.example.invalid:5432/kvarteret" in done.stderr
+    assert "secret" not in done.stderr

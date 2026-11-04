@@ -67,15 +67,17 @@ def test_local_hosts_need_no_confirmation() -> None:
         assert check_database_target(url, None) in {"localhost", "127.0.0.1"}
 
 
-def test_a_hosted_database_needs_the_exact_host_as_confirmation() -> None:
+def test_a_hosted_database_needs_the_whole_target_as_confirmation() -> None:
     url = "postgresql+asyncpg://demo:s3cret-pw@ep-demo-123.neon.example/demo?ssl=require"
-    with pytest.raises(DemoSeedRefused, match="DEMO_SEED_CONFIRM=ep-demo-123.neon.example") as refused:
+    target = "demo@ep-demo-123.neon.example/demo"
+    with pytest.raises(DemoSeedRefused, match=f"DEMO_SEED_CONFIRM={target}") as refused:
         check_database_target(url, None)
     assert "s3cret-pw" not in str(refused.value)
-    for wrong in ("", "yes", "true", "ep-demo-123", "EP-DEMO-123.neon.example", "localhost"):
+    # The host name alone, or anything near it, is not enough.
+    for wrong in ("", "yes", "true", "ep-demo-123.neon.example", "demo@ep-demo-123.neon.example", "localhost"):
         with pytest.raises(DemoSeedRefused):
             check_database_target(url, wrong)
-    assert check_database_target(url, "ep-demo-123.neon.example") == "ep-demo-123.neon.example"
+    assert check_database_target(url, target) == "ep-demo-123.neon.example"
 
 
 def test_a_url_without_a_host_is_refused() -> None:
@@ -91,7 +93,7 @@ async def test_seed_demo_refuses_a_non_local_url_before_it_connects() -> None:
         await seed_demo.seed_demo("postgresql+asyncpg://u:p@db.invalid/demo", env={})
     with pytest.raises(DemoSeedRefused):
         await seed_demo.seed_demo(
-            "postgresql+asyncpg://u:p@db.invalid/demo", env={"DEMO_SEED_CONFIRM": "other.invalid"}
+            "postgresql+asyncpg://u:p@db.invalid/demo", env={"DEMO_SEED_CONFIRM": "other@other.invalid/demo"}
         )
 
 

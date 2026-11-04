@@ -41,6 +41,15 @@ def _mondays_in_month(month: date) -> list[date]:
     return mondays
 
 
+def _lock_down(table_name: str) -> None:
+    """Row-level security on and no access for the public Supabase roles, like every other table
+    here. Postgres only: the roles exist in Supabase, and the unit tests run on SQLite."""
+    if op.get_bind().dialect.name != "postgresql":
+        return
+    op.execute(f"ALTER TABLE public.{table_name} ENABLE ROW LEVEL SECURITY")
+    op.execute(f"REVOKE ALL ON public.{table_name} FROM PUBLIC, anon, authenticated")
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     constraints: list[sa.CheckConstraint] = [
@@ -66,6 +75,7 @@ def upgrade() -> None:
         *constraints,
         schema="public",
     )
+    _lock_down("shift_week_status")
 
     months = bind.execute(
         sa.text("SELECT group_id, month, status FROM public.shift_month_status")
@@ -106,6 +116,7 @@ def downgrade() -> None:
         ),
         schema="public",
     )
+    _lock_down("shift_month_status")
     weeks = bind.execute(
         sa.text("SELECT group_id, week_start, status FROM public.shift_week_status")
     ).all()

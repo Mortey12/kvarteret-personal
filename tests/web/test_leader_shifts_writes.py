@@ -449,3 +449,62 @@ def test_plus_and_minus_cannot_reach_a_bar_outside_the_scope(monkeypatch, audit)
     assert w.send("POST", "/shifts/1/places", json={"kind": "skjenker"}, **{"If-Match": "x"}).status_code == 403
     assert w.send("DELETE", f"/slots/{SKJENKER_SLOT}/seat", **{"If-Match": "x"}).status_code == 403
     assert _counts(repo) == {"skiftleder": 1, "skjenker": 2}
+
+
+# ---- a change must land in the week the leader is looking at ------------------------------------
+
+
+def test_a_write_that_does_not_change_this_week_is_undone(writer, monkeypatch):
+    """The version check uses the week in the query; the ids in the body could belong to another bar.
+    If the write leaves this week's version unchanged, it went somewhere else: 409 and a rollback.
+
+    The request session commits on any normal response and a 4xx from an endpoint is one, so the
+    explicit rollback is what undoes the change in a real database (the in-memory repository here
+    cannot roll back, so the test checks that it is asked to)."""
+    w, repo = writer
+    rolled_back: list[bool] = []
+
+    async def fake_rollback() -> None:
+        rolled_back.append(True)
+
+    async def lands_elsewhere(self, **kwargs):  # the service "succeeds", this week stays the same
+        return "Satt inn."
+
+    monkeypatch.setattr("app.api.v1.leader_shifts.rollback_request_session", fake_rollback)
+    monkeypatch.setattr(ShiftsService, "assign", lands_elsewhere)
+    response = w.send("POST", "/placements", json={"slot_id": SKJENKER_SLOT, "volunteer_id": SANDER})
+    assert response.status_code == 409
+    assert "ikke lagret" in response.json()["detail"]
+    assert rolled_back == [True]
+
+
+def test_a_normal_write_is_not_rolled_back(writer, monkeypatch):
+    w, repo = writer
+    rolled_back: list[bool] = []
+
+    async def fake_rollback() -> None:
+        rolled_back.append(True)
+
+    monkeypatch.setattr("app.api.v1.leader_shifts.rollback_request_session", fake_rollback)
+    response = w.send("POST", "/placements", json={"slot_id": SKJENKER_SLOT, "volunteer_id": SANDER})
+    assert response.status_code == 200
+    assert repo.who(SKJENKER_SLOT) == [SANDER]
+    assert rolled_back == []
+
+
+def test_publishing_again_is_not_treated_as_a_misplaced_write(writer, monkeypatch):
+    """A status write can legitimately change nothing (two leaders publish at once)."""
+    w, repo = writer
+    rolled_back: list[bool] = []
+
+    async def fake_rollback() -> None:
+        rolled_back.append(True)
+
+    monkeypatch.setattr("app.api.v1.leader_shifts.rollback_request_session", fake_rollback)
+    url = f"{BASE}/weeks/2026-11-09/status"
+    version = lambda: w.client.get(f"{BASE}/weeks/2026-11-09", params={"group_id": 7}).json()["version"]  # noqa: E731
+    first = w.client.put(url, params={"group_id": 7}, json={"status": "published"}, headers={**w.headers(), "If-Match": version()})
+    assert first.status_code == 200
+    again = w.client.put(url, params={"group_id": 7}, json={"status": "published"}, headers={**w.headers(), "If-Match": version()})
+    assert again.status_code == 200
+    assert rolled_back == []
