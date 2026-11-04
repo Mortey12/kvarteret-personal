@@ -10,6 +10,7 @@ import pytest
 MIGRATIONS = [
     ("migrations.versions.20261029_1200_shift_week_status", ["shift_week_status", "shift_month_status"]),
     ("migrations.versions.20261030_1200_shift_closed_periods", ["shift_closed_periods"]),
+    ("migrations.versions.20261104_1200_shift_suggestions", ["shift_suggestions"]),
 ]
 
 

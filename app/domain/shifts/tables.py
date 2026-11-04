@@ -266,3 +266,28 @@ volunteer_qualifications = Table(
         name="volunteer_qualifications_status_valid",
     ),
 )
+
+# Pending suggestions for places ("Lag forslag for uka"). Kept apart from shift_assignments on
+# purpose: the volunteer app reads assignments, so a suggestion can never show there. A suggestion
+# becomes a real assignment only when a leader accepts it, through the normal rule checks, and
+# a week with suggestions left cannot be published. `why` is the "Valgt fordi" text.
+shift_suggestions = Table(
+    "shift_suggestions",
+    public_metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "slot_id",
+        BigInteger,
+        ForeignKey("public.shift_slots.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "volunteer_id",
+        BigInteger,
+        ForeignKey("public.volunteer_records.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("why", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint("slot_id", "volunteer_id", name="shift_suggestions_slot_volunteer_key"),
+)
