@@ -6,6 +6,8 @@ Dry run writes nothing, --apply writes, a second --apply adds nothing, and
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
@@ -91,6 +93,8 @@ async def test_dry_run_apply_and_a_second_apply(clean_database, e2e_engine) -> N
 async def test_apply_is_refused_without_confirmation(clean_database, e2e_engine) -> None:
     await _seed(e2e_engine)
 
-    assert copy.main(["--apply"], {"DATABASE_URL": E2E_DATABASE_URL}) == 2
-    assert copy.main(["--apply"], {"DATABASE_URL": E2E_DATABASE_URL, "COPY_CONFIRM": "other.invalid"}) == 2
+    # main() runs its own event loop, so call it from a worker thread.
+    assert await asyncio.to_thread(copy.main, ["--apply"], {"DATABASE_URL": E2E_DATABASE_URL}) == 2
+    refused_env = {"DATABASE_URL": E2E_DATABASE_URL, "COPY_CONFIRM": "other.invalid"}
+    assert await asyncio.to_thread(copy.main, ["--apply"], refused_env) == 2
     assert await _rows(e2e_engine) == []
