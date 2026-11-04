@@ -125,6 +125,6 @@ async def test_a_real_user_account_stops_the_seed(session) -> None:
 
 @pytest.mark.asyncio
 async def test_the_configured_dev_admin_is_allowed_whatever_the_address(session, monkeypatch) -> None:
-    monkeypatch.setenv("DEV_ADMIN_EMAIL", "Morten.Dev@Example.Test")
-    await _add_user(session, "morten.dev@example.test")
+    monkeypatch.setenv("DEV_ADMIN_EMAIL", "Dev.Admin@Example.Test")
+    await _add_user(session, "dev.admin@example.test")
     await ensure_only_fake_people(session)
