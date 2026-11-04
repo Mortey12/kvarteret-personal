@@ -35,11 +35,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from sqlalchemy import delete, func, insert, or_, select, update
-from sqlalchemy.engine import make_url
 
 from app.auth.demo_login import DEMO_LEADER_EMAIL
 from app.auth.dev_auth import dev_auth_user_id
 from app.auth.roles import UserRole
+from seed_target import SeedRefused, check_database_target, database_host  # noqa: F401
 from app.config import Settings
 from app.db.session import build_database_runtime, session_scope
 from app.db.tables import (
@@ -72,7 +72,6 @@ from seed_synthetic import FIRST_NAMES, LAST_NAMES
 
 OSLO = ZoneInfo("Europe/Oslo")
 FAKE_DOMAIN = "@example.dev"
-LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
 DEFAULT_URL = "postgresql+asyncpg://postgres:postgres@localhost:55432/kvarteret_personal_dev"
 TARGET_TOTAL = 100
 SKJENKE_GROUPS = ("Stjerne", "Kjøkken", "Grøndahls", "Halvtimen")
@@ -83,29 +82,10 @@ SWAP_MESSAGE = "Har eksamen, trenger bytte."
 ANSWERS = ("vil", "kan", "nei")
 
 
-class DemoSeedRefused(RuntimeError):
-    """A safety check failed; nothing was written."""
-
+DemoSeedRefused = SeedRefused  # the old name; tests and callers still use it
 
 # ------------------------------------------------------------------- safety
-
-
-def database_host(database_url: str) -> str | None:
-    return make_url(database_url).host
-
-
-def check_database_target(database_url: str, confirm: str | None) -> str:
-    """The host to seed, or a refusal. A hosted database needs DEMO_SEED_CONFIRM=<host>."""
-    host = database_host(database_url)
-    if not host:
-        raise DemoSeedRefused("DATABASE_URL has no host name, so it cannot be confirmed.")
-    if host in LOCAL_HOSTS:
-        return host
-    if confirm != host:
-        raise DemoSeedRefused(
-            f"{host} is not local. To seed this database on purpose, set DEMO_SEED_CONFIRM={host}."
-        )
-    return host
+# The host check (check_database_target) lives in seed_target.py, shared with the other seed scripts.
 
 
 async def ensure_only_fake_people(session) -> None:

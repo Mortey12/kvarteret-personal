@@ -53,6 +53,7 @@ from app.domain.shifts.app_rules import STATUS_PUBLISHED, add_months, wish_windo
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 from seed_synthetic import FIRST_NAMES, LAST_NAMES
+from seed_target import CONFIRM_ENV, SeedRefused, check_database_target
 
 OSLO = ZoneInfo("Europe/Oslo")
 CHRISTMAS_BREAK_FROM = (12, 19)  # no shifts from this day to the end of the semester
@@ -533,4 +534,8 @@ if __name__ == "__main__":
         "DEV_DATABASE_URL",
         "postgresql+asyncpg://postgres:postgres@localhost:55432/kvarteret_personal_dev",
     )
+    try:
+        check_database_target(url, os.environ.get(CONFIRM_ENV))
+    except SeedRefused as refusal:
+        raise SystemExit(f"Refused: {refusal}") from None
     asyncio.run(seed_shifts(url))

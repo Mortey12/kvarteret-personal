@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import insert, select
@@ -39,6 +40,7 @@ from app.db.tables import (
     volunteer_application_submissions,
     volunteer_records,
 )
+from seed_target import CONFIRM_ENV, SeedRefused, check_database_target
 from app.shared.semester import get_current_semester_code, get_previous_semester_code
 from app.shared.slugs import slugify
 
@@ -352,4 +354,8 @@ if __name__ == "__main__":
         "DEV_DATABASE_URL",
         "postgresql+asyncpg://postgres:postgres@localhost:55432/kvarteret_personal_dev",
     )
+    try:
+        check_database_target(url, os.environ.get(CONFIRM_ENV))
+    except SeedRefused as refusal:
+        raise SystemExit(f"Refused: {refusal}") from None
     asyncio.run(seed(url))

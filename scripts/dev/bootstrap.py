@@ -100,6 +100,12 @@ def load_snapshot() -> None:
 
 
 async def main() -> None:
+    from seed_target import CONFIRM_ENV, SeedRefused, check_database_target  # noqa: PLC0415
+
+    try:
+        check_database_target(DEV_DATABASE_URL, os.environ.get(CONFIRM_ENV))
+    except SeedRefused as refusal:
+        raise SystemExit(f"Refused: {refusal}") from None
     await wait_for_database()
     migrate()
 
