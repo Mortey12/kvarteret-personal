@@ -26,6 +26,7 @@ from app.domain.shifts.models import (
     ShiftRecord,
     ShiftWishes,
     SlotRecord,
+    SuggestionRecord,
     WeekBanner,
     WeekPlan,
     WeekStatusView,
@@ -107,6 +108,7 @@ class ShiftsServiceProtocol(Protocol):
 # Kinds "+" may add: the bars' skjenker and the kitchen's kokk. More roles are added here when decided.
 LEADER_ADDABLE_KINDS = ("skjenker", "kokk")
 ONE_SKIFTLEDER = "Et skift har én skiftleder. Den legges ikke til eller fjernes her."
+SUGGESTIONS_PENDING = "Uka har forslag som ikke er godtatt eller forkastet. Godta eller forkast dem før du publiserer."
 
 
 def _week_bounds(day: date) -> tuple[datetime, datetime]:
@@ -540,12 +542,66 @@ class ShiftsService:
         name = await self.repository.get_volunteer_name(assignment.volunteer_id) or "Personen"
         return PlacementResult(_message(f"{name} er flyttet til {self._describe(shift, slot)}.", warnings))
 
+    async def list_suggestions(self, group_id: int, week: date) -> list[SuggestionRecord]:
+        """The pending suggestions on one bar's week (the caller has checked the scope)."""
+        start, end = _week_bounds(monday_of(week))
+        return await self.repository.list_suggestions(group_id, start, end)
+
+    async def save_suggestions(
+        self, *, group_id: int, week: date, items: list[tuple[int, int, str]], scope: GroupScope
+    ) -> int:
+        """Replace the pending suggestions of a bar's week with ``items`` of (slot, volunteer, why).
+
+        What a suggestion engine (or any other source) calls. Only places that belong to this bar's
+        week are accepted, a place gets at most one suggestion per person, and nothing here places
+        anybody: the rules are checked when a leader accepts."""
+        name = await self.repository.get_group_name(group_id)
+        if name is None:
+            raise ShiftNotFoundError("Gruppen finnes ikke.")
+        scope.require(group_id, name)
+        start, end = _week_bounds(monday_of(week))
+        week_shifts = await self.repository.list_shifts_between(start, end, group_id)
+        slots = {slot.slot_id for shift in week_shifts for slot in shift.slots}
+        seen: set[tuple[int, int]] = set()
+        rows: list[tuple[int, int, str]] = []
+        for slot_id, volunteer_id, why in items:
+            if slot_id not in slots:
+                raise ShiftPlacementError("Plassen hører ikke til denne uka.")
+            if (slot_id, volunteer_id) in seen:
+                continue
+            seen.add((slot_id, volunteer_id))
+            rows.append((slot_id, volunteer_id, why.strip()[:500] or "Foreslått"))
+        await self._lock(*[shift.shift_id for shift in week_shifts])
+        await self.repository.replace_suggestions([shift.shift_id for shift in week_shifts], rows)
+        return len(rows)
+
+    async def discard_suggestions(self, *, group_id: int, week: date, scope: GroupScope) -> int:
+        """Throw away the pending suggestions of a bar's week. Returns how many there were."""
+        name = await self.repository.get_group_name(group_id)
+        if name is None:
+            raise ShiftNotFoundError("Gruppen finnes ikke.")
+        scope.require(group_id, name)
+        pending = await self.list_suggestions(group_id, week)
+        await self.repository.delete_suggestions([item.suggestion_id for item in pending])
+        return len(pending)
+
+    async def lock_week(self, group_id: int, week: date) -> None:
+        """Serialise writers to one bar's week (the leader app takes this before its version check)."""
+        await self.repository.lock_week(group_id, monday_of(week))
+
     async def remove(self, *, assignment_id: int, scope: GroupScope) -> PlacementResult:
         assignment = await self.repository.get_assignment(assignment_id)
         if assignment is None:
             raise ShiftNotFoundError("Tildelingen finnes ikke lenger. Oppdater siden.")
+        shift, _ = await self._load_slot(assignment.slot_id, scope)
+        await self._lock(shift.shift_id)
+        # Read again under the lock: a leader may have moved the person meanwhile.
+        assignment = await self.repository.get_assignment(assignment_id)
+        if assignment is None:
+            raise ShiftNotFoundError("Tildelingen finnes ikke lenger. Oppdater siden.")
         shift, slot = await self._load_slot(assignment.slot_id, scope)
-        await self.repository.remove_assignment(assignment_id)
+        if not await self.repository.remove_assignment_from_slot(assignment_id, assignment.slot_id):
+            raise ShiftNotFoundError("Plassen er endret. Oppdater siden.")
         name = await self.repository.get_volunteer_name(assignment.volunteer_id) or "Personen"
         return PlacementResult(f"{name} er tatt av {self._describe(shift, slot)}. Plassen er ledig igjen.")
 
@@ -636,6 +692,10 @@ class ShiftsService:
         scope.require(group_id, name)
         monday = monday_of(week)
         weeks = mondays_in_month(monday) if whole_month else [monday]
+        if status == "published":
+            for item in weeks:
+                if await self.list_suggestions(group_id, item):
+                    raise ShiftPlacementError(SUGGESTIONS_PENDING)
         await self.repository.set_week_statuses(group_id, weeks, status)
         label = PERIOD_STATUSES[status][0].lower()
         if whole_month:

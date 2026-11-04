@@ -143,6 +143,17 @@ class AssignmentRef:
 
 
 @dataclass(slots=True)
+class SuggestionRecord:
+    """A pending suggestion: ``volunteer_id`` for the place ``slot_id`` of shift ``shift_id``."""
+
+    suggestion_id: int
+    slot_id: int
+    shift_id: int
+    volunteer_id: int
+    why: str
+
+
+@dataclass(slots=True)
 class PlacementResult:
     message: str
 

@@ -43,6 +43,7 @@ _SOURCE_LABEL = {
     "personalplattformen": "Personalplattformen",
     "internbevis-rn": "internbevis-appen",
     "nettside": "kvarteret.no",
+    "skiftlista": "Skiftlista (lederappen)",
 }
 
 

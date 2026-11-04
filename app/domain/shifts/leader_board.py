@@ -21,6 +21,7 @@ from app.domain.shifts.leader_models import (
     Person,
     Place,
     Shift,
+    Suggestion,
     WeekBoard,
     WeekRow,
     WeekStripItem,
@@ -94,8 +95,14 @@ def to_board(
     times: dict[int, tuple[datetime, datetime]] | None = None,
     week_minutes: dict[int, int] | None = None,
     changes: dict[date, tuple[datetime, str]] | None = None,
+    suggestions=None,
 ) -> WeekBoard:
-    """``changes``: Monday -> (when, by whom) for published weeks changed after publishing."""
+    """``changes``: Monday -> (when, by whom) for published weeks changed after publishing.
+    ``suggestions``: the pending ``SuggestionRecord``s of the week; each is drawn on the next truly
+    empty place of its slot (a suggestion never fills a "kan ikke i dag" place)."""
+    pending: dict[int, list] = {}
+    for record in suggestions or []:
+        pending.setdefault(record.slot_id, []).append(record)
     changes = changes or {}
     times = times or {}
     week_minutes = week_minutes or {}
@@ -112,7 +119,11 @@ def to_board(
             for place in _one_box_per_seat(cell.places):
                 seat = seats.get(place.slot_id, 0)
                 seats[place.slot_id] = seat + 1
-                places.append(_place(place, seat, closed=cell.is_closed))
+                box = _place(place, seat, closed=cell.is_closed)
+                if box.assignment is None and pending.get(box.slot_id):
+                    record = pending[box.slot_id].pop(0)
+                    box.suggestion = Suggestion(volunteer_id=record.volunteer_id, why=record.why)
+                places.append(box)
             start, end = times.get(cell.shift_id, (None, None))
             shifts.append(
                 Shift(

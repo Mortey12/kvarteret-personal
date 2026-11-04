@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, insert, select, text, update
 
 from app.db.repository import SqlAlchemyRepository
 from app.domain.admin_accounts.tables import group_admin_memberships
@@ -24,6 +24,7 @@ from app.domain.shifts.models import (
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
+    SuggestionRecord,
 )
 from app.domain.shifts.tables import (
     shift_assignments,
@@ -31,6 +32,7 @@ from app.domain.shifts.tables import (
     shift_template_slots,
     shift_group_settings,
     shift_slots,
+    shift_suggestions,
     shift_templates,
     shift_availability_rules,
     shift_week_status,
@@ -585,6 +587,76 @@ class ShiftsRepository(SqlAlchemyRepository):
 
     async def remove_assignment(self, assignment_id: int) -> None:
         await self.execute(delete(shift_assignments).where(shift_assignments.c.id == assignment_id))
+
+    # ---- pending suggestions (apart from assignments, never visible in the volunteer app)
+
+    async def list_suggestions(
+        self, group_id: int, starts_from: datetime, starts_before: datetime
+    ) -> list[SuggestionRecord]:
+        """The pending suggestions on one bar's shifts that start in the range, oldest first."""
+        rows = await self.fetch_all_mappings(
+            select(
+                shift_suggestions.c.id,
+                shift_suggestions.c.slot_id,
+                shift_slots.c.shift_id,
+                shift_suggestions.c.volunteer_id,
+                shift_suggestions.c.why,
+            )
+            .select_from(
+                shift_suggestions.join(shift_slots, shift_slots.c.id == shift_suggestions.c.slot_id).join(
+                    shifts, shifts.c.id == shift_slots.c.shift_id
+                )
+            )
+            .where(
+                shifts.c.group_id == group_id,
+                shifts.c.starts_at >= starts_from,
+                shifts.c.starts_at < starts_before,
+            )
+            .order_by(shift_suggestions.c.id.asc())
+        )
+        return [
+            SuggestionRecord(row["id"], row["slot_id"], row["shift_id"], row["volunteer_id"], row["why"])
+            for row in rows
+        ]
+
+    async def replace_suggestions(
+        self, shift_ids: list[int], rows: list[tuple[int, int, str]]
+    ) -> None:
+        """Replace every pending suggestion on these shifts with ``rows`` of (slot, volunteer, why)."""
+        if shift_ids:
+            slot_ids = select(shift_slots.c.id).where(shift_slots.c.shift_id.in_(shift_ids))
+            await self.execute(delete(shift_suggestions).where(shift_suggestions.c.slot_id.in_(slot_ids)))
+        if rows:
+            await self.execute(
+                insert(shift_suggestions),
+                [{"slot_id": slot, "volunteer_id": who, "why": why} for slot, who, why in rows],
+            )
+
+    async def delete_suggestions(self, suggestion_ids: list[int]) -> None:
+        if suggestion_ids:
+            await self.execute(delete(shift_suggestions).where(shift_suggestions.c.id.in_(suggestion_ids)))
+
+    async def remove_assignment_from_slot(self, assignment_id: int, slot_id: int) -> bool:
+        """Delete the person only while they still stand on this place (False: someone moved them)."""
+        result = await self.session.execute(
+            delete(shift_assignments).where(
+                shift_assignments.c.id == assignment_id, shift_assignments.c.slot_id == slot_id
+            )
+        )
+        return result.rowcount == 1
+
+    async def lock_week(self, group_id: int, week: date) -> None:
+        """Hold one bar's week until commit, so two leaders' writes to it run one after the other.
+
+        A Postgres advisory lock on the bar and week. It is taken before the leader app compares
+        ``If-Match``, so the second writer reads the first one's result and gets a 409. Other
+        databases (the SQLite tests) are single-writer already."""
+        if self.session.get_bind().dialect.name != "postgresql":
+            return
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"skiftlista-week:{group_id}:{week.isoformat()}"},
+        )
 
     async def set_slot_count(self, slot_id: int, count: int) -> None:
         await self.execute(update(shift_slots).where(shift_slots.c.id == slot_id).values(count=count))

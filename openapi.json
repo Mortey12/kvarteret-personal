@@ -3544,6 +3544,78 @@
         "title": "PlaceRequest",
         "type": "object"
       },
+      "ProblemReportRequest": {
+        "additionalProperties": false,
+        "description": "\"Meld feil\" in the leader app. Free text from the leader, plus where they were.",
+        "properties": {
+          "app_version": {
+            "default": "unknown",
+            "maxLength": 40,
+            "pattern": "^[A-Za-z0-9_. -]*$",
+            "title": "App Version",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "live",
+            "enum": [
+              "live",
+              "fake"
+            ],
+            "title": "Data Source",
+            "type": "string"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "message": {
+            "maxLength": 1500,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "week_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Start"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ProblemReportRequest",
+        "type": "object"
+      },
+      "ProblemReportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ProblemReportResult",
+        "type": "object"
+      },
       "PublicVolunteerProspectResponse": {
         "additionalProperties": false,
         "properties": {
@@ -6585,6 +6657,88 @@
         ]
       }
     },
+    "/api/v1/leader/shifts/problem-reports": {
+      "post": {
+        "description": "\"Meld feil\": becomes a bug issue in the same triage as the other apps' feedback.\n\nThe issue carries who sent it (the account id, not a name), where they were (bar and week) and\nthe environment, so a report from a rehearsal server is easy to tell from a real one. Nothing\nelse from the board is added: the leader's own text is the only free text, and the app tells\nthem not to write names in it. If reports are not configured here (no Linear key) the answer is\n503, so nobody believes it was sent.",
+        "operationId": "reportLeaderShiftsProblem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemReportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The text is empty or too long."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many reports."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Reports are not set up on this server."
+          }
+        },
+        "summary": "Report Problem",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
     "/api/v1/leader/shifts/shifts/{shift_id}/places": {
       "post": {
         "description": "One more place of a kind on a shift (\"+\"). Refused on a closed shift and above 20 of a kind.",
@@ -6913,6 +7067,104 @@
         ]
       }
     },
+    "/api/v1/leader/shifts/weeks/{week_start}/copy-previous": {
+      "post": {
+        "description": "Fill the EMPTY places of this week with last week's people on the same places.\n\nAll or nothing. Nobody is removed or replaced. People who answered \"kan ikke\", who have left the\ngroup, or whom a rule refuses (never forced) are skipped and listed in `warnings`.",
+        "operationId": "copyLeaderShiftsPreviousWeek",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Copy Previous",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
     "/api/v1/leader/shifts/weeks/{week_start}/status": {
       "put": {
         "description": "Publish the week, or make it a draft again (only a coming week can be reopened).",
@@ -7016,6 +7268,300 @@
           }
         },
         "summary": "Set Week Status",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/suggestions": {
+      "post": {
+        "description": "\"Lag forslag for uka\": suggestions for the empty places, from the wishes, the rules and\nfairness over the semester. Replaces the pending ones. Nobody is placed and volunteers see\nnothing; a leader accepts or discards (`/suggestions/accept`, `/suggestions/discard`).",
+        "operationId": "suggestLeaderShiftsWeek",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggest Week",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/suggestions/accept": {
+      "post": {
+        "description": "\"Godta forslag\": the pending suggestions become real placements, each through the normal\nrules. What a rule refuses is skipped and listed in `warnings`. All or nothing.",
+        "operationId": "acceptLeaderShiftsSuggestions",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Week Suggestions",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/suggestions/discard": {
+      "post": {
+        "description": "\"Forkast forslag\": throw the pending suggestions away. Nobody is placed, so a published week\nis not marked as changed.",
+        "operationId": "discardLeaderShiftsSuggestions",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Week Suggestions",
         "tags": [
           "leader-shifts"
         ]

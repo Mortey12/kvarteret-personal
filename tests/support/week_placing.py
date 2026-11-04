@@ -18,6 +18,7 @@ from app.domain.shifts.models import (
     ShiftGroupOption,
     ShiftRecord,
     SlotRecord,
+    SuggestionRecord,
 )
 
 TUESDAY = date(2026, 11, 3)
@@ -62,6 +63,8 @@ class PlacingRepository:
         self.events: list[tuple] = []
         self.admin_group_ids = [7]
         self.member_reads = 0
+        self.suggestions: list[SuggestionRecord] = []
+        self._suggestion_id = 0
         self.statuses: dict[tuple[int, date], str] = {}
         self.changes: dict[tuple[int, date], tuple[datetime, str]] = {}
 
@@ -81,6 +84,12 @@ class PlacingRepository:
     def who(self, slot_id: int) -> list[int]:
         slot = next(x for s in self.shifts.values() for x in s.slots if x.slot_id == slot_id)
         return [p.volunteer_id for p in slot.people]
+
+    def suggest(self, slot_id: int, volunteer_id: int, why: str = "Valgt fordi han vil") -> int:
+        self._suggestion_id += 1
+        shift = self.shift_of(slot_id)
+        self.suggestions.append(SuggestionRecord(self._suggestion_id, slot_id, shift.shift_id, volunteer_id, why))
+        return self._suggestion_id
 
     # ---- the repository
     async def list_shift_groups(self):
@@ -190,6 +199,32 @@ class PlacingRepository:
         for shift in self.shifts.values():
             for slot in shift.slots:
                 slot.people = [p for p in slot.people if p.assignment_id != ref.assignment_id]
+
+    async def remove_assignment_from_slot(self, assignment_id, slot_id):
+        ref = self.assignments.get(assignment_id)
+        if ref is None or ref.slot_id != slot_id:
+            return False
+        await self.remove_assignment(assignment_id)
+        return True
+
+    async def list_suggestions(self, group_id, starts_from, starts_before):
+        found = []
+        for record in self.suggestions:
+            shift = self.shifts.get(record.shift_id)
+            if shift and shift.group_id == group_id and starts_from <= shift.starts_at < starts_before:
+                found.append(record)
+        return sorted(found, key=lambda r: r.suggestion_id)
+
+    async def replace_suggestions(self, shift_ids, rows):
+        self.suggestions = [r for r in self.suggestions if r.shift_id not in shift_ids]
+        for slot_id, volunteer_id, why in rows:
+            self.suggest(slot_id, volunteer_id, why)
+
+    async def delete_suggestions(self, suggestion_ids):
+        self.suggestions = [r for r in self.suggestions if r.suggestion_id not in suggestion_ids]
+
+    async def lock_week(self, group_id, week):
+        self.events.append(("lock_week", group_id, week))
 
     async def move_assignment(self, assignment_id, slot_id):
         self.events.append(("move", assignment_id, slot_id))

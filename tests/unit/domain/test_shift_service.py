@@ -208,6 +208,19 @@ class FakeRepository:
     async def remove_assignment(self, assignment_id: int) -> None:
         self.removed.append(assignment_id)
 
+    async def remove_assignment_from_slot(self, assignment_id: int, slot_id: int) -> bool:
+        ref = self.assignments.get(assignment_id)
+        if ref is None or ref.slot_id != slot_id:
+            return False
+        self.removed.append(assignment_id)
+        return True
+
+    async def list_suggestions(self, group_id, starts_from, starts_before):
+        return []
+
+    async def lock_week(self, group_id: int, week) -> None:
+        self.events.append(("lock_week", group_id, week))
+
     async def lock_shift(self, shift_id: int) -> None:
         self.events.append(("lock", shift_id))
 

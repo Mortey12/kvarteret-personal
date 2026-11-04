@@ -23,7 +23,19 @@ from pydantic import BaseModel, ConfigDict
 from app.api.v1.leader_write_guard import require_leader_write
 from app.auth.models import AuthenticatedUser
 from app.db.session import rollback_request_session
-from app.dependencies import get_shift_scope, get_shifts_service, require_management_user
+from app.dependencies import (
+    get_feedback_service,
+    get_settings,
+    get_shift_scope,
+    get_shifts_service,
+    require_management_user,
+)
+from app.domain.feedback.service import (
+    FeedbackDeliveryError,
+    FeedbackRateLimitedError,
+    FeedbackService,
+    FeedbackValidationError,
+)
 from app.domain.shifts.errors import ShiftForbiddenError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.leader_board import to_board
 from app.domain.shifts.leader_models import (
@@ -33,6 +45,8 @@ from app.domain.shifts.leader_models import (
     MoveRequest,
     Note,
     PlaceRequest,
+    ProblemReportRequest,
+    ProblemReportResult,
     ReplaceRequest,
     StatusRequest,
     SwapRequest,
@@ -42,11 +56,19 @@ from app.domain.shifts.leader_models import (
 from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.service import ShiftsService
 from app.domain.shifts.week_page import load_week_page
-from app.domain.shifts.week_placing import remove_from_place, replace_person, swap_people
+from app.domain.shifts.suggesting import generate_suggestions
+from app.domain.shifts.week_placing import (
+    accept_suggestions,
+    copy_previous_week,
+    remove_from_place,
+    replace_person,
+    swap_people,
+)
 from app.errors import NotConfiguredError
-from app.observability import log_admin_activity
+from app.observability import get_logger, log_admin_activity
 
 router = APIRouter()
+logger = get_logger("app.api.leader_shifts")
 
 NO_STORE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 
@@ -104,7 +126,10 @@ async def _board(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Du har ingen barer å planlegge skift for.")
     weeks = [item.week_start for item in page.view.strip]
     changes = await service.week_changes(page.view.bar_id, [page.view.week_start, *weeks])
-    return to_board(page.view, times=page.times, week_minutes=page.week_minutes, changes=changes)
+    suggestions = await service.list_suggestions(page.view.bar_id, page.view.week_start)
+    return to_board(
+        page.view, times=page.times, week_minutes=page.week_minutes, changes=changes, suggestions=suggestions
+    )
 
 
 @router.get(
@@ -179,6 +204,7 @@ async def _write(
     targets=None,
     message_for=None,
     marks_change: bool = True,
+    warnings_for=None,
 ) -> JSONResponse:
     """The steps every write shares: the week must be the one the leader saw (else 409), the change
     runs under the service's own locks and rules, the audit log is written, and the answer is the
@@ -187,6 +213,10 @@ async def _write(
     ``message_for(board)`` replaces the service's sentence where the leader app words it differently.
     A change to an explicitly published week is flagged "changed after publishing" with the leader's
     name (``marks_change`` is off for the status write itself, which publishes or reopens)."""
+    # Writers to one bar's week go one at a time, and the version is compared only after the
+    # lock is ours: the second of two leaders reads what the first did and gets the 409.
+    # The lock lasts until the request commits.
+    await service.lock_week(group_id, week_start)
     before = await _board(service, scope, week=week_start, group_id=group_id)
     if before.version != if_match:
         raise HTTPException(status.HTTP_409_CONFLICT, STALE_WEEK)
@@ -196,15 +226,16 @@ async def _write(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except (ShiftNotFoundError, ShiftPlacementError) as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    if marks_change:
+    message = result if isinstance(result, str) else result.message
+    # The service puts its own hints after " Merk: "; the problems on the board say the same and more.
+    message = message.partition(" Merk: ")[0].rstrip()
+    # A request that changed nothing leaves a published week as it was.
+    if marks_change and not message.startswith(NO_CHANGE):
         await service.mark_week_changed(group_id, week_start, user.display_name or user.username)
     log_admin_activity(
         request=request, user=user, action=action, subject_type=subject_type, subject_id=subject_id,
         details=details,
     )
-    message = result if isinstance(result, str) else result.message
-    # The service puts its own hints after " Merk: "; the problems on the board say the same and more.
-    message = message.partition(" Merk: ")[0].rstrip()
     after = await _board(service, scope, week=week_start, group_id=group_id)
     if marks_change and after.version == before.version and not message.startswith(NO_CHANGE):
         # The change ran, but the week the leader is looking at did not change: the place or
@@ -215,7 +246,7 @@ async def _write(
         raise HTTPException(status.HTTP_409_CONFLICT, WRONG_WEEK)
     if message_for is not None:
         message = message_for(after)
-    warnings = _problems_on(after, targets) if targets else []
+    warnings = warnings_for(after) if warnings_for else (_problems_on(after, targets) if targets else [])
     body = WriteResult(message=message, warnings=warnings, board=after)
     return JSONResponse(content=body.model_dump(mode="json"), headers=NO_STORE)
 
@@ -468,3 +499,226 @@ async def set_week_status(
             + ("publisert. Folk ser skiftene sine i appen nå." if board.status == "published" else "åpen for ønsker.")
         ),
     )
+
+
+@router.post(
+    "/weeks/{week_start}/copy-previous",
+    response_model=WriteResult,
+    operation_id="copyLeaderShiftsPreviousWeek",
+    dependencies=[Depends(require_leader_write)],
+    responses=_WRITE_ERRORS,
+)
+async def copy_previous(
+    request: Request,
+    week_start: Annotated[date, Path(description="Any day in the week; the Monday is used.")],
+    group_id: GroupId,
+    if_match: IfMatch,
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+) -> JSONResponse:
+    """Fill the EMPTY places of this week with last week's people on the same places.
+
+    All or nothing. Nobody is removed or replaced. People who answered "kan ikke", who have left the
+    group, or whom a rule refuses (never forced) are skipped and listed in `warnings`."""
+    outcome = {}
+
+    async def run():
+        try:
+            result = await copy_previous_week(shifts_service, group_id=group_id, week=week_start, scope=scope)
+        except Exception:
+            # A deliberate 4xx commits what was written before it; nothing may stay half-copied.
+            await rollback_request_session()
+            raise
+        outcome["result"] = result
+        return result.message
+
+    def warnings(_board):
+        result = outcome["result"]
+        return [Note(text=t, level="yellow") for t in [*result.skipped, *result.notes]]
+
+    return await _write(
+        request, shifts_service, scope, current_user,
+        group_id=group_id, week_start=week_start, if_match=if_match,
+        action="shift.copy_week", subject_type="shift_group", subject_id=group_id,
+        details={"week": week_start.isoformat(), "via": "leader-app"},
+        run=run, warnings_for=warnings,
+    )
+
+
+@router.post(
+    "/weeks/{week_start}/suggestions",
+    response_model=WriteResult,
+    operation_id="suggestLeaderShiftsWeek",
+    dependencies=[Depends(require_leader_write)],
+    responses=_WRITE_ERRORS,
+)
+async def suggest_week(
+    request: Request,
+    week_start: Annotated[date, Path(description="Any day in the week; the Monday is used.")],
+    group_id: GroupId,
+    if_match: IfMatch,
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+) -> JSONResponse:
+    """"Lag forslag for uka": suggestions for the empty places, from the wishes, the rules and
+    fairness over the semester. Replaces the pending ones. Nobody is placed and volunteers see
+    nothing; a leader accepts or discards (`/suggestions/accept`, `/suggestions/discard`)."""
+    outcome = {}
+
+    async def run():
+        try:
+            result = await generate_suggestions(shifts_service, group_id=group_id, week=week_start, scope=scope)
+        except Exception:
+            await rollback_request_session()
+            raise
+        outcome["result"] = result
+        return result.message
+
+    def warnings(_board):
+        return [Note(text=text, level="yellow") for text in outcome["result"].notes]
+
+    return await _write(
+        request, shifts_service, scope, current_user,
+        group_id=group_id, week_start=week_start, if_match=if_match,
+        action="shift.suggestions_generate", subject_type="shift_group", subject_id=group_id,
+        details={"week": week_start.isoformat(), "via": "leader-app"},
+        run=run, marks_change=False, warnings_for=warnings,
+    )
+
+
+@router.post(
+    "/weeks/{week_start}/suggestions/accept",
+    response_model=WriteResult,
+    operation_id="acceptLeaderShiftsSuggestions",
+    dependencies=[Depends(require_leader_write)],
+    responses=_WRITE_ERRORS,
+)
+async def accept_week_suggestions(
+    request: Request,
+    week_start: Annotated[date, Path(description="Any day in the week; the Monday is used.")],
+    group_id: GroupId,
+    if_match: IfMatch,
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+) -> JSONResponse:
+    """"Godta forslag": the pending suggestions become real placements, each through the normal
+    rules. What a rule refuses is skipped and listed in `warnings`. All or nothing."""
+    outcome = {}
+
+    async def run():
+        try:
+            result = await accept_suggestions(shifts_service, group_id=group_id, week=week_start, scope=scope)
+        except Exception:
+            await rollback_request_session()
+            raise
+        outcome["result"] = result
+        return result.message
+
+    def warnings(_board):
+        result = outcome["result"]
+        return [Note(text=t, level="yellow") for t in [*result.skipped, *result.notes]]
+
+    return await _write(
+        request, shifts_service, scope, current_user,
+        group_id=group_id, week_start=week_start, if_match=if_match,
+        action="shift.suggestions_accept", subject_type="shift_group", subject_id=group_id,
+        details={"week": week_start.isoformat(), "via": "leader-app"},
+        run=run, warnings_for=warnings,
+    )
+
+
+@router.post(
+    "/weeks/{week_start}/suggestions/discard",
+    response_model=WriteResult,
+    operation_id="discardLeaderShiftsSuggestions",
+    dependencies=[Depends(require_leader_write)],
+    responses=_WRITE_ERRORS,
+)
+async def discard_week_suggestions(
+    request: Request,
+    week_start: Annotated[date, Path(description="Any day in the week; the Monday is used.")],
+    group_id: GroupId,
+    if_match: IfMatch,
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    shifts_service: ShiftsService = Depends(get_shifts_service),
+) -> JSONResponse:
+    """"Forkast forslag": throw the pending suggestions away. Nobody is placed, so a published week
+    is not marked as changed."""
+    async def run():
+        count = await shifts_service.discard_suggestions(group_id=group_id, week=week_start, scope=scope)
+        return f"Forkastet {count} forslag." if count else "Ingen endring. Det er ingen forslag å forkaste."
+
+    return await _write(
+        request, shifts_service, scope, current_user,
+        group_id=group_id, week_start=week_start, if_match=if_match,
+        action="shift.suggestions_discard", subject_type="shift_group", subject_id=group_id,
+        details={"week": week_start.isoformat(), "via": "leader-app"},
+        run=run, marks_change=False,
+    )
+
+
+REPORT_NOT_SENT = "Feilmeldingen ble ikke sendt. Si fra til etjenesten på en annen måte."
+
+
+@router.post(
+    "/problem-reports",
+    response_model=ProblemReportResult,
+    operation_id="reportLeaderShiftsProblem",
+    dependencies=[Depends(require_leader_write)],
+    responses={
+        **_ERRORS,
+        422: {"model": ErrorResponse, "description": "The text is empty or too long."},
+        429: {"model": ErrorResponse, "description": "Too many reports."},
+        503: {"model": ErrorResponse, "description": "Reports are not set up on this server."},
+    },
+)
+async def report_problem(
+    body: Annotated[ProblemReportRequest, Body()],
+    current_user: AuthenticatedUser = Depends(require_management_user),
+    scope: GroupScope = Depends(get_shift_scope),
+    feedback: FeedbackService = Depends(get_feedback_service),
+    settings=Depends(get_settings),
+) -> JSONResponse:
+    """"Meld feil": becomes a bug issue in the same triage as the other apps' feedback.
+
+    The issue carries who sent it (the account id, not a name), where they were (bar and week) and
+    the environment, so a report from a rehearsal server is easy to tell from a real one. Nothing
+    else from the board is added: the leader's own text is the only free text, and the app tells
+    them not to write names in it. If reports are not configured here (no Linear key) the answer is
+    503, so nobody believes it was sent."""
+    if body.group_id is not None and not scope.allows(body.group_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Du har ikke tilgang til denne gruppa.")
+    environment = settings.app_env or "ukjent"
+    where = f"bar {body.group_id}" if body.group_id is not None else "ingen bar valgt"
+    if body.week_start is not None:
+        where += f", uke fra {body.week_start.isoformat()}"
+    account = current_user.user_account_id
+    try:
+        await feedback.submit_feedback(
+            feedback_type="bug",
+            name=None,
+            email=None,
+            message=f"[Skiftlista, {environment}, {body.data_source}] {body.message}",
+            page=f"Skiftlista, {where}",
+            platform=f"skiftlista-app {body.app_version} ({environment})",
+            user_id=account,
+            source="skiftlista",
+            source_key=f"leader:{account or 'unknown'}",
+        )
+    except FeedbackRateLimitedError as exc:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Du har sendt mange meldinger. Vent litt.") from exc
+    except FeedbackValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except FeedbackDeliveryError as exc:
+        # Metadata only: the leader's text is not logged.
+        logger.warning(
+            "leader.problem_report.undelivered",
+            extra={"environment": environment, "group_id": body.group_id, "data_source": body.data_source},
+        )
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, REPORT_NOT_SENT) from exc
+    body_out = ProblemReportResult(message="Takk! Feilmeldingen er sendt til etjenesten.")
+    return JSONResponse(content=body_out.model_dump(mode="json"), headers=NO_STORE)

@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from datetime import date
+
+from pydantic import BaseModel, ConfigDict, Field
 
 Answer = Literal["vil", "kan", "nei"]
 AnswerStatus = Literal["ikke_svart", "paabegynt", "ferdig"]
@@ -204,3 +206,18 @@ class WriteResult(_Model):
     # The placed person's problems on the refreshed board, worded by the server.
     warnings: list[Note]
     board: WeekBoard
+
+
+class ProblemReportRequest(_Model):
+    """"Meld feil" in the leader app. Free text from the leader, plus where they were."""
+
+    message: str = Field(min_length=1, max_length=1500)
+    group_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
+    week_start: date | None = None
+    # The app's own build label, plain characters only (it is shown in the issue).
+    app_version: str = Field(default="unknown", max_length=40, pattern=r"^[A-Za-z0-9_. -]*$")
+    data_source: Literal["live", "fake"] = "live"
+
+
+class ProblemReportResult(_Model):
+    message: str
