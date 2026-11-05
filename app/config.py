@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # Origins (scheme and host, no path) that may send cookie-authenticated writes to the
     # leader API from a browser, comma separated. Empty means no leader app may write.
     leader_app_origins: str = Field(default="")
+    # E-mail addresses (comma separated) of the few who may add or remove completions of
+    # Skjenkekurs, Kokkekurs and Skiftlederkurs by hand. Empty: nobody; the courses are registered
+    # when a leader approves a finished training in Skiftlista.
+    training_course_editors: str = Field(default="")
     website_base_url: str = Field(default="https://www.samfunnetibergen.no")
     # One key signs every website -> Personal request; the previous key is
     # accepted during zero-downtime rotation.

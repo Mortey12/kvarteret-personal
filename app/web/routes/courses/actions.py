@@ -5,7 +5,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 
-from app.dependencies import get_courses_service, require_management_user
+from app.dependencies import get_courses_service, get_settings, require_management_user
 from app.domain.courses.service import (
     CourseCompletionNotFoundError,
     CourseDeleteBlockedError,
@@ -13,9 +13,20 @@ from app.domain.courses.service import (
     DuplicateCourseCompletionError,
     InvalidCourseCompletionError,
 )
+from app.domain.courses.training_courses import LOCKED_TEXT, is_training_course, may_edit_training_course
 from app.web.route_helpers import blocked_http_exception, log_and_redirect
 
 router = APIRouter()
+
+
+async def _require_course_editable(course_id: int, user, courses_service: CoursesService, settings) -> None:
+    """Skjenkekurs, Kokkekurs and Skiftlederkurs are not edited by every admin: only the few named
+    in TRAINING_COURSE_EDITORS can, because the courses are registered by approving a training."""
+    course = await courses_service.get_course_detail(course_id)
+    if course is None or not is_training_course(course.name):
+        return
+    if not may_edit_training_course(getattr(user, "email", None), settings.training_course_editors):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=LOCKED_TEXT)
 
 
 @router.post("/courses")
@@ -25,6 +36,7 @@ async def courses_create(
     description: str | None = Form(default=None),
     current_user=Depends(require_management_user),
     courses_service: CoursesService = Depends(get_courses_service),
+    settings=Depends(get_settings),
 ):
     course_id = await courses_service.create_course(name=name, description=description)
     return log_and_redirect(
@@ -45,7 +57,9 @@ async def courses_update(
     description: str | None = Form(default=None),
     current_user=Depends(require_management_user),
     courses_service: CoursesService = Depends(get_courses_service),
+    settings=Depends(get_settings),
 ):
+    await _require_course_editable(course_id, current_user, courses_service, settings)
     updated = await courses_service.update_course(
         course_id, name=name, description=description
     )
@@ -69,7 +83,9 @@ async def courses_delete(
     course_id: int,
     current_user=Depends(require_management_user),
     courses_service: CoursesService = Depends(get_courses_service),
+    settings=Depends(get_settings),
 ):
+    await _require_course_editable(course_id, current_user, courses_service, settings)
     try:
         deleted = await courses_service.delete_course(course_id)
     except CourseDeleteBlockedError as exc:
@@ -97,7 +113,9 @@ async def courses_add_completion(
     term: int = Form(...),
     current_user=Depends(require_management_user),
     courses_service: CoursesService = Depends(get_courses_service),
+    settings=Depends(get_settings),
 ):
+    await _require_course_editable(course_id, current_user, courses_service, settings)
     try:
         created_count = await courses_service.create_course_completions(
             course_id=course_id,
@@ -135,7 +153,9 @@ async def courses_delete_completion(
     completion_id: int,
     current_user=Depends(require_management_user),
     courses_service: CoursesService = Depends(get_courses_service),
+    settings=Depends(get_settings),
 ):
+    await _require_course_editable(course_id, current_user, courses_service, settings)
     try:
         await courses_service.delete_course_completion(
             course_id=course_id, completion_id=completion_id
