@@ -28,6 +28,7 @@ dependencies = [
     "starlette>=1.0.1",
     "posthog>=7.0,<8",
     "opentelemetry-instrumentation-sqlalchemy>=0.65b0",
+    "ortools>=9.15.6755",
 ]
 
 [dependency-groups]
