@@ -64,6 +64,10 @@ class PlacingRepository:
         self.admin_group_ids = [7]
         self.member_reads = 0
         self.suggestions: list[SuggestionRecord] = []
+        self.training_targets: dict[tuple[int, str, int], int] = {}
+        # The courses of the qualifications exist; Brannkurs is for everyone and is never touched.
+        self.courses_by_name: dict[str, int] = {"Skjenkekurs": 41, "Skiftlederkurs": 42, "Brannkurs": 43}
+        self.completed_courses: dict[int, set[int]] = {}
         self._suggestion_id = 0
         self.statuses: dict[tuple[int, date], str] = {}
         self.changes: dict[tuple[int, date], tuple[datetime, str]] = {}
@@ -136,6 +140,50 @@ class PlacingRepository:
     async def list_qualifications(self, volunteer_ids):
         return [QualificationRecord(v, q, st, g, None, False, None, None)
                 for v, q, st, g in self.qualifications if v in volunteer_ids]
+
+    async def list_group_qualifications(self, group_ids):
+        started = datetime(2026, 10, 1, tzinfo=UTC)
+        return [QualificationRecord(v, q, st, g, self.training_targets.get((v, q, g)), False, None, None, started)
+                for v, q, st, g in self.qualifications if g in group_ids]
+
+    async def list_attended(self, group_id, volunteer_ids, since):
+        found = {}
+        for shift in self.shifts.values():
+            if shift.group_id != group_id or shift.starts_at < since:
+                continue
+            for slot in shift.slots:
+                for person in slot.people:
+                    if person.volunteer_id in volunteer_ids and not person.cannot_attend:
+                        found.setdefault(person.volunteer_id, []).append((shift.starts_at, shift.ends_at))
+        return found
+
+    async def list_courses_by_name(self, names):
+        return {name: self.courses_by_name[name] for name in names if name in self.courses_by_name}
+
+    async def list_completed_courses(self, volunteer_ids, course_ids):
+        return {v: {c for c in self.completed_courses.get(v, set()) if c in course_ids} for v in volunteer_ids}
+
+    async def add_course_completion(self, volunteer_id, course_id, semester):
+        self.completed_courses.setdefault(volunteer_id, set()).add(course_id)
+        self.events.append(("course", volunteer_id, course_id, semester))
+
+    async def start_training(self, volunteer_id, qualification, group_id):
+        self.qualifications.append((volunteer_id, qualification, "training", group_id))
+
+    async def set_training_target(self, volunteer_id, qualification, group_id, target):
+        self.training_targets[(volunteer_id, qualification, group_id)] = target
+
+    async def approve_training(self, volunteer_id, qualification, group_id, approved_by, now):
+        self.qualifications = [
+            (v, q, "approved" if (v, q, g) == (volunteer_id, qualification, group_id) else st, g)
+            for v, q, st, g in self.qualifications
+        ]
+
+    async def stop_training(self, volunteer_id, qualification, group_id):
+        self.qualifications = [
+            row for row in self.qualifications
+            if not (row[0] == volunteer_id and row[1] == qualification and row[3] == group_id and row[2] == "training")
+        ]
 
     async def get_qualification_settings(self, group_ids):
         return {gid: QualificationSettings() for gid in group_ids}

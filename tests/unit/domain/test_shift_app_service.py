@@ -6,6 +6,8 @@ Made-up people only. The clock is fixed to Monday 2 November 2026,
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -850,6 +852,8 @@ async def test_qualification_reads_return_rows_per_person_and_per_group(world: W
 
     assert await repository.list_qualifications([]) == []
     sander = await repository.list_qualifications([SANDER])
+    assert all(row.created_at is not None for row in sander)  # when the row was made
+    sander = [replace(row, created_at=None) for row in sander]
     assert sander == [
         QualificationRecord(
             volunteer_id=SANDER,
@@ -1158,3 +1162,57 @@ async def test_the_semester_follows_the_services_own_clock(world: World) -> None
     )
     assert (await world.service.shifts.eligibility_for(SANDER)).person.member_groups == {STJERNE}
     assert set((await world.service._person_or_none(SANDER)).roles_by_group) == {STJERNE}
+
+
+@pytest.mark.asyncio
+async def test_training_on_the_person_is_stored_counted_approved_and_stopped(world: World) -> None:
+    """The leader app's training calls against a real (SQLite) database: a qualification row with
+    status "training" per person and bar, shifts counted from the assignments, then approved."""
+    from app.domain.shifts.repository import ShiftsRepository
+
+    repository = ShiftsRepository()
+    await world.session.execute(delete(volunteer_qualifications))
+    await repository.start_training(OLA, "skjenker", STJERNE)
+
+    rows = await repository.list_group_qualifications([STJERNE])
+    assert [(r.volunteer_id, r.qualification, r.status) for r in rows] == [(OLA, "skjenker", "training")]
+    assert rows[0].created_at is not None
+
+    # Ola works a shift in Stjerne; it counts as attended, a "kan ikke i dag" one does not.
+    await world.place("tue", "skjenker", OLA)
+    since = datetime(2000, 1, 1, tzinfo=UTC)
+    attended = await repository.list_attended(STJERNE, [OLA, SANDER], since)
+    assert list(attended) == [OLA] and len(attended[OLA]) == 1
+    assert await repository.list_attended(HALVTIMEN, [OLA], since) == {}
+    assert await repository.list_attended(STJERNE, [], since) == {}
+
+    await repository.set_training_target(OLA, "skjenker", STJERNE, 4)
+    assert (await repository.list_group_qualifications([STJERNE]))[0].training_target == 4
+
+    await repository.approve_training(OLA, "skjenker", STJERNE, None, datetime(2026, 11, 5, tzinfo=UTC))
+    approved = (await repository.list_group_qualifications([STJERNE]))[0]
+    assert (approved.status, approved.approved_at is not None) == ("approved", True)
+
+    # Stopping only removes a row that is still in training, never an approved qualification.
+    await repository.stop_training(OLA, "skjenker", STJERNE)
+    assert len(await repository.list_group_qualifications([STJERNE])) == 1
+    await repository.start_training(TORA, "kokk", STJERNE)
+    await repository.stop_training(TORA, "kokk", STJERNE)
+    assert [r.volunteer_id for r in await repository.list_group_qualifications([STJERNE])] == [OLA]
+
+
+@pytest.mark.asyncio
+async def test_courses_by_name_and_completions_for_the_approval_step(world: World) -> None:
+    from app.domain.shifts.repository import ShiftsRepository
+
+    repository = ShiftsRepository()
+
+    # Matched without regard to case; names that do not exist are left out.
+    assert await repository.list_courses_by_name(["brannkurs", "Kokkekurs"]) == {"brannkurs": BRANN}
+    assert await repository.list_courses_by_name([]) == {}
+
+    before = await repository.list_completed_courses([OLA], [BRANN])
+    await repository.add_course_completion(OLA, BRANN, 20262)
+    after = await repository.list_completed_courses([OLA], [BRANN])
+    assert BRANN not in before.get(OLA, set()) and after == {OLA: {BRANN}}
+    assert await repository.list_completed_courses([], [BRANN]) == {}

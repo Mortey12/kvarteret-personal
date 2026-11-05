@@ -46,6 +46,7 @@ from app.domain.shifts.leader_models import (
     Note,
     PlaceRequest,
     ProblemReportRequest,
+    TrainingRequest,
     ProblemReportResult,
     ReplaceRequest,
     StatusRequest,
@@ -57,6 +58,13 @@ from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.service import ShiftsService
 from app.domain.shifts.week_page import load_week_page
 from app.domain.shifts.suggesting import generate_suggestions
+from app.domain.shifts.training_service import (
+    approve_training,
+    extend_training,
+    start_training,
+    stop_training,
+    training_views,
+)
 from app.domain.shifts.week_placing import (
     accept_suggestions,
     copy_previous_week,
@@ -127,8 +135,14 @@ async def _board(
     weeks = [item.week_start for item in page.view.strip]
     changes = await service.week_changes(page.view.bar_id, [page.view.week_start, *weeks])
     suggestions = await service.list_suggestions(page.view.bar_id, page.view.week_start)
+    trainings = await training_views(service, page.view.bar_id)
     return to_board(
-        page.view, times=page.times, week_minutes=page.week_minutes, changes=changes, suggestions=suggestions
+        page.view,
+        times=page.times,
+        week_minutes=page.week_minutes,
+        changes=changes,
+        suggestions=suggestions,
+        trainings=trainings,
     )
 
 
@@ -659,6 +673,63 @@ async def discard_week_suggestions(
         details={"week": week_start.isoformat(), "via": "leader-app"},
         run=run, marks_change=False,
     )
+
+def _training_endpoint(name: str, action: str, doer, summary: str):
+    """One write on a person's training. Same guards as every leader write: Origin, CSRF, the
+    week's version, the week lock, the audit trail."""
+
+    @router.post(
+        f"/weeks/{{week_start}}/training/{name}",
+        response_model=WriteResult,
+        operation_id=f"{name}LeaderShiftsTraining",
+        dependencies=[Depends(require_leader_write)],
+        responses=_WRITE_ERRORS,
+        summary=summary,
+    )
+    async def endpoint(
+        request: Request,
+        week_start: Annotated[date, Path(description="Any day in the week; the Monday is used.")],
+        group_id: GroupId,
+        if_match: IfMatch,
+        body: TrainingRequest,
+        current_user: AuthenticatedUser = Depends(require_management_user),
+        scope: GroupScope = Depends(get_shift_scope),
+        shifts_service: ShiftsService = Depends(get_shifts_service),
+    ) -> JSONResponse:
+        async def run():
+            try:
+                return await doer(
+                    shifts_service,
+                    group_id=group_id,
+                    volunteer_id=body.volunteer_id,
+                    qualification=body.qualification,
+                    scope=scope,
+                    **(
+                        {"approved_by": current_user.auth_user_id, "register_courses": body.register_courses}
+                        if name == "approve"
+                        else {}
+                    ),
+                )
+            except Exception:
+                await rollback_request_session()
+                raise
+
+        return await _write(
+            request, shifts_service, scope, current_user,
+            group_id=group_id, week_start=week_start, if_match=if_match,
+            action=action, subject_type="volunteer", subject_id=body.volunteer_id,
+            details={"week": week_start.isoformat(), "qualification": body.qualification, "via": "leader-app"},
+            run=run, marks_change=False,
+        )
+
+    return endpoint
+
+
+start_training_endpoint = _training_endpoint("start", "shift.training_start", start_training, "Put a person in training")
+approve_training_endpoint = _training_endpoint("approve", "shift.training_approve", approve_training, "Approve a finished training")
+extend_training_endpoint = _training_endpoint("extend", "shift.training_extend", extend_training, "Give a trainee one more shift")
+stop_training_endpoint = _training_endpoint("stop", "shift.training_stop", stop_training, "Take a person out of training")
+
 
 
 REPORT_NOT_SENT = "Feilmeldingen ble ikke sendt. Si fra til etjenesten på en annen måte."

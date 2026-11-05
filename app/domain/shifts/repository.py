@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, insert, select, text, update
 
 from app.db.repository import SqlAlchemyRepository
 from app.domain.admin_accounts.tables import group_admin_memberships
-from app.domain.courses.tables import courses
+from app.domain.courses.tables import course_completions, courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.planning import OSLO
@@ -421,6 +421,7 @@ class ShiftsRepository(SqlAlchemyRepository):
                 takes_trainees=row["takes_trainees"],
                 approved_by=row["approved_by"],
                 approved_at=row["approved_at"],
+                created_at=row["created_at"],
             )
             for row in rows
         ]
@@ -644,6 +645,113 @@ class ShiftsRepository(SqlAlchemyRepository):
             )
         )
         return result.rowcount == 1
+
+    # ---- training kept on the person: a qualification row with status "training"
+
+    async def list_attended(
+        self, group_id: int, volunteer_ids: list[int], since: datetime
+    ) -> dict[int, list[tuple[datetime, datetime]]]:
+        """(starts_at, ends_at) of each shift in this bar the people were on, from ``since`` on,
+        without the ones they said "kan ikke i dag" for."""
+        if not volunteer_ids:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(shift_assignments.c.volunteer_id, shifts.c.starts_at, shifts.c.ends_at)
+            .select_from(
+                shift_assignments.join(shift_slots, shift_slots.c.id == shift_assignments.c.slot_id).join(
+                    shifts, shifts.c.id == shift_slots.c.shift_id
+                )
+            )
+            .where(
+                shifts.c.group_id == group_id,
+                shifts.c.starts_at >= since,
+                shift_assignments.c.volunteer_id.in_(volunteer_ids),
+                shift_assignments.c.cannot_attend.is_(False),
+            )
+        )
+        found: dict[int, list[tuple[datetime, datetime]]] = {}
+        for row in rows:
+            found.setdefault(row["volunteer_id"], []).append(
+                (require_datetime(row["starts_at"]), require_datetime(row["ends_at"]))
+            )
+        return found
+
+    async def list_courses_by_name(self, names: list[str]) -> dict[str, int]:
+        """Course id by name (matched without regard to case), for the names that exist."""
+        if not names:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(courses.c.id, courses.c.name).where(func.lower(courses.c.name).in_([n.lower() for n in names]))
+        )
+        by_lower = {row["name"].lower(): row["id"] for row in rows}
+        return {name: by_lower[name.lower()] for name in names if name.lower() in by_lower}
+
+    async def list_completed_courses(
+        self, volunteer_ids: list[int], course_ids: list[int]
+    ) -> dict[int, set[int]]:
+        """Volunteer id -> the course ids they have completed (in any semester)."""
+        if not volunteer_ids or not course_ids:
+            return {}
+        rows = await self.fetch_all_mappings(
+            select(course_completions.c.volunteer_id, course_completions.c.course_id).where(
+                course_completions.c.volunteer_id.in_(volunteer_ids),
+                course_completions.c.course_id.in_(course_ids),
+            )
+        )
+        found: dict[int, set[int]] = {}
+        for row in rows:
+            found.setdefault(row["volunteer_id"], set()).add(row["course_id"])
+        return found
+
+    async def add_course_completion(self, volunteer_id: int, course_id: int, semester: int) -> None:
+        await self.execute(
+            insert(course_completions).values(
+                volunteer_id=volunteer_id, course_id=course_id, completed_semester=semester
+            )
+        )
+
+    def _training_row(self, volunteer_id: int, qualification: str, group_id: int):
+        return (
+            volunteer_qualifications.c.volunteer_id == volunteer_id,
+            volunteer_qualifications.c.qualification == qualification,
+            volunteer_qualifications.c.group_id == group_id,
+        )
+
+    async def start_training(self, volunteer_id: int, qualification: str, group_id: int) -> None:
+        await self.execute(
+            insert(volunteer_qualifications).values(
+                volunteer_id=volunteer_id,
+                qualification=qualification,
+                status="training",
+                group_id=group_id,
+            )
+        )
+
+    async def set_training_target(
+        self, volunteer_id: int, qualification: str, group_id: int, target: int
+    ) -> None:
+        await self.execute(
+            update(volunteer_qualifications)
+            .where(*self._training_row(volunteer_id, qualification, group_id), volunteer_qualifications.c.status == "training")
+            .values(training_target=target)
+        )
+
+    async def approve_training(
+        self, volunteer_id: int, qualification: str, group_id: int, approved_by, now: datetime
+    ) -> None:
+        await self.execute(
+            update(volunteer_qualifications)
+            .where(*self._training_row(volunteer_id, qualification, group_id), volunteer_qualifications.c.status == "training")
+            .values(status="approved", approved_by=approved_by, approved_at=now)
+        )
+
+    async def stop_training(self, volunteer_id: int, qualification: str, group_id: int) -> None:
+        await self.execute(
+            delete(volunteer_qualifications).where(
+                *self._training_row(volunteer_id, qualification, group_id),
+                volunteer_qualifications.c.status == "training",
+            )
+        )
 
     async def lock_week(self, group_id: int, week: date) -> None:
         """Hold one bar's week until commit, so two leaders' writes to it run one after the other.

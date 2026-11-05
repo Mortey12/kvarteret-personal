@@ -51,7 +51,7 @@ class Assignment(_Model):
     volunteer_id: int
     cannot_attend: bool
     swap_requested: bool
-    # "opplæring 2/3" once the training counter exists, else null.
+    # "opplæring 2/3": which training shift this is, when the person is in training; else null.
     training: str | None = None
     # The person's problems on this place, worded by the server.
     problems: list[Note]
@@ -98,6 +98,22 @@ class Shift(_Model):
     answers: dict[str, Answer]
 
 
+class PersonTraining(_Model):
+    """A person in training in this bar. Kept on the person, counted from finished shifts."""
+
+    qualification: Literal["skjenker", "kokk", "skiftleder"]
+    kind: Literal["normal", "skiftleder"]
+    done: int
+    required: int
+    # Enough shifts are done: a leader approves, or gives one more shift.
+    ready: bool
+    # "opplæring 2/3".
+    text: str
+    # Courses required of this bar's members that the person has not completed. Approving can
+    # register them as completed at the same time.
+    courses_pending: list[str] = []
+
+
 class Person(_Model):
     volunteer_id: int
     name: str
@@ -112,6 +128,8 @@ class Person(_Model):
     note: str | None = None
     max_shifts: int | None = None
     tags: list[str]
+    # In training in this bar (normal and/or skiftleder); empty when not.
+    training: list[PersonTraining] = []
 
 
 class FitOk(_Model):
@@ -206,6 +224,15 @@ class WriteResult(_Model):
     # The placed person's problems on the refreshed board, worded by the server.
     warnings: list[Note]
     board: WeekBoard
+
+
+class TrainingRequest(_Model):
+    """Put someone in training, or act on their training (approve, extend, stop)."""
+
+    volunteer_id: int = Field(ge=1, le=2_147_483_647)
+    qualification: Literal["skjenker", "kokk", "skiftleder"]
+    # Only used when approving: also register the required courses as completed this semester.
+    register_courses: bool = True
 
 
 class ProblemReportRequest(_Model):

@@ -3375,6 +3375,14 @@
             "title": "Tags",
             "type": "array"
           },
+          "training": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PersonTraining"
+            },
+            "title": "Training",
+            "type": "array"
+          },
           "volunteer_id": {
             "title": "Volunteer Id",
             "type": "integer"
@@ -3400,6 +3408,63 @@
           "tags"
         ],
         "title": "Person",
+        "type": "object"
+      },
+      "PersonTraining": {
+        "additionalProperties": false,
+        "description": "A person in training in this bar. Kept on the person, counted from finished shifts.",
+        "properties": {
+          "courses_pending": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Courses Pending",
+            "type": "array"
+          },
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "normal",
+              "skiftleder"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "qualification": {
+            "enum": [
+              "skjenker",
+              "kokk",
+              "skiftleder"
+            ],
+            "title": "Qualification",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "required": {
+            "title": "Required",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "qualification",
+          "kind",
+          "done",
+          "required",
+          "ready",
+          "text"
+        ],
+        "title": "PersonTraining",
         "type": "object"
       },
       "Place": {
@@ -4449,6 +4514,38 @@
           "assignment_b"
         ],
         "title": "SwapRequest",
+        "type": "object"
+      },
+      "TrainingRequest": {
+        "additionalProperties": false,
+        "description": "Put someone in training, or act on their training (approve, extend, stop).",
+        "properties": {
+          "qualification": {
+            "enum": [
+              "skjenker",
+              "kokk",
+              "skiftleder"
+            ],
+            "title": "Qualification",
+            "type": "string"
+          },
+          "register_courses": {
+            "default": true,
+            "title": "Register Courses",
+            "type": "boolean"
+          },
+          "volunteer_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Volunteer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "volunteer_id",
+          "qualification"
+        ],
+        "title": "TrainingRequest",
         "type": "object"
       },
       "UserRole": {
@@ -7562,6 +7659,434 @@
           }
         },
         "summary": "Discard Week Suggestions",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/training/approve": {
+      "post": {
+        "operationId": "approveLeaderShiftsTraining",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve a finished training",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/training/extend": {
+      "post": {
+        "operationId": "extendLeaderShiftsTraining",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Give a trainee one more shift",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/training/start": {
+      "post": {
+        "operationId": "startLeaderShiftsTraining",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put a person in training",
+        "tags": [
+          "leader-shifts"
+        ]
+      }
+    },
+    "/api/v1/leader/shifts/weeks/{week_start}/training/stop": {
+      "post": {
+        "operationId": "stopLeaderShiftsTraining",
+        "parameters": [
+          {
+            "description": "Any day in the week; the Monday is used.",
+            "in": "path",
+            "name": "week_start",
+            "required": true,
+            "schema": {
+              "description": "Any day in the week; the Monday is used.",
+              "format": "date",
+              "title": "Week Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The bar the leader is looking at.",
+            "in": "query",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "description": "The bar the leader is looking at.",
+              "title": "Group Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `version` of the board the leader saw.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "The `version` of the board the leader saw.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Admin or Gruppeadmin, or the bar is outside the scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A rule refuses this, or the week changed; show detail as is."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Take a person out of training",
         "tags": [
           "leader-shifts"
         ]

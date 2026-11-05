@@ -124,6 +124,8 @@ class QualificationRecord:
     takes_trainees: bool
     approved_by: UUID | None
     approved_at: datetime | None
+    # When the row was made; for a training row this is when training started.
+    created_at: datetime | None = None
 
 
 @dataclass(slots=True)

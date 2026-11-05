@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+
+from app.domain.shifts.models import QualificationSettings
 from unittest.mock import AsyncMock
 
 import pytest
@@ -27,7 +29,13 @@ BARS = [
 def setup(monkeypatch):
     app = create_app()
     service = SimpleNamespace(
-        repository=SimpleNamespace(list_shift_groups=AsyncMock(return_value=BARS)),
+        repository=SimpleNamespace(
+            list_shift_groups=AsyncMock(return_value=BARS),
+            list_group_qualifications=AsyncMock(return_value=[]),
+            get_qualification_settings=AsyncMock(
+                side_effect=lambda ids: {i: QualificationSettings() for i in ids}
+            ),
+        ),
         week_changes=AsyncMock(return_value={}),
         list_suggestions=AsyncMock(return_value=[]),
     )
