@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # Origins (scheme and host, no path) that may send cookie-authenticated writes to the
     # leader API from a browser, comma separated. Empty means no leader app may write.
     leader_app_origins: str = Field(default="")
+    # Which engine "Lag forslag for uka" uses: "simple" (plain Python, the default) or "cpsat"
+    # (Google OR-Tools; falls back to simple when the solver is missing or times out).
+    suggest_engine: Literal["simple", "cpsat"] = Field(default="simple")
     website_base_url: str = Field(default="https://www.samfunnetibergen.no")
     # One key signs every website -> Personal request; the previous key is
     # accepted during zero-downtime rotation.

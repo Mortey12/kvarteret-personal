@@ -561,6 +561,7 @@ async def suggest_week(
     current_user: AuthenticatedUser = Depends(require_management_user),
     scope: GroupScope = Depends(get_shift_scope),
     shifts_service: ShiftsService = Depends(get_shifts_service),
+    settings=Depends(get_settings),
 ) -> JSONResponse:
     """"Lag forslag for uka": suggestions for the empty places, from the wishes, the rules and
     fairness over the semester. Replaces the pending ones. Nobody is placed and volunteers see
@@ -569,7 +570,13 @@ async def suggest_week(
 
     async def run():
         try:
-            result = await generate_suggestions(shifts_service, group_id=group_id, week=week_start, scope=scope)
+            result = await generate_suggestions(
+                shifts_service,
+                group_id=group_id,
+                week=week_start,
+                scope=scope,
+                engine=settings.suggest_engine,
+            )
         except Exception:
             await rollback_request_session()
             raise

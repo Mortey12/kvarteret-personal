@@ -215,6 +215,12 @@ def suggest(data: SuggestInput) -> SuggestOutput:
         if not changed:
             break
 
+    return _finish(state, order)
+
+
+def _finish(state: _State, order: list[PlaceSpec]) -> SuggestOutput:
+    """Turn the holders in ``state`` into picks with a reason, the unfilled places and the idle people."""
+    data = state.data
     picks = [
         Pick(place.slot_id, state.holder[place.key], _why(state, place))
         for place in sorted(data.places, key=lambda p: (p.starts_at, p.slot_id, p.seat))

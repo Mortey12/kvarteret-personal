@@ -14,7 +14,8 @@ from app.domain.shifts.errors import ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.permissions import GroupScope
 from app.domain.shifts.planning import monday_of, open_places
 from app.domain.shifts.service import ShiftsService, _week_bounds
-from app.domain.shifts.suggest import PersonSpec, PlaceSpec, SuggestInput, suggest
+from app.domain.shifts.suggest import PersonSpec, PlaceSpec, SuggestInput
+from app.domain.shifts.suggest_cpsat import suggest_best
 from app.shared.semester import (
     get_current_semester_code,
     get_previous_semester_code,
@@ -34,7 +35,12 @@ class SuggestResult:
 
 
 async def generate_suggestions(
-    service: ShiftsService, *, group_id: int, week: date, scope: GroupScope
+    service: ShiftsService,
+    *,
+    group_id: int,
+    week: date,
+    scope: GroupScope,
+    engine: str = "simple",
 ) -> SuggestResult:
     """Replace the pending suggestions of a bar's week with a fresh set. Never touches placements."""
     repository = service.repository
@@ -152,7 +158,7 @@ async def generate_suggestions(
         )
         for volunteer_id in member_ids
     )
-    output = suggest(
+    output = suggest_best(
         SuggestInput(
             places=tuple(places),
             people=people,
@@ -162,7 +168,8 @@ async def generate_suggestions(
                 if value in ("vil", "kan", "nei")
             },
             allowed=frozenset(allowed),
-        )
+        ),
+        engine,
     )
 
     saved = await service.save_suggestions(
