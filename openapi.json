@@ -263,6 +263,28 @@
         "title": "Body_courses_create_courses_post",
         "type": "object"
       },
+      "Body_courses_training_settings_courses__course_id__training_settings_post": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "qualification": {
+            "default": "",
+            "title": "Qualification",
+            "type": "string"
+          }
+        },
+        "title": "Body_courses_training_settings_courses__course_id__training_settings_post",
+        "type": "object"
+      },
       "Body_courses_update_courses__course_id__patch": {
         "properties": {
           "description": {
@@ -764,6 +786,68 @@
           "role"
         ],
         "title": "Body_my_account_update_my_account_patch",
+        "type": "object"
+      },
+      "Body_qualification_types_add_shifts_qualifications_post": {
+        "properties": {
+          "group_id": {
+            "default": "",
+            "title": "Group Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "style": {
+            "title": "Style",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "style"
+        ],
+        "title": "Body_qualification_types_add_shifts_qualifications_post",
+        "type": "object"
+      },
+      "Body_qualification_types_update_shifts_qualifications__type_id__post": {
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "group_id": {
+            "default": "",
+            "title": "Group Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "style": {
+            "title": "Style",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "style"
+        ],
+        "title": "Body_qualification_types_update_shifts_qualifications__type_id__post",
         "type": "object"
       },
       "Body_request_app_login_code_login_app_code_post": {
@@ -3434,12 +3518,12 @@
             "title": "Kind",
             "type": "string"
           },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
           "qualification": {
-            "enum": [
-              "skjenker",
-              "kokk",
-              "skiftleder"
-            ],
             "title": "Qualification",
             "type": "string"
           },
@@ -4521,11 +4605,8 @@
         "description": "Put someone in training, or act on their training (approve, extend, stop).",
         "properties": {
           "qualification": {
-            "enum": [
-              "skjenker",
-              "kokk",
-              "skiftleder"
-            ],
+            "maxLength": 30,
+            "minLength": 1,
             "title": "Qualification",
             "type": "string"
           },
@@ -4546,6 +4627,35 @@
           "qualification"
         ],
         "title": "TrainingRequest",
+        "type": "object"
+      },
+      "TrainingType": {
+        "additionalProperties": false,
+        "description": "A qualification a leader can put someone in training for, in this bar.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "style": {
+            "enum": [
+              "normal",
+              "skiftleder"
+            ],
+            "title": "Style",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "style"
+        ],
+        "title": "TrainingType",
         "type": "object"
       },
       "UserRole": {
@@ -4696,6 +4806,14 @@
               "$ref": "#/components/schemas/WeekStripItem"
             },
             "title": "Strip",
+            "type": "array"
+          },
+          "training_types": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TrainingType"
+            },
+            "title": "Training Types",
             "type": "array"
           },
           "version": {
@@ -10671,6 +10789,53 @@
         "summary": "Courses Delete Completion"
       }
     },
+    "/courses/{course_id}/training-settings": {
+      "post": {
+        "description": "On or off: is this course registered by approving a finished training in Skiftlista, and for\nwhich qualification. Only the named editors can change it; for every other course it stays off.",
+        "operationId": "courses_training_settings_courses__course_id__training_settings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "course_id",
+            "required": true,
+            "schema": {
+              "title": "Course Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_courses_training_settings_courses__course_id__training_settings_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Courses Training Settings"
+      }
+    },
     "/feedback": {
       "post": {
         "operationId": "feedback_submit_feedback_post",
@@ -12594,6 +12759,147 @@
           }
         },
         "summary": "Shift Generate"
+      }
+    },
+    "/shifts/qualifications": {
+      "get": {
+        "operationId": "qualification_types_page_shifts_qualifications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "notice",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notice"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Qualification Types Page"
+      },
+      "post": {
+        "operationId": "qualification_types_add_shifts_qualifications_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_qualification_types_add_shifts_qualifications_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Qualification Types Add"
+      }
+    },
+    "/shifts/qualifications/{type_id}": {
+      "post": {
+        "operationId": "qualification_types_update_shifts_qualifications__type_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "type_id",
+            "required": true,
+            "schema": {
+              "title": "Type Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_qualification_types_update_shifts_qualifications__type_id__post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Qualification Types Update"
       }
     },
     "/shifts/settings": {

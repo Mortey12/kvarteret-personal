@@ -11,6 +11,7 @@ from app.domain.courses.tables import course_completions, courses
 from app.domain.groups.tables import groups
 from app.domain.role_assignments.tables import assignment_roles, role_assignments
 from app.domain.shifts.planning import OSLO
+from app.domain.shifts.qualification_types import QualificationType
 from app.domain.shifts.models import (
     ClosedPeriod,
     PlannedShift,
@@ -32,6 +33,7 @@ from app.domain.shifts.tables import (
     shift_template_slots,
     shift_group_settings,
     shift_slots,
+    qualification_types,
     shift_suggestions,
     shift_templates,
     shift_availability_rules,
@@ -676,15 +678,54 @@ class ShiftsRepository(SqlAlchemyRepository):
             )
         return found
 
-    async def list_courses_by_name(self, names: list[str]) -> dict[str, int]:
-        """Course id by name (matched without regard to case), for the names that exist."""
-        if not names:
-            return {}
-        rows = await self.fetch_all_mappings(
-            select(courses.c.id, courses.c.name).where(func.lower(courses.c.name).in_([n.lower() for n in names]))
+    # ---- the qualification types a leader can train for (see ``qualification_types.py``)
+
+    @staticmethod
+    def _qualification_type(row) -> QualificationType:
+        return QualificationType(
+            type_id=row["id"],
+            key=row["key"],
+            label=row["label"],
+            style=row["style"],
+            active=row["active"],
+            group_id=row["group_id"],
+            sort_order=row["sort_order"],
         )
-        by_lower = {row["name"].lower(): row["id"] for row in rows}
-        return {name: by_lower[name.lower()] for name in names if name.lower() in by_lower}
+
+    async def list_qualification_types(self) -> list[QualificationType]:
+        rows = await self.fetch_all_mappings(
+            select(qualification_types).order_by(qualification_types.c.sort_order, qualification_types.c.id)
+        )
+        return [self._qualification_type(row) for row in rows]
+
+    async def add_qualification_type(
+        self, *, key: str, label: str, style: str, group_id: int | None, sort_order: int
+    ) -> None:
+        await self.execute(
+            insert(qualification_types).values(
+                key=key, label=label, style=style, group_id=group_id, sort_order=sort_order, active=True
+            )
+        )
+
+    async def update_qualification_type(
+        self, type_id: int, *, label: str, style: str, active: bool, group_id: int | None
+    ) -> bool:
+        result = await self.session.execute(
+            update(qualification_types)
+            .where(qualification_types.c.id == type_id)
+            .values(label=label, style=style, active=active, group_id=group_id)
+        )
+        return result.rowcount == 1
+
+    async def list_training_courses(self) -> dict[str, tuple[int, str]]:
+        """Qualification -> (course id, name) for the courses marked as registered by approving a
+        finished training (``courses.training_qualification``)."""
+        rows = await self.fetch_all_mappings(
+            select(courses.c.training_qualification, courses.c.id, courses.c.name).where(
+                courses.c.training_qualification.is_not(None)
+            )
+        )
+        return {row["training_qualification"]: (row["id"], row["name"]) for row in rows}
 
     async def list_completed_courses(
         self, volunteer_ids: list[int], course_ids: list[int]

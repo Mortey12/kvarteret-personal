@@ -1,0 +1,91 @@
+{% extends "layouts/base.html" %}
+{% from "components/shared/ui_macros.html" import flash_notice %}
+
+{% block page_content %}
+  <section class="grid gap-7">
+    <header class="grid justify-items-center gap-3 pt-3 text-center">
+      <h1 class="text-5xl leading-none font-light tracking-tight text-stone-900 md:text-7xl">Kvalifikasjoner</h1>
+      <p class="text-sm text-stone-700">Det lederne kan sette folk i opplæring for. <a href="/shifts/settings">Tilbake til innstillinger</a></p>
+    </header>
+
+    {{ flash_notice(notice, 'success', 'mb-0') }}
+    {{ flash_notice(error, 'error', 'mb-0') }}
+
+    <p class="border-2 border-stone-300 bg-white px-4 py-3 text-sm text-stone-800">
+      Hver kvalifikasjon kan ha opplæring på 3 skift (eller det baren har satt). Når en leder godkjenner ferdig opplæring, kan kurset som hører til registreres (sett det på kurssiden). «Skiftleder»-typen krever en erfaren skiftleder på skiftet, ellers får lederen en advarsel.
+      En ny kvalifikasjon endrer ikke hvem som kan ta hvilke plasser: plasstypene og reglene for dem er egne.
+    </p>
+
+    {% if not can_edit %}
+      <p class="border-l-4 border-kvarteret-red bg-stone-100 p-3 text-sm" id="qualification-types-locked">{{ locked_text }}</p>
+    {% endif %}
+
+    {% for item in types %}
+      <form action="/shifts/qualifications/{{ item.type_id }}" class="app-panel grid gap-3 sm:grid-cols-2" data-qualification-type="{{ item.key }}" method="post">
+        <div class="sm:col-span-2 flex flex-wrap items-center gap-2">
+          <h2 class="text-xl font-medium tracking-tight text-stone-900">{{ item.label }}</h2>
+          <span class="text-xs text-stone-500">nøkkel: {{ item.key }}</span>
+          <span class="app-badge">{{ "På" if item.active else "Av" }}</span>
+        </div>
+        <label class="grid gap-1">
+          <span class="text-sm text-kvarteret-sky">Navn</span>
+          <input class="app-input" name="label" required type="text" value="{{ item.label }}" {% if not can_edit %}disabled{% endif %}>
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm text-kvarteret-sky">Type opplæring</span>
+          <select class="app-input" name="style" {% if not can_edit %}disabled{% endif %}>
+            {% for style in styles %}
+              <option value="{{ style }}" {% if item.style == style %}selected{% endif %}>{{ "Skiftleder (trenger erfaren skiftleder)" if style == "skiftleder" else "Vanlig" }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm text-kvarteret-sky">Bare for denne gruppa (og under)</span>
+          <select class="app-input" name="group_id" {% if not can_edit %}disabled{% endif %}>
+            <option value="" {% if item.group_id is none %}selected{% endif %}>Alle barer</option>
+            {% for group in groups %}
+              <option value="{{ group.group_id }}" {% if item.group_id == group.group_id %}selected{% endif %}>{{ group.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="flex items-center gap-2 text-sm text-stone-900">
+          <input type="checkbox" name="active" value="on" {% if item.active %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+          På (lederne kan velge den)
+        </label>
+        {% if can_edit %}
+          <div class="sm:col-span-2"><button class="app-button" type="submit">Lagre</button></div>
+        {% endif %}
+      </form>
+    {% endfor %}
+
+    {% if can_edit %}
+      <form action="/shifts/qualifications" class="app-panel grid gap-3 sm:grid-cols-2" id="new-qualification-type" method="post">
+        <h2 class="sm:col-span-2 text-xl font-medium tracking-tight text-stone-900">Ny kvalifikasjon</h2>
+        <label class="grid gap-1">
+          <span class="text-sm text-kvarteret-sky">Nøkkel (små bokstaver, kan ikke endres)</span>
+          <input class="app-input" maxlength="30" name="key" pattern="[a-z][a-z0-9_]{1,29}" required type="text">
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm text-kvarteret-sky">Navn</span>
+          <input class="app-input" maxlength="60" name="label" required type="text">
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm text-kvarteret-sky">Type opplæring</span>
+          <select class="app-input" name="style">
+            {% for style in styles %}
+              <option value="{{ style }}">{{ "Skiftleder (trenger erfaren skiftleder)" if style == "skiftleder" else "Vanlig" }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm text-kvarteret-sky">Bare for denne gruppa (og under)</span>
+          <select class="app-input" name="group_id">
+            <option value="">Alle barer</option>
+            {% for group in groups %}<option value="{{ group.group_id }}">{{ group.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <div class="sm:col-span-2"><button class="app-button" type="submit">Opprett</button></div>
+      </form>
+    {% endif %}
+  </section>
+{% endblock %}

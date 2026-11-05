@@ -64,6 +64,7 @@ from app.domain.shifts.training_service import (
     start_training,
     stop_training,
     training_views,
+    types_for_bar,
 )
 from app.domain.shifts.week_placing import (
     accept_suggestions,
@@ -143,6 +144,7 @@ async def _board(
         changes=changes,
         suggestions=suggestions,
         trainings=trainings,
+        training_types=await types_for_bar(service, page.view.bar_id),
     )
 
 

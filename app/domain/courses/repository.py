@@ -237,6 +237,24 @@ class CoursesRepository(SqlAlchemyRepository):
         updated_course_id = await callback(self.session)
         return updated_course_id == course_id
 
+    async def get_training_qualification(self, course_id: int) -> str | None:
+        """The qualification this course is registered by (skjenker, kokk, skiftleder), or None."""
+        row = await self.fetch_first_mapping(
+            select(courses.c.training_qualification).where(courses.c.id == course_id)
+        )
+        return row["training_qualification"] if row else None
+
+    async def course_with_training_qualification(self, qualification: str) -> tuple[int, str] | None:
+        row = await self.fetch_first_mapping(
+            select(courses.c.id, courses.c.name).where(courses.c.training_qualification == qualification)
+        )
+        return (row["id"], row["name"]) if row else None
+
+    async def set_training_qualification(self, course_id: int, qualification: str | None) -> None:
+        await self.execute(
+            update(courses).where(courses.c.id == course_id).values(training_qualification=qualification)
+        )
+
     async def delete_course(self, course_id: int) -> bool:
         async def callback(session):
             await session.execute(

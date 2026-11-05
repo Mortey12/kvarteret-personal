@@ -6,6 +6,7 @@ from app.auth.roles import UserRole
 from app.dependencies import (
     get_courses_service,
     get_settings,
+    get_shifts_service,
     require_authenticated_user,
     require_management_user,
 )
@@ -13,7 +14,7 @@ from app.errors import NotConfiguredError
 from app.shared.semester import get_current_semester_code
 from app.domain.volunteers.options import SEMESTER_TERM_OPTIONS
 from app.domain.courses.service import CoursesService
-from app.domain.courses.training_courses import LOCKED_TEXT, is_training_course, may_edit_training_course
+from app.domain.courses.training_courses import LOCKED_TEXT, may_edit_training_course
 from app.web.route_helpers import not_configured_http_exception
 from app.web.templates import templates
 
@@ -71,6 +72,7 @@ async def courses_detail(
     current_user=Depends(require_authenticated_user),
     courses_service: CoursesService = Depends(get_courses_service),
     settings=Depends(get_settings),
+    shifts_service=Depends(get_shifts_service),
 ):
     try:
         course = await courses_service.get_course_detail(course_id)
@@ -85,9 +87,9 @@ async def courses_detail(
     can_manage = current_user.role in {UserRole.ADMIN, UserRole.GROUP_ADMIN}
     # Skjenkekurs, Kokkekurs and Skiftlederkurs are registered by approving a training: the forms
     # are hidden unless the user is one of the few named editors.
-    locked = is_training_course(course.name) and not may_edit_training_course(
-        getattr(current_user, "email", None), settings.training_course_editors
-    )
+    is_editor = may_edit_training_course(getattr(current_user, "email", None), settings.training_course_editors)
+    training_qualification = await courses_service.get_training_qualification(course_id)
+    locked = training_qualification is not None and not is_editor
     can_manage = can_manage and not locked
     return templates.TemplateResponse(
         request,
@@ -98,6 +100,13 @@ async def courses_detail(
             "current_user": current_user,
             "can_manage_course": can_manage,
             "training_course_locked": locked,
+            "training_qualification": training_qualification,
+            "can_set_training_qualification": is_editor and can_manage,
+            "training_qualification_options": (
+                [(t.key, t.label) for t in await shifts_service.repository.list_qualification_types() if t.active]
+                if is_editor and can_manage
+                else []
+            ),
             "training_course_locked_text": LOCKED_TEXT,
             "course": course,
             "default_completion_year": get_current_semester_code() // 10,

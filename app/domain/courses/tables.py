@@ -22,6 +22,10 @@ courses = Table(
     Column("name", Text, nullable=False),
     Column("description", Text),
     Column("created_at", DateTime(timezone=True)),
+    # When set (skjenker, kokk, skiftleder), this course is registered by a leader approving a
+    # finished training in Skiftlista, and only the few named editors may change who completed it
+    # by hand. Null for every other course. At most one course per qualification.
+    Column("training_qualification", Text),
 )
 
 course_completions = Table(

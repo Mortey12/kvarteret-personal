@@ -36,6 +36,26 @@
           {{ blocker_notice(course.delete_blockers) }}
         {% endif %}
 
+        {% if can_set_training_qualification %}
+          <form action="/courses/{{ course.course_id }}/training-settings" class="mt-8 grid gap-3 border border-stone-300 p-4" id="training-settings" method="post">
+            <h2 class="text-xl font-medium tracking-tight text-stone-900">Skiftlista: opplæring</h2>
+            <p class="text-sm text-stone-600">Slå på for kurs som registreres når en leder godkjenner ferdig opplæring i Skiftlista. Da kan bare de navngitte redaktørene legge til eller fjerne hvem som har tatt kurset her. Er den av, er kurset et vanlig kurs og alt er som før.</p>
+            <label class="flex items-center gap-3">
+              <input class="size-5" name="enabled" type="checkbox" value="on" {% if training_qualification %}checked{% endif %}>
+              <span>Registreres ved godkjent opplæring</span>
+            </label>
+            <label class="grid gap-1">
+              <span class="text-sm text-kvarteret-sky">Opplæring som godkjennes</span>
+              <select class="app-input" name="qualification">
+                {% for key, label in training_qualification_options %}
+                  <option value="{{ key }}" {% if training_qualification == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <div><button class="app-button" type="submit">Lagre innstillinger</button></div>
+          </form>
+        {% endif %}
+
         <h2 class="mt-8 text-2xl font-medium tracking-tight text-stone-900">Påbudte grupper</h2>
         <div class="mt-5 grid gap-3">
           {% for group in course.required_groups %}

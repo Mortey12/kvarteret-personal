@@ -1,8 +1,8 @@
 """Training kept on the person, counted from finished shifts.
 
 Training is not a kind of place. A person is in training when they hold a qualification with
-status "training" in a bar (``volunteer_qualifications``): "skjenker" or "kokk" for a normal
-training, "skiftleder" for skiftleder training. It takes ``required`` shifts: the person's own
+status "training" in a bar (``volunteer_qualifications``) for a qualification type
+(``qualification_types``), whose style is "normal" or "skiftleder". It takes ``required`` shifts: the person's own
 ``training_target`` when a leader has given more, otherwise the bar's setting (3).
 
 How many are done is counted, never typed: the shifts the person was on in that bar that ended
@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from app.domain.shifts.models import QualificationRecord, QualificationSettings
+from app.domain.shifts.qualification_types import QualificationType
 
-TRAINEE_QUALIFICATIONS = ("skjenker", "kokk", "skiftleder")
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,10 +31,13 @@ class TrainingRecord:
     qualification: str
     required: int
     started_at: datetime
+    # How the training works: "normal", or "skiftleder" (needs an experienced skiftleder with them).
+    style: str = "normal"
+    label: str = ""
 
     @property
     def kind(self) -> str:
-        return "skiftleder" if self.qualification == "skiftleder" else "normal"
+        return self.style
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,9 +56,12 @@ class TrainingProgress:
 
 
 def training_records(
-    qualifications: list[QualificationRecord], settings: QualificationSettings, group_id: int
+    qualifications: list[QualificationRecord],
+    settings: QualificationSettings,
+    group_id: int,
+    types: dict[str, QualificationType],
 ) -> list[TrainingRecord]:
-    """Everyone in training in this bar."""
+    """Everyone in training in this bar, for the qualification types that exist."""
     return [
         TrainingRecord(
             volunteer_id=q.volunteer_id,
@@ -63,9 +69,11 @@ def training_records(
             qualification=q.qualification,
             required=q.training_target or settings.training_shifts_needed,
             started_at=q.created_at or datetime.min.replace(tzinfo=UTC),
+            style=types[q.qualification].style,
+            label=types[q.qualification].label,
         )
         for q in qualifications
-        if q.status == "training" and q.group_id == group_id and q.qualification in TRAINEE_QUALIFICATIONS
+        if q.status == "training" and q.group_id == group_id and q.qualification in types
     ]
 
 

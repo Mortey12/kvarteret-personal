@@ -32,6 +32,8 @@ def setup(monkeypatch):
         repository=SimpleNamespace(
             list_shift_groups=AsyncMock(return_value=BARS),
             list_group_qualifications=AsyncMock(return_value=[]),
+            list_group_parents=AsyncMock(return_value={}),
+            list_qualification_types=AsyncMock(return_value=[]),
             get_qualification_settings=AsyncMock(
                 side_effect=lambda ids: {i: QualificationSettings() for i in ids}
             ),

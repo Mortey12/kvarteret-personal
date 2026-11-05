@@ -13,6 +13,7 @@ from datetime import date, datetime
 
 from app.domain.shifts.leader_models import (
     PersonTraining,
+    TrainingType,
     Assignment,
     FitOk,
     FitRefused,
@@ -135,6 +136,7 @@ def to_board(
     changes: dict[date, tuple[datetime, str]] | None = None,
     suggestions=None,
     trainings: dict | None = None,
+    training_types: list | None = None,
 ) -> WeekBoard:
     """``changes``: Monday -> (when, by whom) for published weeks changed after publishing.
     ``suggestions``: the pending ``SuggestionRecord``s of the week; each is drawn on the next truly
@@ -223,6 +225,7 @@ def to_board(
                 training=[
                     PersonTraining(
                         qualification=v.record.qualification,
+                        label=v.record.label or v.record.qualification,
                         kind=v.record.kind,
                         done=v.progress.done,
                         required=v.progress.required,
@@ -236,6 +239,7 @@ def to_board(
             for person in view.people
         ],
         fit=fit,
+        training_types=[TrainingType(key=t.key, label=t.label, style=t.style) for t in training_types or []],
         strip=[
             WeekStripItem(week_start=item.week_start.isoformat(), number=item.number, status=_status_of(item.status, item.week_start, changes))
             for item in view.strip

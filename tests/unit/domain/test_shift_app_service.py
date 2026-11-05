@@ -31,6 +31,7 @@ from app.domain.shifts.app_repository import ShiftsAppRepository
 from app.domain.shifts.app_service import ShiftsAppService
 from app.domain.shifts.errors import ShiftAccessError, ShiftNotFoundError, ShiftPlacementError
 from app.domain.shifts.tables import (
+    qualification_types,
     shift_assignments,
     shift_availability_rules,
     shift_group_settings,
@@ -90,6 +91,7 @@ TABLES = [
     shift_availability_rules,
     shift_wishes,
     volunteer_qualifications,
+    qualification_types,
     volunteer_cards,
     volunteer_next_of_kin,
     volunteer_photos,
@@ -1202,17 +1204,49 @@ async def test_training_on_the_person_is_stored_counted_approved_and_stopped(wor
 
 
 @pytest.mark.asyncio
-async def test_courses_by_name_and_completions_for_the_approval_step(world: World) -> None:
+async def test_marked_training_courses_and_completions_for_the_approval_step(world: World) -> None:
     from app.domain.shifts.repository import ShiftsRepository
 
     repository = ShiftsRepository()
 
-    # Matched without regard to case; names that do not exist are left out.
-    assert await repository.list_courses_by_name(["brannkurs", "Kokkekurs"]) == {"brannkurs": BRANN}
-    assert await repository.list_courses_by_name([]) == {}
+    # Only a course marked with a qualification is a training course; BRANN is an ordinary course.
+    assert await repository.list_training_courses() == {}
+    await world.session.execute(update(courses).where(courses.c.id == BAR).values(training_qualification="skjenker"))
+    assert await repository.list_training_courses() == {"skjenker": (BAR, "Barkurs")}
 
     before = await repository.list_completed_courses([OLA], [BRANN])
     await repository.add_course_completion(OLA, BRANN, 20262)
     after = await repository.list_completed_courses([OLA], [BRANN])
     assert BRANN not in before.get(OLA, set()) and after == {OLA: {BRANN}}
     assert await repository.list_completed_courses([], [BRANN]) == {}
+
+
+@pytest.mark.asyncio
+async def test_qualification_types_are_rows_a_new_one_needs_no_code(world: World) -> None:
+    from app.domain.shifts.qualification_types import offered_in
+    from app.domain.shifts.repository import ShiftsRepository
+
+    repository = ShiftsRepository()
+    assert await repository.list_qualification_types() == []  # the migration seeds three; this world starts empty
+
+    await repository.add_qualification_type(key="skjenker", label="skjenker", style="normal", group_id=None, sort_order=0)
+    await repository.add_qualification_type(key="vert", label="vertskap", style="normal", group_id=STJERNE, sort_order=1)
+    types = await repository.list_qualification_types()
+    assert [(t.key, t.style, t.group_id, t.active) for t in types] == [
+        ("skjenker", "normal", None, True),
+        ("vert", "normal", STJERNE, True),
+    ]
+    # "vert" belongs to Stjerne only; "skjenker" is for every bar.
+    assert [t.key for t in offered_in(types, [STJERNE])] == ["skjenker", "vert"]
+    assert [t.key for t in offered_in(types, [HALVTIMEN])] == ["skjenker"]
+
+    assert await repository.update_qualification_type(types[1].type_id, label="vert", style="skiftleder", active=False, group_id=None)
+    changed = (await repository.list_qualification_types())[1]
+    assert (changed.label, changed.style, changed.active, changed.group_id) == ("vert", "skiftleder", False, None)
+    assert [t.key for t in offered_in(await repository.list_qualification_types(), [STJERNE])] == ["skjenker"]
+    assert not await repository.update_qualification_type(9999, label="x", style="normal", active=True, group_id=None)
+
+    # The database no longer restricts the qualification names on a person.
+    await world.session.execute(delete(volunteer_qualifications))
+    await repository.start_training(OLA, "vert", STJERNE)
+    assert [(r.volunteer_id, r.qualification) for r in await repository.list_group_qualifications([STJERNE]) if r.status == "training"] == [(OLA, "vert")]

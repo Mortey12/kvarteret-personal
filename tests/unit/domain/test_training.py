@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.domain.shifts.models import QualificationRecord, QualificationSettings
+from app.domain.shifts.qualification_types import QualificationType
 from app.domain.shifts.training import TrainingRecord, place_text, progress, training_records
 
 START = datetime(2026, 11, 1, tzinfo=UTC)
@@ -49,6 +50,19 @@ def test_only_training_rows_of_this_bar_count_and_the_target_wins_over_the_bar_s
     def q(who, status, group, target=None, qualification="skjenker"):
         return QualificationRecord(who, qualification, status, group, target, False, None, None, START)
 
-    rows = [q(1, "training", 5), q(2, "approved", 5), q(3, "training", 6), q(4, "training", 5, 4, "skiftleder")]
-    found = training_records(rows, QualificationSettings(training_shifts_needed=3), 5)
-    assert [(r.volunteer_id, r.required, r.kind) for r in found] == [(1, 3, "normal"), (4, 4, "skiftleder")]
+    rows = [
+        q(1, "training", 5),
+        q(2, "approved", 5),
+        q(3, "training", 6),
+        q(4, "training", 5, 4, "skiftleder"),
+        q(5, "training", 5, None, "ukjent"),  # a qualification that is not a known type is left out
+    ]
+    types = {
+        "skjenker": QualificationType(1, "skjenker", "skjenker", "normal", True, None, 0),
+        "skiftleder": QualificationType(2, "skiftleder", "skiftleder", "skiftleder", True, None, 1),
+    }
+    found = training_records(rows, QualificationSettings(training_shifts_needed=3), 5, types)
+    assert [(r.volunteer_id, r.required, r.kind, r.label) for r in found] == [
+        (1, 3, "normal", "skjenker"),
+        (4, 4, "skiftleder", "skiftleder"),
+    ]

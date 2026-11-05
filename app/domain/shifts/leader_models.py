@@ -101,7 +101,9 @@ class Shift(_Model):
 class PersonTraining(_Model):
     """A person in training in this bar. Kept on the person, counted from finished shifts."""
 
-    qualification: Literal["skjenker", "kokk", "skiftleder"]
+    qualification: str
+    # The name leaders read ("skjenker", "kokk", ...), from the qualification type.
+    label: str = ""
     kind: Literal["normal", "skiftleder"]
     done: int
     required: int
@@ -162,6 +164,14 @@ class LastChanged(_Model):
     at: str
 
 
+class TrainingType(_Model):
+    """A qualification a leader can put someone in training for, in this bar."""
+
+    key: str
+    label: str
+    style: Literal["normal", "skiftleder"]
+
+
 class WeekBoard(_Model):
     bar: LeaderBar
     week_start: str
@@ -176,6 +186,8 @@ class WeekBoard(_Model):
     # volunteer id (as text) -> slot id (as text) -> fit. Only open places.
     fit: dict[str, dict[str, FitOk | FitRefused]]
     strip: list[WeekStripItem]
+    # The qualifications a leader can put someone in training for in this bar.
+    training_types: list[TrainingType] = []
     last_changed: LastChanged | None = None
 
 
@@ -230,7 +242,7 @@ class TrainingRequest(_Model):
     """Put someone in training, or act on their training (approve, extend, stop)."""
 
     volunteer_id: int = Field(ge=1, le=2_147_483_647)
-    qualification: Literal["skjenker", "kokk", "skiftleder"]
+    qualification: str = Field(min_length=1, max_length=30)
     # Only used when approving: also register the required courses as completed this semester.
     register_courses: bool = True
 

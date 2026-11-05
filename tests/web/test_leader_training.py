@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.domain.shifts.qualification_types import QualificationType
 from tests.support.week_placing import (
     SIGRID,
     SKIFTLEDER_SLOT,
@@ -54,13 +55,28 @@ def test_a_person_in_training_is_marked_on_the_person_not_on_a_place(writer) -> 
     assert tora["tags"] == ["opplæring 0/3"]
 
 
-def test_a_leader_puts_someone_in_training(writer) -> None:
+def test_a_leader_puts_someone_in_training_for_a_type_that_exists_in_the_data(writer) -> None:
     w, repo = writer
-    assert act(w, "start", SANDER, "kokk").status_code == 200
-    assert [t["qualification"] for t in person(board(w), SANDER)["training"]] == ["kokk"]
+    # A new qualification is just a row: no code needed. "vert" is offered in every bar.
+    repo.qualification_types.append(QualificationType(9, "vert", "vertskap", "normal", True, None, 3))
+    assert act(w, "start", SANDER, "vert").status_code == 200
+    trained = person(board(w), SANDER)["training"]
+    assert [(t["qualification"], t["label"], t["kind"]) for t in trained] == [("vert", "vertskap", "normal")]
+    assert {t["key"] for t in board(w)["training_types"]} == {"skjenker", "skiftleder", "vert"}
     # Starting the same training twice is refused, and so is training someone already approved.
-    assert act(w, "start", SANDER, "kokk").status_code == 409
+    assert act(w, "start", SANDER, "vert").status_code == 409
     assert act(w, "start", SANDER, "skjenker").status_code == 409
+
+
+def test_a_type_that_is_switched_off_or_belongs_to_another_group_cannot_be_used(writer) -> None:
+    w, repo = writer
+    # "kokk" belongs to the kitchen (group 8), not to Stjerne (7).
+    refused = act(w, "start", SANDER, "kokk")
+    assert refused.status_code == 409 and "finnes ikke for denne baren" in refused.json()["detail"]
+    assert "kokk" not in {t["key"] for t in board(w)["training_types"]}
+    repo.qualification_types[0] = QualificationType(1, "skjenker", "skjenker", "normal", False, None, 0)
+    assert "skjenker" not in {t["key"] for t in board(w)["training_types"]}
+    assert act(w, "start", SANDER, "ukjent").status_code == 409
 
 
 def test_the_place_says_which_training_shift_it_is_and_it_follows_the_person(writer) -> None:
@@ -109,23 +125,24 @@ def test_only_the_course_of_the_qualification_is_ever_registered(writer) -> None
     w, repo = writer
     place_on(w, SKJENKER_SLOT, TORA)
     make_done(repo, target=1)
-    repo.courses_by_name["Brannkurs"] = 43  # for everyone: must stay out of it
+    # Brannkurs (43) is for everyone and is not marked, so it can never be registered here.
 
     act(w, "approve", TORA)
 
     assert repo.completed_courses == {TORA: {41}}
 
 
-def test_a_qualification_whose_course_does_not_exist_is_approved_without_one(writer) -> None:
+def test_a_group_that_does_not_use_it_has_no_marked_course_and_nothing_is_registered(writer) -> None:
     w, repo = writer
-    act(w, "start", SANDER, "kokk")  # no "Kokkekurs" in the made-up data
+    repo.qualification_types.append(QualificationType(9, "vert", "vertskap", "normal", True, None, 3))
+    act(w, "start", SANDER, "vert")  # no course is marked for "vert" in the made-up data
     for shift in repo.shifts.values():
         shift.starts_at = datetime(2026, 10, 20, 16, tzinfo=UTC)
         shift.ends_at = datetime(2026, 10, 20, 22, tzinfo=UTC)
-    repo.training_targets[(SANDER, "kokk", 7)] = 1
+    repo.training_targets[(SANDER, "vert", 7)] = 1
     place_on(w, SKJENKER_SLOT, SANDER)
 
-    response = act(w, "approve", SANDER, "kokk")
+    response = act(w, "approve", SANDER, "vert")
 
     assert response.status_code == 200
     assert "Kurs registrert" not in response.json()["message"]

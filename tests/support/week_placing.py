@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+from app.domain.shifts.qualification_types import QualificationType
 from app.domain.shifts.models import (
     AssignedPerson,
     AssignmentRef,
@@ -65,8 +66,18 @@ class PlacingRepository:
         self.member_reads = 0
         self.suggestions: list[SuggestionRecord] = []
         self.training_targets: dict[tuple[int, str, int], int] = {}
-        # The courses of the qualifications exist; Brannkurs is for everyone and is never touched.
-        self.courses_by_name: dict[str, int] = {"Skjenkekurs": 41, "Skiftlederkurs": 42, "Brannkurs": 43}
+        # What a leader can train people for: kokk only for the kitchen (group 8), not Stjerne (7).
+        self.qualification_types = [
+            QualificationType(1, "skjenker", "skjenker", "normal", True, None, 0),
+            QualificationType(2, "skiftleder", "skiftleder", "skiftleder", True, None, 1),
+            QualificationType(3, "kokk", "kokk", "normal", True, 8, 2),
+        ]
+        # Courses marked as registered by approving a training (qualification -> (id, name)).
+        # Brannkurs is for everyone, is not marked, and is never touched.
+        self.training_courses: dict[str, tuple[int, str]] = {
+            "skjenker": (41, "Skjenkekurs"),
+            "skiftleder": (42, "Skiftlederkurs"),
+        }
         self.completed_courses: dict[int, set[int]] = {}
         self._suggestion_id = 0
         self.statuses: dict[tuple[int, date], str] = {}
@@ -157,8 +168,11 @@ class PlacingRepository:
                         found.setdefault(person.volunteer_id, []).append((shift.starts_at, shift.ends_at))
         return found
 
-    async def list_courses_by_name(self, names):
-        return {name: self.courses_by_name[name] for name in names if name in self.courses_by_name}
+    async def list_qualification_types(self):
+        return list(self.qualification_types)
+
+    async def list_training_courses(self):
+        return dict(self.training_courses)
 
     async def list_completed_courses(self, volunteer_ids, course_ids):
         return {v: {c for c in self.completed_courses.get(v, set()) if c in course_ids} for v in volunteer_ids}

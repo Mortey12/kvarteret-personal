@@ -248,6 +248,9 @@ class FakeCoursesService:
             delete_blockers=[],
         )
 
+    async def get_training_qualification(self, course_id: int):
+        return None  # an ordinary course
+
     async def create_course_completion(self, *, course_id: int, volunteer_id: int, year: int, term: int) -> int:
         if volunteer_id == 999:
             raise InvalidCourseCompletionError("Selected volunteer was not found.")

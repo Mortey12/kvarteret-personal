@@ -48,6 +48,10 @@ class CoursesServiceProtocol(Protocol):
         self, course_id: int, *, name: str, description: str | None
     ) -> bool: ...
     async def delete_course(self, course_id: int) -> bool: ...
+    async def get_training_qualification(self, course_id: int) -> str | None: ...
+    async def set_training_qualification(
+        self, course_id: int, qualification: str | None, *, allowed: set[str]
+    ) -> None: ...
     async def create_course_completion(
         self, *, course_id: int, volunteer_id: int, year: int, term: int
     ) -> int: ...
@@ -94,6 +98,25 @@ class CoursesService:
         return await self.repository.update_course(
             course_id, name=name, description=description
         )
+
+    async def get_training_qualification(self, course_id: int) -> str | None:
+        return await self.repository.get_training_qualification(course_id)
+
+    async def set_training_qualification(
+        self, course_id: int, qualification: str | None, *, allowed: set[str]
+    ) -> None:
+        """Say which qualification's approval registers this course (None: none). ``allowed`` are
+        the keys of the qualification types that exist. One course per qualification: another
+        course that already has it must be cleared first."""
+        if qualification is not None:
+            if qualification not in allowed:
+                raise InvalidCourseCompletionError("Ukjent kvalifikasjon.")
+            taken = await self.repository.course_with_training_qualification(qualification)
+            if taken is not None and taken[0] != course_id:
+                raise InvalidCourseCompletionError(
+                    f"Kvalifikasjonen brukes allerede av kurset «{taken[1]}». Fjern den der først."
+                )
+        await self.repository.set_training_qualification(course_id, qualification)
 
     async def delete_course(self, course_id: int) -> bool:
         blockers = await self.repository.get_course_delete_blockers(course_id)

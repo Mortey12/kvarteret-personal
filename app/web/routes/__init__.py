@@ -18,6 +18,7 @@ from app.web.routes.groups.actions import router as group_actions_router
 from app.web.routes.groups.pages import router as group_pages_router
 from app.web.routes.shifts.actions import router as shift_actions_router
 from app.web.routes.shifts.pages import router as shift_pages_router
+from app.web.routes.shifts.qualification_types import router as shift_qualification_types_router
 from app.web.routes.shifts.setup_actions import router as shift_setup_actions_router
 from app.web.routes.spotify.pages import router as spotify_pages_router
 from app.web.routes.volunteer_applications.actions import (
@@ -50,6 +51,7 @@ web_router.include_router(group_actions_router)
 web_router.include_router(course_pages_router)
 web_router.include_router(course_actions_router)
 web_router.include_router(shift_pages_router)
+web_router.include_router(shift_qualification_types_router)
 web_router.include_router(shift_actions_router)
 web_router.include_router(shift_setup_actions_router)
 web_router.include_router(event_statistics_router)

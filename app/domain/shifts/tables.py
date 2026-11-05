@@ -257,10 +257,8 @@ volunteer_qualifications = Table(
         "group_id",
         name="volunteer_qualifications_volunteer_qualification_group_key",
     ),
-    CheckConstraint(
-        "qualification IN ('skjenker', 'skiftleder', 'kokk')",
-        name="volunteer_qualifications_qualification_valid",
-    ),
+    # The qualification names are rows of ``qualification_types`` (checked by the service, not by
+    # the database), so a new one needs no code and no migration.
     CheckConstraint(
         "status IN ('training', 'approved')",
         name="volunteer_qualifications_status_valid",
@@ -290,4 +288,25 @@ shift_suggestions = Table(
     Column("why", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     UniqueConstraint("slot_id", "volunteer_id", name="shift_suggestions_slot_volunteer_key"),
+)
+
+
+# The qualifications a leader can put someone in training for, and a named editor can add to in
+# Personal without code. ``style`` says how the training works: "normal" or "skiftleder" (a
+# skiftleder in training needs an experienced skiftleder on the shift). ``group_id`` limits a type
+# to one group and the groups below it; empty means every bar. This does not change who may take
+# which place: place kinds and their rules are separate.
+qualification_types = Table(
+    "qualification_types",
+    public_metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("key", Text, nullable=False),
+    Column("label", Text, nullable=False),
+    Column("style", Text, nullable=False),
+    Column("active", Boolean, nullable=False, server_default=true()),
+    Column("group_id", BigInteger, ForeignKey("public.groups.id")),
+    Column("sort_order", Integer, nullable=False, server_default="0"),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint("key", name="qualification_types_key_key"),
+    CheckConstraint("style IN ('normal', 'skiftleder')", name="qualification_types_style_valid"),
 )
